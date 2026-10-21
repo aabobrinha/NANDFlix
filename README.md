@@ -79,10 +79,20 @@ Os mesmos arquivos estão na página de [Releases](../../releases).
 ## Primeiro uso
 
 1. Abra o `NANDFlix.exe`.
-2. Clique em **Importar planilha** e escolha o seu `.xlsx`, ou adicione filmes pelo **+**.
-3. As capas começam a ser buscadas sozinhas.
+2. Cole a sua chave do OMDb na tela que aparece (veja abaixo como conseguir uma).
+3. Clique em **Importar planilha** e escolha o seu `.xlsx`, ou adicione filmes pelo **+**.
+4. As capas começam a ser buscadas sozinhas.
 
-A chave do OMDb fica em **Configurações**. O plano gratuito permite 1.000 consultas por dia; você pode criar a sua em [omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx).
+## Como conseguir a sua chave do OMDb
+
+As capas, notas e sinopses vêm do [OMDb](https://www.omdbapi.com/), que pede uma chave por pessoa. Ela é gratuita e dá direito a 1.000 consultas por dia, o bastante para buscar as capas de uma lista grande em um ou dois dias.
+
+1. Entre em [omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx).
+2. Marque o plano **FREE (1,000 daily limit)**, preencha seu e-mail, nome, sobrenome e o campo **Use** (pode ser algo como "catálogo pessoal de filmes") e clique em **Submit**.
+3. Abra o e-mail que o OMDb mandou. Ele traz a sua chave (8 letras e números, como `1a2b3c4d`) e um **link de ativação**. Clique no link: sem ativar, a chave não funciona.
+4. Abra o NANDFlix e cole a chave na tela **Chave do OMDb**.
+
+Enquanto não houver chave salva, essa tela aparece toda vez que o app abre; dá para fechar em **Agora não** e usar o app sem capas novas. A chave pode ser trocada depois em **Configurações**, e o app confere se ela funciona antes de salvar.
 
 ## Onde ficam os dados
 
@@ -91,7 +101,7 @@ Tudo fica no seu computador, em `%APPDATA%\Filmes legais` (Windows):
 - `filmes.json`: a lista, salva a cada mudança.
 - `capas/`: as imagens baixadas.
 - `backups/`: os 5 últimos backups.
-- `config.json`: chave do OMDb, preferências e posição da janela.
+- `config.json`: a sua chave do OMDb, preferências e posição da janela.
 
 **Configurações → Abrir pasta de dados** leva direto a ela.
 
@@ -135,4 +145,4 @@ NANDFlix/
 - [Electron](https://www.electronjs.org/), com HTML, CSS e JavaScript puros, sem framework.
 - [SheetJS](https://sheetjs.com/) para as planilhas e [Lucide](https://lucide.dev/) para os ícones.
 - APIs: OMDb (capas e notas), YouTube (trailers, pelo player sem cookies) e Wikidata (duração).
-- Fonte Gotham.
+- Fonte [Montserrat](https://fonts.google.com/specimen/Montserrat) (licença OFL), pelo pacote `@fontsource/montserrat`.

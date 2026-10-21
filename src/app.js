@@ -1488,6 +1488,65 @@ window.addEventListener('blur', () => { clearTimeout(timerPrevia); fecharPrevia(
 
 // ---------- Configurações, importação e exportação ----------
 
+// ---------- Chave do OMDb ----------
+
+// Confere a chave no OMDb e salva. Sem internet (ou com o limite do dia
+// esgotado) não dá para conferir, mas a chave é salva assim mesmo.
+async function salvarChaveOmdb(chave) {
+  chave = chave.trim();
+  if (!chave) return { ok: false, mensagem: 'Cole a chave que chegou no seu e-mail.' };
+  const r = await api.testarChave(chave);
+  if (!r.ok && r.erro.tipo === 'chave') {
+    return { ok: false, mensagem: 'Essa chave não funcionou. Confira se copiou certinho e se já clicou no link de ativação do e-mail.' };
+  }
+  estado.config = await api.salvarConfig({ omdbKey: chave });
+  return { ok: true, conferida: r.ok || r.erro.tipo === 'limite' };
+}
+
+// Abre ao iniciar enquanto não houver chave salva; também dá para abrir pelo aviso de "configure a chave".
+function pedirChaveOmdb() {
+  abrirModal(`${cabecalhoModal('Chave do OMDb')}
+    <div class="modal-corpo chave-omdb">
+      <p>O nandflix usa o <b>OMDb</b> para buscar as capas, notas e sinopses dos filmes. Para isso, cada pessoa precisa da própria chave, que é <b>gratuita</b> (1.000 consultas por dia).</p>
+      <ol>
+        <li>Abra a página de cadastro do OMDb: <button class="link-chave" id="chave-site">omdbapi.com/apikey.aspx</button></li>
+        <li>Escolha o plano <b>FREE</b>, preencha seu e-mail e o resto do formulário e clique em <b>Submit</b>.</li>
+        <li>Abra o e-mail que o OMDb mandou e clique no <b>link de ativação</b>. Sem isso a chave não funciona.</li>
+        <li>Copie a chave que veio no mesmo e-mail (8 letras e números, como <code>1a2b3c4d</code>) e cole aqui:</li>
+      </ol>
+      <div class="busca-linha">
+        <input id="chave-campo" placeholder="Sua chave do OMDb" spellcheck="false" autocomplete="off">
+        <button class="btn btn-primario" id="chave-salvar">Salvar chave</button>
+      </div>
+      <p class="chave-status" id="chave-status" role="status"></p>
+    </div>
+    <div class="modal-rodape"><button class="btn btn-fantasma" data-fechar>Agora não</button></div>`, 'modal-pequeno modal-chave');
+
+  const campo = $('#chave-campo', modal);
+  const status = $('#chave-status', modal);
+  const botao = $('#chave-salvar', modal);
+  $('#chave-site', modal).onclick = () => window.open('https://www.omdbapi.com/apikey.aspx');
+  const salvar = async () => {
+    botao.disabled = true;
+    status.className = 'chave-status carregando';
+    status.textContent = 'Conferindo a chave';
+    const r = await salvarChaveOmdb(campo.value);
+    botao.disabled = false;
+    if (!r.ok) {
+      status.className = 'chave-status erro';
+      status.textContent = r.mensagem;
+      campo.focus();
+      return;
+    }
+    fecharModal();
+    aviso(r.conferida ? 'Chave salva. As capas vão começar a aparecer.' : 'Chave salva (não deu para conferir agora: sem conexão com o OMDb).', { tipo: 'ok', duracao: 5000 });
+    if (estado.filmes.length) buscarCapas({ automatica: true });
+  };
+  botao.onclick = salvar;
+  campo.addEventListener('keydown', (e) => { if (e.key === 'Enter') salvar(); });
+  campo.focus();
+}
+
 function abrirConfiguracoes() {
   const c = estado.config;
   const semCapa = estado.filmes.filter((f) => !f.poster).length;
@@ -1501,7 +1560,7 @@ function abrirConfiguracoes() {
           <input id="cfg-chave" value="${esc(c.omdbKey)}" placeholder="Chave da API" spellcheck="false">
           <button class="btn btn-laranja" id="cfg-salvar-chave">Salvar chave</button>
         </div>
-        <p>Chave gratuita em omdbapi.com/apikey.aspx (1.000 consultas por dia).</p>
+        <p>Chave gratuita (1.000 consultas por dia). <button class="link-chave" id="cfg-como-chave">Como pegar a minha chave</button></p>
       </div>
       <div class="secao">
         <h3>Abrir Stremio pelo</h3>
@@ -1541,9 +1600,11 @@ function abrirConfiguracoes() {
     </div>`);
 
   $('#cfg-salvar-chave', modal).onclick = async () => {
-    estado.config = await api.salvarConfig({ omdbKey: $('#cfg-chave', modal).value.trim() });
-    aviso('Chave salva.', { tipo: 'ok' });
+    const r = await salvarChaveOmdb($('#cfg-chave', modal).value);
+    if (!r.ok) { aviso(r.mensagem, { tipo: 'erro', duracao: 7000 }); return; }
+    aviso(r.conferida ? 'Chave salva e conferida.' : 'Chave salva (não deu para conferir agora: sem conexão com o OMDb).', { tipo: 'ok' });
   };
+  $('#cfg-como-chave', modal).onclick = pedirChaveOmdb;
   $$('input[name="stremio"]', modal).forEach((r) => {
     r.onchange = async () => { estado.config = await api.salvarConfig({ stremio: r.value }); };
   });
@@ -1642,7 +1703,7 @@ async function importarBackup() {
 
 async function buscarCapas(opcoes) {
   if (!estado.config.omdbKey) {
-    aviso('Configure a chave do OMDb para buscar as capas.', { acao: { rotulo: 'Configurações', fn: abrirConfiguracoes } });
+    aviso('Coloque a sua chave do OMDb para buscar as capas.', { acao: { rotulo: 'Colocar chave', fn: pedirChaveOmdb } });
     return;
   }
   const r = await api.buscarCapas(opcoes);
@@ -1839,5 +1900,6 @@ document.addEventListener('keydown', (e) => {
   aplicarVista(dados.config.visualizacao === 'lista' ? 'lista' : 'grade');
   // Já começa com um filme sorteado.
   sortear({ rolar: false, avisarSeVazio: false });
-  if (estado.filmes.length && estado.config.omdbKey) buscarCapas({ automatica: true });
+  if (!estado.config.omdbKey) pedirChaveOmdb();
+  else if (estado.filmes.length) buscarCapas({ automatica: true });
 })();

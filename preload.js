@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('api', {
   infoFilme: chamar('filme:info'),
   pesquisarOmdb: chamar('omdb:pesquisar'),
   detalhesOmdb: chamar('omdb:detalhes'),
+  testarChave: chamar('omdb:testarChave'),
   buscarCapas: chamar('capas:buscar'),
   abrirStremio: chamar('abrir:stremio'),
   abrirLetterboxd: chamar('abrir:letterboxd'),

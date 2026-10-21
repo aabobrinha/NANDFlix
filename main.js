@@ -21,7 +21,7 @@ const PASTA = app.getPath('userData');
 const C = armazem.caminhos(PASTA);
 
 const CONFIG_PADRAO = {
-  omdbKey: 'ebd62c99',
+  omdbKey: '', // cada pessoa usa a própria chave (o app pede ao abrir enquanto não houver)
   stremio: 'app', // 'app' | 'web'
   visualizacao: 'grade',
   ordenacao: 'ordem',
@@ -389,6 +389,9 @@ async function chamarOmdb(fn) {
 
 ipcMain.handle('omdb:pesquisar', (_e, termo) => chamarOmdb(() => omdb.pesquisar(config.omdbKey, termo)));
 ipcMain.handle('omdb:detalhes', (_e, imdbID) => chamarOmdb(() => omdb.detalhes(config.omdbKey, imdbID)));
+
+// Confere uma chave nova com uma consulta simples (Um Sonho de Liberdade) antes de salvar.
+ipcMain.handle('omdb:testarChave', (_e, chave) => chamarOmdb(() => omdb.detalhes(String(chave || '').trim(), 'tt0111161')));
 
 ipcMain.handle('capas:buscar', (_e, opcoes) => buscarCapasQueFaltam(opcoes || {}));
 
