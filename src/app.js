@@ -178,18 +178,66 @@ function cartaoHTML(f) {
 // cache, porque um elemento não pode estar em dois lugares.
 const cacheCartoes = new Map();
 const cacheFileira = new Map();
+// Visto e favorito ficam fora da assinatura: mudam o cartão no lugar (ver
+// atualizarCartao), sem recriar o elemento. Recriar tirava da página o botão
+// que acabou de ser clicado e, com ele focado, o Chromium rolava a página.
 function assinatura(f) {
-  return [f.titulo, f.ano, f.diretor, f.visto, f.favorito, f.capaLocal, f.poster].join('\u0001');
+  return [f.titulo, f.ano, f.diretor, f.capaLocal, f.poster].join('\u0001');
 }
+
+function atualizarCartao(el, f) {
+  el.classList.toggle('visto', Boolean(f.visto));
+  const area = $('.capa-area', el);
+  $('.selo-visto', area)?.remove();
+  $('.selo-fav', area)?.remove();
+  if (f.visto) area.insertAdjacentHTML('beforeend', `<span class="selo-visto" title="Visto">${icone('Check')}</span>`);
+  if (f.favorito) area.insertAdjacentHTML('beforeend', `<span class="selo-fav" title="Favorito">${icone('Star', { preenchido: true })}</span>`);
+  const visto = $('.acao[data-acao="visto"]', el);
+  const tituloVisto = f.visto ? 'Desmarcar visto' : 'Marcar como visto';
+  visto.classList.toggle('visto-on', Boolean(f.visto));
+  visto.title = tituloVisto;
+  visto.setAttribute('aria-label', tituloVisto);
+  const fav = $('.acao[data-acao="favorito"]', el);
+  const tituloFav = f.favorito ? 'Tirar dos favoritos' : 'Favoritar';
+  fav.classList.toggle('fav-on', Boolean(f.favorito));
+  fav.title = tituloFav;
+  fav.setAttribute('aria-label', tituloFav);
+  fav.innerHTML = icone('Star', { preenchido: f.favorito });
+}
+
 function elementoCartao(f, cache = cacheCartoes) {
   const sig = assinatura(f);
   const c = cache.get(f.id);
-  if (c && c.sig === sig) return c.el;
+  if (c && c.sig === sig) {
+    if (c.visto !== Boolean(f.visto) || c.favorito !== Boolean(f.favorito)) {
+      atualizarCartao(c.el, f);
+      c.visto = Boolean(f.visto);
+      c.favorito = Boolean(f.favorito);
+    }
+    return c.el;
+  }
   const tpl = document.createElement('template');
   tpl.innerHTML = cartaoHTML(f).trim();
   const el = tpl.content.firstElementChild;
-  cache.set(f.id, { el, sig });
+  cache.set(f.id, { el, sig, visto: Boolean(f.visto), favorito: Boolean(f.favorito) });
   return el;
+}
+
+// Põe os cartões no contêiner só se algo mudou. Tirar da página o botão que
+// está com foco (o que acabou de ser clicado) faz o Chromium rolar a página
+// para outro lugar; por isso, se a lista mudar, o foco sai antes, sem rolar.
+function trocarFilhos(conteiner, novos) {
+  const atuais = conteiner.children;
+  if (atuais.length === novos.length && novos.every((el, i) => atuais[i] === el)) return;
+  const focado = document.activeElement;
+  if (focado && conteiner.contains(focado)) {
+    const cartao = focado.closest('.cartao');
+    focado.blur();
+    conteiner.replaceChildren(...novos);
+    if (cartao && cartao.isConnected) focado.focus({ preventScroll: true });
+    return;
+  }
+  conteiner.replaceChildren(...novos);
 }
 
 function renderFileira() {
@@ -198,7 +246,7 @@ function renderFileira() {
   $('#secao-favoritos').hidden = favoritos.length === 0;
   const vistosFav = favoritos.filter((f) => f.visto).length;
   $('#kicker-favoritos').textContent = `${favoritos.length} favorito${favoritos.length === 1 ? '' : 's'} · ${vistosFav} de ${favoritos.length} vistos`;
-  fileira.replaceChildren(...favoritos.map((f) => elementoCartao(f, cacheFileira)));
+  trocarFilhos(fileira, favoritos.map((f) => elementoCartao(f, cacheFileira)));
   atualizarSetasFileira();
   Movimento.observar(fileira.children, 'fileira');
 }
@@ -272,7 +320,7 @@ function render() {
   const visiveis = vazio ? [] : filtrados();
   $('#sem-resultados').hidden = vazio || visiveis.length > 0;
   lista.className = `lista ${estado.vista === 'lista' ? 'compacta' : 'grade'}`;
-  lista.replaceChildren(...visiveis.map((f) => elementoCartao(f)));
+  trocarFilhos(lista, visiveis.map((f) => elementoCartao(f)));
 
   const total = estado.filmes.length;
   $('#contagem').textContent = vazio ? '' : (visiveis.length === total ? `${total} filmes` : `${visiveis.length} de ${total} filmes`);

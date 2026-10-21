@@ -18,8 +18,8 @@ O NANDFlix é um app de desktop para catalogar os filmes que você quer ver. Ele
 | Arquivo | O que é |
 |---|---|
 | [`NANDFlix.exe`](NANDFlix.exe) | Versão portátil para Windows: é só abrir, não precisa instalar. |
-| [`dist/NANDFlix-Setup-1.0.0.exe`](dist/NANDFlix-Setup-1.0.0.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
-| [`dist/NANDFlix-1.0.0-portable.exe`](dist/NANDFlix-1.0.0-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
+| [`dist/NANDFlix-Setup-1.0.1.exe`](dist/NANDFlix-Setup-1.0.1.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
+| [`dist/NANDFlix-1.0.1-portable.exe`](dist/NANDFlix-1.0.1-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
 
 Os mesmos arquivos estão na página de [Releases](../../releases).
 
