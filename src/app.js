@@ -11,6 +11,7 @@ const estado = {
   filtro: 'todos',
   busca: '',
   diretor: '', // "filmes do mesmo diretor", escolhido no painel
+  pais: '', // filtro de país, escolhido no cabeçalho do grupo ou no painel
   ordenacao: 'ordem',
   vista: 'grade',
   painelId: null,
@@ -111,6 +112,47 @@ document.addEventListener('error', (e) => {
   img.replaceWith(vazia);
 }, true);
 
+// ---------- Países ----------
+
+// O OMDb dá os países em inglês ("United States, Canada"), o principal primeiro.
+// Aqui viram português pelo Intl; a tabela cobre o que ele não reconhece.
+const PAISES_ESPECIAIS = {
+  'Soviet Union': 'União Soviética', 'West Germany': 'Alemanha Ocidental', 'East Germany': 'Alemanha Oriental',
+  Czechoslovakia: 'Tchecoslováquia', Yugoslavia: 'Iugoslávia', 'Federal Republic of Yugoslavia': 'Iugoslávia',
+  'Serbia and Montenegro': 'Sérvia e Montenegro', 'Hong Kong': 'Hong Kong', Macao: 'Macau', 'Czech Republic': 'Tchéquia',
+  'Republic of North Macedonia': 'Macedônia do Norte', UK: 'Reino Unido', USA: 'Estados Unidos',
+  'Ivory Coast': 'Costa do Marfim', Burma: 'Mianmar', Korea: 'Coreia do Sul',
+};
+const codigosPais = (() => {
+  const mapa = new Map();
+  try {
+    const en = new Intl.DisplayNames(['en'], { type: 'region' });
+    for (let i = 0; i < 26; i++) {
+      for (let j = 0; j < 26; j++) {
+        const codigo = String.fromCharCode(65 + i, 65 + j);
+        const nome = en.of(codigo);
+        if (nome && nome !== codigo) mapa.set(nome.toLowerCase(), codigo);
+      }
+    }
+  } catch { /* sem Intl.DisplayNames: os países ficam em inglês */ }
+  return mapa;
+})();
+const nomesPaisPt = (() => { try { return new Intl.DisplayNames(['pt-BR'], { type: 'region' }); } catch { return null; } })();
+const traducoesPais = new Map();
+function paisEmPortugues(nome) {
+  if (!traducoesPais.has(nome)) {
+    const codigo = codigosPais.get(nome.toLowerCase());
+    traducoesPais.set(nome, PAISES_ESPECIAIS[nome] || (codigo && nomesPaisPt ? nomesPaisPt.of(codigo) : nome));
+  }
+  return traducoesPais.get(nome);
+}
+const paisesDe = (f) => (f.info && f.info.pais
+  ? f.info.pais.split(',').map((p) => p.trim()).filter((p) => p && p !== 'N/A').map(paisEmPortugues)
+  : []);
+const paisPrincipal = (f) => paisesDe(f)[0] || '';
+// No painel cada país é um link que filtra a lista por ele.
+const paisesHTML = (f) => paisesDe(f).map((p) => `<button class="link-pais" data-p="pais" data-pais="${esc(p)}" title="Ver só os filmes deste país">${esc(p)}</button>`).join(', ');
+
 // ---------- Lista ----------
 
 // "Joel Coen, Ethan Coen" → ['joel coen', 'ethan coen'] (codirigidos contam para os dois).
@@ -125,17 +167,21 @@ function filtrados() {
     if (estado.filtro === 'vistos' && !f.visto) return false;
     if (estado.filtro === 'favoritos' && !f.favorito) return false;
     if (diretores.length && !diretoresDe(f.diretor).some((d) => diretores.includes(d))) return false;
+    if (estado.pais && !paisesDe(f).includes(estado.pais)) return false;
     if (!palavras.length) return true;
-    const alvo = normalizar([f.titulo, f.ano, f.diretor, f.notas, f.buscaCapa].join(' '));
+    const alvo = normalizar([f.titulo, f.ano, f.diretor, f.notas, f.buscaCapa, ...paisesDe(f)].join(' '));
     return palavras.every((p) => alvo.includes(p));
   });
 
   const comparaTitulo = (a, b) => a.titulo.localeCompare(b.titulo, 'pt', { sensitivity: 'base', numeric: true });
+  // Agrupados: em ordem alfabética, e quem não tem a informação vai para o fim.
+  const comparaGrupo = (x, y) => (x || '￿').localeCompare(y || '￿', 'pt', { sensitivity: 'base' });
   const ordens = {
     ordem: (a, b) => (a.ordem || 0) - (b.ordem || 0),
     titulo: comparaTitulo,
     ano: (a, b) => anoNumero(a.ano) - anoNumero(b.ano) || comparaTitulo(a, b),
-    diretor: (a, b) => (a.diretor || '￿').localeCompare(b.diretor || '￿', 'pt', { sensitivity: 'base' }) || anoNumero(a.ano) - anoNumero(b.ano),
+    diretor: (a, b) => comparaGrupo((a.diretor || '').trim(), (b.diretor || '').trim()) || anoNumero(a.ano) - anoNumero(b.ano) || comparaTitulo(a, b),
+    pais: (a, b) => comparaGrupo(paisPrincipal(a), paisPrincipal(b)) || anoNumero(a.ano) - anoNumero(b.ano) || comparaTitulo(a, b),
     recentes: (a, b) => String(b.adicionadoEm).localeCompare(String(a.adicionadoEm)) || (b.ordem || 0) - (a.ordem || 0),
   };
   return lista.sort(ordens[estado.ordenacao] || ordens.ordem);
@@ -146,6 +192,69 @@ function filtrarDiretor(diretor) {
   fecharPainel();
   render();
   if (estado.diretor) rolarParaLista();
+}
+
+function filtrarPais(pais) {
+  estado.pais = pais || '';
+  fecharPainel();
+  render();
+  if (estado.pais) rolarParaLista();
+}
+
+// Ordenar por diretor ou por país separa a lista em grupos, cada um com um
+// cabeçalho (nome e quantidade); clicar no nome filtra só aquele grupo.
+const AGRUPAMENTOS = {
+  diretor: { chave: (f) => (f.diretor || '').trim(), semChave: 'Diretor não informado', filtrar: filtrarDiretor, dica: 'Ver só os filmes deste diretor' },
+  pais: {
+    chave: paisPrincipal, semChave: 'País não informado', semChavePendente: 'País ainda não carregado',
+    pendente: (f) => f.imdbID && !f.info, buscar: () => buscarInfos(),
+    filtrar: filtrarPais, dica: 'Ver só os filmes deste país',
+  },
+};
+
+const cacheGrupos = new Map();
+function cabecalhoGrupo(chave, fs, ag) {
+  const id = `${estado.ordenacao}|${chave}`;
+  let el = cacheGrupos.get(id);
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'grupo-cabecalho';
+    if (chave) {
+      el.innerHTML = `<button class="grupo-nome" title="${ag.dica}">${esc(chave)}</button><span class="grupo-contagem"></span>`;
+      $('.grupo-nome', el).addEventListener('click', () => ag.filtrar(chave));
+    }
+    cacheGrupos.set(id, el);
+  }
+  // Grupo sem a informação: se ainda há filmes por buscar no OMDb, diz isso e
+  // oferece buscar agora; senão o OMDb simplesmente não informa.
+  if (!chave) {
+    const pendentes = ag.pendente ? fs.some(ag.pendente) : false;
+    if (el.dataset.pendentes !== String(pendentes)) {
+      el.dataset.pendentes = String(pendentes);
+      el.innerHTML = `<span class="grupo-nome">${pendentes ? ag.semChavePendente : ag.semChave}</span><span class="grupo-contagem"></span>${pendentes ? `<button class="btn btn-fantasma grupo-acao">${icone('RefreshCw')} Buscar agora</button>` : ''}`;
+      if (pendentes) $('.grupo-acao', el).addEventListener('click', ag.buscar);
+    }
+  }
+  const quantidade = fs.length;
+  const texto = `${quantidade} filme${quantidade === 1 ? '' : 's'}`;
+  const contagem = $('.grupo-contagem', el);
+  if (contagem.textContent !== texto) contagem.textContent = texto;
+  return el;
+}
+
+// Cartões da lista, com os cabeçalhos dos grupos quando a ordenação agrupa.
+function itensDaLista(visiveis) {
+  const ag = AGRUPAMENTOS[estado.ordenacao];
+  if (!ag) return visiveis.map((f) => elementoCartao(f));
+  const grupos = new Map();
+  for (const f of visiveis) {
+    const chave = ag.chave(f);
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(f);
+  }
+  const itens = [];
+  for (const [chave, fs] of grupos) itens.push(cabecalhoGrupo(chave, fs, ag), ...fs.map((f) => elementoCartao(f)));
+  return itens;
 }
 
 function cartaoHTML(f) {
@@ -314,13 +423,15 @@ function render() {
   $('#barra-ferramentas').hidden = vazio;
   $('#chip-diretor').hidden = !estado.diretor;
   $('#chip-diretor').innerHTML = `${icone('Film')}<span>${esc(estado.diretor)}</span>${icone('X')}`;
+  $('#chip-pais').hidden = !estado.pais;
+  $('#chip-pais').innerHTML = `${icone('Globe')}<span>${esc(estado.pais)}</span>${icone('X')}`;
   if (vazio) $('#secao-sorteado').hidden = true;
   atualizarTopo();
   renderFileira();
   const visiveis = vazio ? [] : filtrados();
   $('#sem-resultados').hidden = vazio || visiveis.length > 0;
   lista.className = `lista ${estado.vista === 'lista' ? 'compacta' : 'grade'}`;
-  trocarFilhos(lista, visiveis.map((f) => elementoCartao(f)));
+  trocarFilhos(lista, itensDaLista(visiveis));
 
   const total = estado.filmes.length;
   $('#contagem').textContent = vazio ? '' : (visiveis.length === total ? `${total} filmes` : `${visiveis.length} de ${total} filmes`);
@@ -488,6 +599,7 @@ function renderPainel() {
       </div>
       <div class="painel-fichas">
         ${f.diretor ? `<p class="painel-ficha"><b>Direção:</b> <span>${esc(f.diretor)}</span></p>` : ''}
+        <p class="painel-ficha" data-info="pais-painel"${paisesDe(f).length ? '' : ' hidden'}><b>País:</b> <span>${paisesHTML(f)}</span></p>
         <p class="painel-ficha" data-info="elenco-painel"${elenco ? '' : ' hidden'}><b>Elenco:</b> <span>${esc(elenco)}</span></p>
         <p class="painel-ficha" data-info="generos-painel"${generos(f.info).length ? '' : ' hidden'}><b>Gêneros:</b> <span>${esc(generos(f.info).join(', '))}</span></p>
         ${f.notas ? `<p class="painel-ficha"><b>Suas notas:</b> <span>${esc(f.notas)}</span></p>` : ''}
@@ -533,6 +645,8 @@ function renderPainel() {
       $('[data-info="meta-painel"]').innerHTML = painelMetaHTML(f);
       const p = $('[data-info="sinopse-painel"]');
       if (p && info.sinopse) { p.textContent = info.sinopse; p.hidden = false; }
+      const pais = $('[data-info="pais-painel"]');
+      if (pais && paisesDe(f).length) { $('span', pais).innerHTML = paisesHTML(f); pais.hidden = false; }
       const e = $('[data-info="elenco-painel"]');
       if (e && info.elenco) { $('span', e).textContent = info.elenco.split(',').slice(0, 4).map((n) => n.trim()).join(', '); e.hidden = false; }
       const g = $('[data-info="generos-painel"]');
@@ -642,6 +756,7 @@ $('#painel').addEventListener('click', async (e) => {
     case 'arquivo': usarArquivoCapa(id); break;
     case 'trailer': abrirTrailer(id); break;
     case 'mesmo-diretor': filtrarDiretor(porId(id).diretor); break;
+    case 'pais': filtrarPais(b.dataset.pais); break;
     case 'diretor-letterboxd': {
       // Página do (primeiro) diretor no Letterboxd: letterboxd.com/director/nome-sobrenome/
       const nome = (porId(id).diretor || '').split(/\s*(?:,|;|\/|&)\s*/)[0];
@@ -1200,6 +1315,7 @@ function sortear({ rolar = true, avisarSeVazio = true } = {}) {
   const filtros = [];
   if (estado.filtro === 'favoritos') filtros.push('★ Favoritos');
   if (estado.diretor) filtros.push(estado.diretor);
+  if (estado.pais) filtros.push(estado.pais);
   if (estado.busca.trim()) filtros.push(`“${estado.busca.trim()}”`);
   origemSorteio.set(f.id, `Sorteado entre ${candidatos.length} não visto${candidatos.length === 1 ? '' : 's'}${filtros.length ? ` · ${filtros.join(' · ')}` : ''}`);
 
@@ -1618,9 +1734,10 @@ function abrirConfiguracoes() {
         </div>
       </div>
       <div class="secao">
-        <h3>Capas</h3>
+        <h3>Capas e informações</h3>
         <div class="linha-botoes">
           <button class="btn" id="cfg-capas" ${semCapa ? '' : 'disabled'}>${icone('ImagePlus')} Buscar capas que faltam (${semCapa})</button>
+          <button class="btn" id="cfg-infos" ${semInformacoes() ? '' : 'disabled'} title="País, notas, gêneros e sinopse dos filmes que ainda não têm">${icone('RefreshCw')} Buscar informações que faltam (${semInformacoes()})</button>
         </div>
         <p>${naoEncontradas ? `${naoEncontradas} filme(s) não foram encontrados no OMDb e ficam fora da busca automática. Use “Trocar capa” ou preencha “Busca da capa” com o título em inglês.` : 'A busca automática roda ao abrir o app.'}</p>
       </div>
@@ -1657,6 +1774,7 @@ function abrirConfiguracoes() {
     r.onchange = async () => { estado.config = await api.salvarConfig({ stremio: r.value }); };
   });
   $('#cfg-capas', modal).onclick = () => { fecharModal(); buscarCapas({ incluirNaoEncontradas: true }); };
+  $('#cfg-infos', modal).onclick = () => { fecharModal(); buscarInfos(); };
   $('#cfg-importar', modal).onclick = () => { fecharModal(); importarPlanilha(); };
   $('#cfg-exportar', modal).onclick = exportarPlanilha;
   $('#cfg-backup-exp', modal).onclick = async () => {
@@ -1758,6 +1876,37 @@ async function buscarCapas(opcoes) {
   if (r && r.pulada === 'limite' && !opcoes.automatica) aviso('O limite diário do OMDb já foi atingido hoje.');
 }
 
+// ---------- Busca das informações que faltam (país, notas, gêneros, sinopse) ----------
+
+const semInformacoes = () => estado.filmes.filter((f) => f.imdbID && !f.info).length;
+
+async function buscarInfos() {
+  const r = await api.buscarInfos();
+  if (r.pulada === 'chave') { pedirChaveOmdb(); return; }
+  if (r.emAndamento) { aviso('A busca de informações já está rodando.'); return; }
+  if (!r.total) aviso('Todos os filmes já têm as informações do OMDb.', { tipo: 'ok' });
+}
+
+api.aoProgressoInfos(({ feitos, total }) => {
+  estado.buscandoInfos = true;
+  $('#progresso-capas').hidden = false;
+  $('#progresso-cheio').style.width = `${total ? (feitos / total) * 100 : 0}%`;
+  $('#progresso-texto').textContent = `Buscando países e notas… ${feitos} de ${total}`;
+});
+
+api.aoFimInfos(({ total, faltam, erro }) => {
+  estado.buscandoInfos = false;
+  if (!estado.buscandoCapas) $('#progresso-capas').hidden = true;
+  if (erro && erro.tipo === 'limite') {
+    aviso(`O limite diário do OMDb acabou. Faltam ${faltam} filme(s); a busca continua amanhã, ao abrir o app.`, { tipo: 'erro', duracao: 9000 });
+  } else if (erro) {
+    const acao = erro.tipo === 'chave' ? { rotulo: 'Colocar chave', fn: pedirChaveOmdb } : undefined;
+    aviso(erro.mensagem, { tipo: 'erro', duracao: 9000, acao });
+  } else {
+    aviso(`Informações carregadas: ${total - faltam} filme(s).`, { tipo: 'ok' });
+  }
+});
+
 api.aoProgressoCapas(({ feitos, total }) => {
   estado.buscandoCapas = true;
   $('#progresso-capas').hidden = false;
@@ -1768,7 +1917,7 @@ api.aoProgressoCapas(({ feitos, total }) => {
 
 api.aoFimCapas((r) => {
   estado.buscandoCapas = false;
-  $('#progresso-capas').hidden = true;
+  if (!estado.buscandoInfos) $('#progresso-capas').hidden = true;
   atualizarEstatisticas();
   if (r.erro) {
     const acao = r.erro.tipo === 'chave' ? { rotulo: 'Configurações', fn: abrirConfiguracoes } : undefined;
@@ -1837,6 +1986,7 @@ $$('.chip[data-filtro]').forEach((chip) => {
 });
 
 $('#chip-diretor').addEventListener('click', () => filtrarDiretor(''));
+$('#chip-pais').addEventListener('click', () => filtrarPais(''));
 
 $('#ordenacao').addEventListener('change', async (e) => {
   estado.ordenacao = e.target.value;

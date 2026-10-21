@@ -83,6 +83,58 @@ async function buscarDuracoes() {
   buscandoDuracoes = false;
 }
 
+// ---------- Informações do OMDb (país, notas, gêneros, sinopse) ----------
+
+// Busca em segundo plano as informações dos filmes que ainda não têm, para
+// poder agrupar "Todos os filmes" por país. Usa a cota do OMDb devagar (2 por
+// vez) e para no limite do dia, sem chave ou sem internet; continua depois.
+// `forcar` (botão "Buscar informações que faltam"): tenta mesmo que o limite do
+// dia já tenha sido marcado como atingido.
+let buscandoInfos = false;
+function buscarInfosQueFaltam({ forcar = false } = {}) {
+  if (buscandoInfos) return { emAndamento: true };
+  if (!config.omdbKey) return { pulada: 'chave' };
+  const hoje = new Date().toISOString().slice(0, 10);
+  if (!forcar && config.limiteAtingidoEm === hoje) return { pulada: 'limite' };
+  const fila = filmes.filter((f) => f.imdbID && !f.info);
+  if (!fila.length) return { total: 0 };
+  buscandoInfos = true;
+  const total = fila.length;
+  let feitos = 0;
+  let erro = null;
+  avisar('infos:progresso', { feitos, total });
+  const trabalhar = async () => {
+    while (fila.length && !erro) {
+      const f = fila.shift();
+      if (!f.info && f.imdbID) {
+        try {
+          const d = await omdb.detalhes(config.omdbKey, f.imdbID);
+          // Sem resultado no OMDb: guarda um registro vazio para não perguntar de novo.
+          atualizarFilme(f.id, d ? { info: d.info, diretor: f.diretor || d.diretor } : { info: { atualizadoEm: new Date().toISOString() } });
+          avisar('filme:mudou', f);
+        } catch (e) {
+          erro = e;
+          if (e.tipo === 'limite') {
+            config.limiteAtingidoEm = hoje;
+            gravarConfig();
+          }
+        }
+      }
+      feitos++;
+      avisar('infos:progresso', { feitos, total });
+    }
+  };
+  Promise.all([trabalhar(), trabalhar(), trabalhar()]).then(() => {
+    gravarAgora();
+    buscandoInfos = false;
+    const faltam = filmes.filter((f) => f.imdbID && !f.info).length;
+    avisar('infos:fim', { total, faltam, erro: erro ? { tipo: erro.tipo || 'rede', mensagem: erro.message } : null });
+  });
+  return { iniciada: true, total };
+}
+
+ipcMain.handle('infos:buscar', () => buscarInfosQueFaltam({ forcar: true }));
+
 // ---------- Capas ----------
 
 function nomeArquivoCapa(filme) {
@@ -189,6 +241,7 @@ async function buscarCapasQueFaltam({ incluirNaoEncontradas = false, automatica 
     const resultado = { total: feitos, encontradas, erro: erro ? { tipo: erro.tipo, mensagem: erro.message } : null };
     avisar('capas:fim', resultado);
     buscarDuracoes();
+    buscarInfosQueFaltam();
     return resultado;
   })();
 
@@ -328,6 +381,7 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
   for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
   if ('omdbKey' in mudancas) config.limiteAtingidoEm = null;
   gravarConfig();
+  if ('omdbKey' in mudancas) buscarInfosQueFaltam();
   return configPublica();
 });
 
@@ -707,6 +761,7 @@ if (!travaUnica) {
 
     criarJanela();
     buscarDuracoes();
+    buscarInfosQueFaltam();
   });
 
   app.on('before-quit', () => {

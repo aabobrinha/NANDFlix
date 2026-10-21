@@ -18,8 +18,8 @@ O NANDFlix é um app de desktop para catalogar os filmes que você quer ver. Ele
 | Arquivo | O que é |
 |---|---|
 | [`NANDFlix.exe`](NANDFlix.exe) | Versão portátil para Windows: é só abrir, não precisa instalar. |
-| [`dist/NANDFlix-Setup-1.0.1.exe`](dist/NANDFlix-Setup-1.0.1.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
-| [`dist/NANDFlix-1.0.1-portable.exe`](dist/NANDFlix-1.0.1-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
+| [`dist/NANDFlix-Setup-1.0.2.exe`](dist/NANDFlix-Setup-1.0.2.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
+| [`dist/NANDFlix-1.0.2-portable.exe`](dist/NANDFlix-1.0.2-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
 
 Os mesmos arquivos estão na página de [Releases](../../releases).
 
@@ -49,8 +49,10 @@ Os mesmos arquivos estão na página de [Releases](../../releases).
 
 ### Listas
 - **Filmes na sua lista**: fileira com os favoritos, rolagem suave pelas setas, trackpad ou Shift + roda do mouse, e a contagem de quantos você já viu.
-- **Todos os filmes**: grade de capas ou lista compacta, filtros (todos, não vistos, vistos, favoritos), ordenação (ordem original, título, ano, diretor, adicionados recentemente) e o progresso de vistos.
-- Busca por título, ano, diretor ou notas, sem diferenciar acentos.
+- **Todos os filmes**: grade de capas ou lista compacta, filtros (todos, não vistos, vistos, favoritos), ordenação (ordem original, título, ano, diretor, país, adicionados recentemente) e o progresso de vistos.
+- **Agrupar por diretor ou por país**: ordenando por um deles, a lista se separa em grupos com o nome e a quantidade de filmes (ex.: "Brasil · 6 filmes"). Cada filme entra no grupo do seu país principal; os países aparecem em português.
+- **Filtrar por diretor ou país**: clicando no nome do grupo, ou no diretor e nos países da página de detalhes. Uma etiqueta mostra o filtro ativo e tira o filtro com um clique.
+- Busca por título, ano, diretor, país ou notas, sem diferenciar acentos.
 
 ### Stremio e Letterboxd
 - **Assistir** abre o filme no app do Stremio e traz a janela para a frente. Também dá para usar o Stremio Web.
@@ -59,6 +61,7 @@ Os mesmos arquivos estão na página de [Releases](../../releases).
 ### Capas, trailers e informações
 - Capas e notas vêm do [OMDb](https://www.omdbapi.com/). As capas ficam salvas no computador e funcionam sem internet.
 - **Buscar capas que faltam** procura em segundo plano, até 3 por vez, e avisa quando o limite diário do OMDb acaba (continua no dia seguinte).
+- País, notas, gêneros e sinopse de todos os filmes também são buscados em segundo plano ao abrir o app (uma consulta por filme). Para forçar na hora, use **Configurações → Buscar informações que faltam** ou **Buscar agora** no grupo "País ainda não carregado"; uma barra no topo mostra o progresso.
 - Trailers vêm do YouTube, achados automaticamente pelo título e ano.
 - A duração vem do [Wikidata](https://www.wikidata.org/), que não tem limite de consultas.
 

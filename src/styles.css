@@ -584,6 +584,28 @@ main::-webkit-scrollbar-thumb:hover { background: var(--divisor); }
 }
 .lista.grade .cartao { content-visibility: auto; contain-intrinsic-size: auto 280px; }
 
+/* Cabeçalho de grupo (ordenar por diretor ou país): ocupa a linha inteira */
+.grupo-cabecalho {
+  grid-column: 1 / -1;
+  display: flex; align-items: baseline; gap: 14px;
+  margin-top: 28px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--divisor);
+}
+.grupo-cabecalho:first-child { margin-top: 0; }
+.lista.compacta .grupo-cabecalho { margin-top: 32px; margin-bottom: 4px; }
+.lista.compacta .grupo-cabecalho:first-child { margin-top: 0; }
+.grupo-nome {
+  padding: 0; border: 0; background: none; color: var(--texto);
+  font: 700 22px/1.2 var(--display); letter-spacing: -.01em; text-align: left;
+}
+button.grupo-nome { cursor: pointer; transition: color .15s ease-out; }
+button.grupo-nome:hover { color: var(--acento-texto); }
+span.grupo-nome { color: var(--texto-2); }
+.grupo-contagem { color: var(--texto-2); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.grupo-acao { margin-left: auto; align-self: center; min-height: 36px; padding: 0 14px; font-size: 13px; }
+.link-pais { padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-decoration: underline; text-decoration-color: rgba(232, 235, 240, .35); text-underline-offset: 3px; }
+.link-pais:hover { color: var(--acento-texto); text-decoration-color: currentColor; }
+
 /* Lista compacta: linhas numeradas com divisores pontilhados */
 @counter-style tres-digitos { system: extends decimal; pad: 3 "0"; }
 .lista.compacta { display: flex; flex-direction: column; counter-reset: linha; }
