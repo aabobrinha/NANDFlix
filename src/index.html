@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; img-src 'self' file: capa: https: data:; style-src 'self' file: 'unsafe-inline'; font-src 'self' file:; script-src 'self' file:; frame-src https://www.youtube-nocookie.com">
+  <title>nandflix</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topo" id="topo">
+    <div class="topo-linha">
+      <div class="topo-esq">
+        <h1 class="marca"><img class="marca-icone" src="icone.png" alt=""> nandflix</h1>
+        <button class="btn btn-fantasma btn-capas" id="btn-capas-faltam" hidden></button>
+      </div>
+      <div class="topo-dir">
+        <div class="pesquisa" id="pesquisa-caixa">
+          <input id="pesquisa" type="search" placeholder="Título, ano, diretor ou notas" autocomplete="off" spellcheck="false" tabindex="-1" aria-label="Pesquisar filmes">
+          <button class="icone-btn" id="btn-lupa" data-dica="Pesquisar" aria-label="Pesquisar"><span data-icone="Search"></span></button>
+        </div>
+        <button class="icone-btn" id="btn-sortear" data-dica="Sortear (R)" aria-label="Sortear"><span data-icone="Dices"></span></button>
+        <button class="icone-btn btn-mais" id="btn-adicionar" data-dica="Adicionar filme" aria-label="Adicionar filme"><span data-icone="Plus"></span></button>
+        <button class="icone-btn" id="btn-config" data-dica="Configurações" aria-label="Configurações"><span data-icone="Settings"></span></button>
+      </div>
+    </div>
+    <div class="progresso-capas" id="progresso-capas" hidden>
+      <div class="progresso-trilho"><div class="progresso-cheio" id="progresso-cheio"></div></div>
+      <span id="progresso-texto"></span>
+    </div>
+  </header>
+
+  <main id="principal">
+    <section class="bloco" id="secao-sorteado" hidden>
+      <h2 class="titulo-secao sr">Filme sorteado</h2>
+      <section class="destaque" id="destaque" aria-label="Filme sorteado"></section>
+    </section>
+
+    <section class="bloco" id="secao-favoritos" hidden>
+      <div class="cabecalho-fileira">
+        <h2 class="titulo-secao">Filmes na sua lista</h2>
+        <span class="divisor-v" aria-hidden="true"></span>
+        <span class="kicker" id="kicker-favoritos">0 favoritos</span>
+      </div>
+      <div class="fileira-envoltorio">
+        <button class="fileira-seta fileira-esq" id="fileira-esq" aria-label="Voltar"><span data-icone="ChevronLeft"></span></button>
+        <div class="fileira" id="fileira"></div>
+        <button class="fileira-seta fileira-dir" id="fileira-dir" aria-label="Mostrar mais"><span data-icone="ChevronRight"></span></button>
+      </div>
+    </section>
+
+    <section class="bloco" id="secao-todos">
+      <div class="cabecalho-secao" id="titulo-todos" hidden>
+        <div class="cabecalho-titulos">
+          <h2 class="titulo-secao">Todos os filmes</h2>
+        </div>
+        <div class="estatisticas" id="estatisticas">
+          <div class="est-vistos">
+            <span id="est-vistos-texto">0 de 0 vistos (0%)</span>
+            <div class="barra" aria-hidden="true"><div class="barra-cheia" id="est-barra"></div></div>
+          </div>
+          <span class="est-fav"><span data-icone="Star" data-preenchido></span><span id="est-fav">0 favoritos</span></span>
+        </div>
+      </div>
+      <div class="barra-ferramentas" id="barra-ferramentas" hidden>
+        <div class="chips" role="radiogroup" aria-label="Filtro">
+          <button class="chip ativo" data-filtro="todos" role="radio" aria-checked="true">Todos</button>
+          <button class="chip" data-filtro="nao-vistos" role="radio" aria-checked="false">Não vistos</button>
+          <button class="chip" data-filtro="vistos" role="radio" aria-checked="false">Vistos</button>
+          <button class="chip" data-filtro="favoritos" role="radio" aria-checked="false">★ Favoritos</button>
+        </div>
+        <button class="chip chip-diretor" id="chip-diretor" title="Tirar o filtro de diretor" hidden></button>
+        <span class="contagem" id="contagem"></span>
+        <div class="espaco"></div>
+        <label class="ordenar">
+          <span>Ordenar por</span>
+          <span class="ordenar-caixa">
+            <select id="ordenacao">
+              <option value="ordem">Ordem original</option>
+              <option value="titulo">Título</option>
+              <option value="ano">Ano</option>
+              <option value="diretor">Diretor</option>
+              <option value="recentes">Adicionados recentemente</option>
+            </select>
+            <span class="ordenar-seta" data-icone="ChevronDown"></span>
+          </span>
+        </label>
+        <div class="alternar-vista" role="group" aria-label="Visualização">
+          <button class="btn btn-icone" data-vista="grade" title="Grade de capas" aria-label="Grade de capas"><span data-icone="LayoutGrid"></span></button>
+          <button class="btn btn-icone" data-vista="lista" title="Lista compacta" aria-label="Lista compacta"><span data-icone="List"></span></button>
+        </div>
+      </div>
+
+      <section class="vazio" id="vazio" hidden>
+        <div class="vazio-caixa">
+          <h2>Sua lista está vazia</h2>
+          <div class="vazio-acoes">
+            <button class="btn btn-primario btn-grande" id="btn-importar-vazio">Importar planilha</button>
+            <div class="vazio-dir">
+              <button class="link-forte" id="btn-adicionar-vazio">ou adicione um filme</button>
+              <p>Importe a planilha de filmes para começar. Os vistos, favoritos e notas vêm junto.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sem-resultados" id="sem-resultados" hidden>
+        <h3 class="sem-titulo">Nenhum filme encontrado.</h3>
+        <div class="sem-rodape">
+          <span>Busque por título, ano, diretor ou notas.</span>
+          <span id="sem-contagem"></span>
+        </div>
+      </section>
+
+      <div id="lista" class="lista grade"></div>
+    </section>
+  </main>
+
+  <aside class="painel" id="painel" aria-hidden="true" aria-label="Detalhes do filme">
+    <div class="painel-conteudo" id="painel-conteudo"></div>
+  </aside>
+  <div class="painel-fundo" id="painel-fundo"></div>
+
+  <div class="previa" id="previa" hidden></div>
+
+  <div class="foco" id="foco" hidden>
+    <div class="foco-caixa" id="foco-caixa"></div>
+  </div>
+
+  <dialog id="modal" class="modal"></dialog>
+
+  <div class="avisos" id="avisos" role="status" aria-live="polite"></div>
+
+  <script src="../node_modules/lucide/dist/umd/lucide.min.js"></script>
+  <script src="icones.js"></script>
+  <script src="movimento.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

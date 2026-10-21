@@ -1,0 +1,13 @@
+# Dependências (recriadas com `npm install`)
+node_modules/
+
+# Restos do build: só os executáveis finais de dist/ entram no repositório
+dist/*
+!dist/*.exe
+dist/*.exe.blockmap
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+.vscode/
+*.log

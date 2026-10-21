@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="fundo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2c3440"/>
+      <stop offset="1" stop-color="#14181c"/>
+    </linearGradient>
+    <clipPath id="ripa"><path d="M84 170 L392 82 L408 138 L100 226 Z"/></clipPath>
+    <clipPath id="topo"><rect x="96" y="232" width="320" height="56"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#fundo)"/>
+  <!-- corpo da claquete -->
+  <rect x="96" y="232" width="320" height="196" rx="22" fill="#f4f6f8"/>
+  <!-- faixa listrada do corpo -->
+  <g clip-path="url(#topo)">
+    <rect x="96" y="232" width="320" height="56" fill="#14181c"/>
+    <path d="M110 232h46l-36 56h-46z M210 232h46l-36 56h-46z M310 232h46l-36 56h-46z M410 232h46l-36 56h-46z" fill="#ff8000"/>
+    <path d="M160 232h46l-36 56h-46z" fill="#00e054"/>
+    <path d="M260 232h46l-36 56h-46z" fill="#40bcf4"/>
+    <path d="M360 232h46l-36 56h-46z" fill="#00e054"/>
+  </g>
+  <!-- ripa aberta -->
+  <g clip-path="url(#ripa)">
+    <path d="M84 170 L392 82 L408 138 L100 226 Z" fill="#14181c"/>
+    <path d="M100 166l44-12 -6 64 -44 12z M200 137l44-12 -6 64 -44 12z M300 109l44-12 -6 64 -44 12z" fill="#ff8000"/>
+    <path d="M150 152l44-12 -6 64 -44 12z M350 95l44-12 -6 64 -44 12z" fill="#40bcf4"/>
+    <path d="M250 123l44-12 -6 64 -44 12z" fill="#00e054"/>
+  </g>
+  <circle cx="108" cy="222" r="14" fill="#f4f6f8"/>
+  <!-- linhas do corpo -->
+  <rect x="132" y="322" width="248" height="14" rx="7" fill="#c9d0d6"/>
+  <rect x="132" y="358" width="170" height="14" rx="7" fill="#c9d0d6"/>
+</svg>

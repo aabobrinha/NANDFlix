@@ -1,0 +1,61 @@
+{
+  "name": "nandflix",
+  "productName": "NANDFlix",
+  "version": "1.0.0",
+  "description": "Catálogo de filmes com cara de streaming: capas, trailers, sorteio e atalhos para assistir no Stremio e registrar no Letterboxd.",
+  "author": "aabobrinha",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "import": "node scripts/import.js"
+  },
+  "build": {
+    "appId": "app.filmeslegais",
+    "productName": "NANDFlix",
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**",
+      "src/**",
+      "!src/amostras/**",
+      "!src/fonts/big-shoulders/**",
+      "!src/fonts/instrument-sans/**",
+      "node_modules/**"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "executableName": "NANDFlix",
+      "icon": "build/icon.png"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.entertainment"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "AudioVideo"
+    }
+  },
+  "dependencies": {
+    "@fontsource/montserrat": "^5.3.0",
+    "lucide": "^1.60.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "electron": "^44.9.1",
+    "electron-builder": "^26.15.3"
+  }
+}
