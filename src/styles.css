@@ -710,6 +710,397 @@ span.grupo-nome { color: var(--texto-2); }
 .generos:empty { display: none; }
 .previa-corpo .nota-chip { background: var(--superficie-2); }
 
+/* ---------- Watchlist de hoje (botões e selo) ---------- */
+
+.acao.hoje-on, .redondo.hoje-on { background: var(--acento); color: var(--sobre-acento); border-color: var(--acento); }
+.lista.compacta .acao.hoje-on { background: transparent; color: var(--acento-texto); }
+/* Na capa cabem cinco botões redondos: ficam um pouco menores. */
+.fileira .acoes, .lista.grade .acoes { gap: 2px; justify-content: space-between; }
+.fileira .acao, .lista.grade .acao { width: 29px; height: 29px; }
+.fileira .acao .ico, .lista.grade .acao .ico { width: 15px; height: 15px; }
+.fileira .acao svg.lb-pontos, .lista.grade .acao svg.lb-pontos { width: 20px; height: 8px; }
+.selo-hoje {
+  position: absolute; top: 8px; left: 8px; z-index: 2;
+  width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--gradiente-acento); color: var(--sobre-acento);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+  transition: opacity .2s ease-out;
+}
+.selo-hoje .ico { width: 14px; height: 14px; stroke-width: 2; }
+.selo-visto ~ .selo-hoje { left: 38px; }
+.fileira .cartao:focus-within .selo-hoje, .lista.grade .cartao:focus-within .selo-hoje { opacity: 0; }
+@media (hover: hover) and (pointer: fine) {
+  .fileira .cartao:hover .selo-hoje, .lista.grade .cartao:hover .selo-hoje { opacity: 0; }
+}
+.lista.compacta .selo-hoje { display: none; }
+
+/* ---------- Painel: dias em que o filme foi visto ---------- */
+
+.painel-vistos { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 14px; }
+.vistos-em { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
+.vistos-em b { font-weight: 500; color: var(--texto-2); margin-right: 2px; }
+.dia-visto {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 3px 4px 3px 11px; border-radius: 999px;
+  background: rgba(109, 74, 168, .22); color: var(--acento-texto);
+  font-size: 13px; font-weight: 600;
+}
+.dia-visto button {
+  width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; background: transparent; color: inherit; cursor: pointer;
+}
+.dia-visto button:hover { background: rgba(232, 235, 240, .14); color: var(--texto); }
+.dia-visto .ico { width: 13px; height: 13px; }
+.vistos-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vistos-acoes .btn { min-height: 36px; padding: 0 14px; font-size: 13px; }
+.vistos-acoes .ico { width: 16px; height: 16px; }
+.adicionar-dia { display: inline-flex; align-items: center; gap: 8px; color: var(--texto-2); font-size: 13px; font-weight: 600; }
+.adicionar-dia input {
+  min-height: 34px; padding: 0 10px; border: 1px solid var(--divisor); border-radius: 8px;
+  background: transparent; color: var(--texto); font: inherit; color-scheme: dark; cursor: pointer;
+}
+.adicionar-dia input:hover { border-color: var(--borda-controle); }
+
+/* ---------- Calendário ----------
+   Um diário de cinema: o dia em que você viu um filme vira um pequeno pôster
+   (a capa desfocada no fundo e a capa nítida por cima); os dias sem filme são
+   só o número, para o mês não parecer uma planilha. O roxo marca o que é
+   plano (hoje e a watchlist), nunca o que já foi visto. */
+
+.calendario {
+  position: fixed; inset: 0; z-index: 35;
+  display: grid; place-items: center;
+  background: rgba(5, 6, 8, .78); backdrop-filter: blur(8px);
+  animation: focoAbrir .2s ease-out;
+}
+.calendario-caixa {
+  position: relative;
+  width: min(1180px, calc(100vw - 48px));
+  /* Altura fixa: ir do mês para um dia (e voltar) não faz a caixa pular. */
+  height: min(860px, calc(100vh - 48px));
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 28px 32px 32px; border-radius: 18px;
+  background: var(--superficie);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, .75), inset 0 0 0 1px rgba(232, 235, 240, .06);
+  display: flex; flex-direction: column;
+}
+.calendario-caixa::-webkit-scrollbar { width: 10px; }
+.calendario-caixa::-webkit-scrollbar-thumb { background: var(--superficie-2); border-radius: 5px; border: 3px solid var(--superficie); }
+
+/* A caixa tem altura fixa: só a grade do mês se ajusta a ela. O topo e as seções
+   do dia nunca encolhem (encolhidos, o título do dia era cortado). */
+.calendario-caixa > :not(.cal-grade) { flex-shrink: 0; }
+
+/* Topo do mês: título, setas, voltar para hoje, números do mês e fechar.
+   Numa linha só: se ele quebrasse num mês e não no outro, a grade mudaria de
+   lugar no meio de um arrasto (ao trocar de mês segurando sobre a seta). */
+.cal-topo { position: relative; z-index: 2; display: flex; align-items: center; flex-wrap: nowrap; gap: 12px 24px; margin-bottom: 24px; }
+.cal-topo .cal-stats { min-width: 0; flex-wrap: nowrap; overflow: hidden; }
+.cal-topo .cal-stat { flex: none; white-space: nowrap; }
+.cal-navegacao { display: flex; align-items: center; gap: 16px; }
+.cal-navegacao h2 { margin: 0; font: 700 34px/1.1 var(--display); letter-spacing: -.02em; white-space: nowrap; }
+.cal-navegacao h2::first-letter { text-transform: uppercase; }
+.cal-ano { color: var(--texto-2); font-weight: 400; }
+.cal-setas { display: flex; gap: 6px; }
+.cal-navegacao .redondo:disabled { opacity: .25; cursor: default; }
+.cal-ir-hoje { min-height: 40px; padding: 0 16px; font-size: 13px; box-shadow: inset 0 0 0 1px var(--divisor); }
+.cal-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cal-stat {
+  display: inline-flex; align-items: center; gap: 7px;
+  min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px;
+  background: rgba(232, 235, 240, .06); color: var(--texto-2);
+  font: 500 13px/1 var(--ui); font-variant-numeric: tabular-nums;
+}
+.cal-stat b { color: var(--texto); font-weight: 700; }
+.cal-stat .ico { width: 15px; height: 15px; }
+.cal-stat.roxo { background: rgba(109, 74, 168, .24); color: var(--acento-texto); cursor: pointer; transition: background-color .15s ease-out; }
+.cal-stat.roxo b { color: #EDE4FF; }
+.cal-stat.roxo:hover { background: rgba(109, 74, 168, .4); }
+.cal-fechar { margin-left: auto; }
+
+/* Grade do mês */
+.cal-semana, .cal-grade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cal-semana { margin-bottom: 8px; }
+.cal-semana span { padding-left: 12px; font-size: 12px; font-weight: 500; color: var(--texto-2); letter-spacing: .04em; }
+.cal-grade { flex: 1; min-height: 0; grid-auto-rows: minmax(88px, 1fr); }
+
+.cal-dia {
+  position: relative; overflow: hidden; isolation: isolate;
+  container-type: size;
+  border-radius: 10px;
+  background: rgba(232, 235, 240, .022);
+  transition: background-color .15s ease-out, box-shadow .15s ease-out, opacity .15s ease-out;
+}
+.cal-dia[data-c="dia"] { cursor: pointer; }
+.cal-dia[data-c="dia"]:hover { background: rgba(232, 235, 240, .07); }
+.cal-dia.vazio { background: transparent; }
+/* Os dias que vêm ficam abertos, sem fundo: ainda não aconteceram. */
+.cal-dia.futuro { background: transparent; box-shadow: inset 0 0 0 1px rgba(232, 235, 240, .05); }
+.cal-dia.futuro:hover { background: rgba(232, 235, 240, .04); }
+
+.cal-cabeca {
+  position: absolute; top: 9px; left: 11px; z-index: 3;
+  display: flex; align-items: center; gap: 6px;
+  pointer-events: none;
+}
+.cal-numero { font-size: 14px; font-weight: 500; color: var(--texto-2); font-variant-numeric: tabular-nums; }
+.cal-dia.com-vistos .cal-numero, .cal-dia.hoje .cal-numero { color: var(--texto); font-weight: 700; text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
+.cal-dia.futuro .cal-numero { color: rgba(156, 159, 163, .7); }
+.cal-hoje {
+  padding: 3px 8px; border-radius: 999px;
+  background: var(--gradiente-acento); color: var(--sobre-acento);
+  font-size: 10.5px; font-weight: 700; line-height: 1.1;
+}
+
+/* Hoje: anel roxo e um véu roxo bem leve */
+.cal-dia.hoje {
+  background: linear-gradient(160deg, rgba(109, 74, 168, .26), rgba(109, 74, 168, .08));
+  box-shadow: inset 0 0 0 2px var(--acento-texto);
+}
+.cal-dia.hoje.com-vistos { box-shadow: inset 0 0 0 2px var(--acento-texto); }
+
+/* Dia com filme visto: a capa vira o fundo da célula, desfocada e escurecida */
+.cal-fundo {
+  position: absolute; inset: -24px; z-index: -1;
+  background-size: cover; background-position: center 30%;
+  filter: blur(14px) saturate(1.25) brightness(.5);
+}
+.cal-dia.com-vistos::after {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(115deg, rgba(5, 6, 8, .55) 0%, rgba(5, 6, 8, 0) 55%);
+}
+.cal-dia.com-vistos:hover .cal-fundo { filter: blur(14px) saturate(1.3) brightness(.62); }
+
+/* Capas nítidas dos vistos: em pé, do lado direito, ocupando a altura da célula.
+   Com mais de uma, elas se sobrepõem como cartas. */
+.cal-vistos {
+  position: absolute; top: 8px; right: 8px; bottom: 8px; z-index: 2;
+  display: flex; flex-direction: row-reverse; align-items: stretch;
+}
+.cal-vistos .cal-capa {
+  height: 100%; width: auto; aspect-ratio: 2 / 3; flex: none;
+}
+.cal-vistos .cal-capa + .cal-capa { margin-right: calc((100cqh - 16px) * -.42); }
+/* A primeira capa fica na frente; as outras aparecem atrás, abertas como cartas. */
+.cal-vistos .cal-capa:nth-child(1) { z-index: 3; }
+.cal-vistos .cal-capa:nth-child(2) { z-index: 2; transform: rotate(-6deg); transform-origin: bottom right; }
+.cal-vistos .cal-capa:nth-child(3) { z-index: 1; transform: rotate(-12deg); transform-origin: bottom right; }
+.cal-vistos .cal-capa:hover { transform: translateY(-3px); z-index: 4; }
+.cal-vistos .cal-capa .capa { height: 100%; box-shadow: 0 6px 18px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .06); }
+.cal-dia > .cal-mais {
+  position: absolute; left: 10px; bottom: 9px; z-index: 3;
+  padding: 3px 8px; border-radius: 999px; background: rgba(5, 6, 8, .7);
+  font-size: 11.5px; font-weight: 700; color: var(--texto);
+}
+
+/* Pensando em ver: capas pequenas com anel roxo, embaixo à esquerda */
+/* A faixa ocupa a largura da célula com a mesma margem dos dois lados e
+   centraliza as capas; elas encolhem para caber (até 3 lado a lado). */
+.cal-wl {
+  position: absolute; left: 10px; right: 10px; bottom: 9px; z-index: 3;
+  display: flex; justify-content: center;
+}
+.cal-wl-capas { position: relative; display: flex; align-items: flex-end; gap: 6px; }
+.cal-wl .cal-capa {
+  flex: none; height: auto; aspect-ratio: 2 / 3;
+  width: min(calc((100cqw - 20px - 12px) / 3), calc(min(100cqh - 40px, 64px) * 2 / 3));
+}
+.cal-wl .cal-capa .capa { height: 100%; border-radius: 4px; box-shadow: 0 0 0 2px var(--acento-texto), 0 6px 16px rgba(0, 0, 0, .5); }
+/* "+N" da watchlist: selo roxo no canto da última capa. (Ao lado das capas ele
+   saía da célula quando elas ocupavam a largura toda.) */
+.cal-wl .cal-mais {
+  position: absolute; top: -8px; right: -6px; z-index: 2;
+  min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px;
+  display: grid; place-items: center;
+  background: var(--gradiente-acento); color: var(--sobre-acento);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .55), 0 0 0 2px var(--superficie);
+  font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+/* Dia com visto e watchlist ao mesmo tempo: os vistos sobem e dão espaço. */
+.cal-dia.misto .cal-vistos { bottom: 50%; top: 8px; }
+.cal-dia.misto .cal-wl .cal-capa { width: min(calc((100cqw - 20px - 12px) / 3), calc(min(50cqh - 18px, 48px) * 2 / 3)); }
+
+.cal-capa {
+  display: block; padding: 0; border: 0; background: none; cursor: pointer;
+  border-radius: 5px; transition: transform .18s ease-out;
+}
+.cal-capa .capa { border-radius: 5px; }
+.cal-capa .capa-vazia { padding: 3px; }
+.cal-capa .capa-vazia strong { font-size: 7px; }
+.cal-capa .capa-vazia span { display: none; }
+.cal-wl .cal-capa:hover { transform: translateY(-3px); }
+
+/* Arrastar uma capa da watchlist para outro dia */
+.cal-capa[data-arrastar] { cursor: grab; touch-action: none; }
+.cal-capa img { -webkit-user-drag: none; user-select: none; }
+.calendario.arrastando, .calendario.arrastando * { cursor: grabbing !important; user-select: none; }
+.cal-fantasma {
+  position: fixed; left: 0; top: 0; z-index: 95; width: 64px;
+  pointer-events: none; border-radius: 6px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .7), 0 0 0 2px var(--acento-texto);
+  will-change: transform;
+}
+.cal-fantasma .capa { border-radius: 6px; }
+.cal-fantasma .capa-vazia strong { font-size: 7px; }
+.cal-fantasma .capa-vazia span { display: none; }
+.redondo.cal-seta-alvo { background: var(--gradiente-acento); border-color: transparent; color: var(--sobre-acento); transform: scale(1.1); }
+.cal-dica-arrasto {
+  position: fixed; left: 50%; bottom: 32px; translate: -50% 0; z-index: 96;
+  display: none; align-items: center; gap: 8px; white-space: nowrap;
+  padding: 10px 16px; border-radius: 999px; background: var(--superficie-2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(155, 123, 220, .4);
+  font-size: 13px; font-weight: 500; color: var(--texto);
+  pointer-events: none;
+}
+.cal-dica-arrasto .ico { width: 16px; height: 16px; color: var(--acento-texto); }
+.calendario.arrastando .cal-dica-arrasto { display: inline-flex; }
+/* Enquanto arrasta, os dias viram alvos: os que vêm ganham contorno tracejado. */
+.calendario.arrastando .cal-dia.futuro { box-shadow: inset 0 0 0 1px rgba(155, 123, 220, .35); }
+.cal-dia.cal-origem { opacity: .45; }
+.cal-dia.cal-soltar {
+  background: rgba(109, 74, 168, .34) !important;
+  box-shadow: inset 0 0 0 2px var(--acento-texto) !important; opacity: 1;
+}
+
+/* ---------- Página de um dia ---------- */
+
+/* Faixa de cinema no topo: a capa do primeiro filme do dia, desfocada */
+.cal-dia-topo { position: relative; margin: -28px -32px 8px; padding: 28px 32px 36px; border-radius: 18px 18px 0 0; overflow: hidden; }
+.cal-dia-topo .cal-topo { margin-bottom: 0; align-items: flex-start; }
+.cal-dia-topo.com-fundo { padding-top: 32px; padding-bottom: 56px; }
+.cal-dia-fundo {
+  position: absolute; inset: -40px; z-index: 0;
+  background-size: cover; background-position: center 30%;
+  filter: blur(30px) saturate(1.3) brightness(.5);
+}
+.cal-dia-topo.com-fundo::after {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(0deg, var(--superficie) 0%, rgba(14, 16, 18, .4) 55%, rgba(14, 16, 18, .15) 100%);
+}
+.cal-dia-titulo { display: flex; flex-direction: column; gap: 6px; }
+.cal-dia-semana { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--texto-2); }
+.cal-dia-semana::first-letter { text-transform: uppercase; }
+.cal-dia-topo.com-fundo .cal-dia-semana { color: rgba(232, 235, 240, .8); }
+.cal-dia-titulo h2 { margin: 0; font: 700 44px/1.05 var(--display); letter-spacing: -.025em; text-shadow: 0 2px 20px rgba(0, 0, 0, .5); }
+
+.cal-secao { position: relative; z-index: 2; }
+.cal-secao + .cal-secao { margin-top: 36px; }
+.cal-secao h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; font: 700 20px/1.2 var(--display); }
+.cal-secao h3 .ico { width: 20px; height: 20px; color: var(--acento-texto); }
+.cal-contagem {
+  min-width: 26px; height: 26px; padding: 0 8px; border-radius: 999px;
+  display: inline-grid; place-items: center;
+  background: rgba(232, 235, 240, .08); color: var(--texto-2);
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+
+/* Prateleira de capas grandes, como as fileiras da tela inicial */
+.cal-filmes { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 216px)); gap: 28px 22px; }
+.cal-filme { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cal-capa.grande { width: 100%; border-radius: 10px; }
+.cal-capa.grande .capa { border-radius: 10px; box-shadow: 0 16px 36px rgba(0, 0, 0, .55); }
+.cal-capa.grande .capa-vazia strong { font-size: 15px; }
+.cal-capa.grande .capa-vazia span { display: block; }
+.cal-capa.grande:hover { transform: translateY(-4px); }
+.cal-capa.grande:hover .capa { box-shadow: 0 22px 44px rgba(0, 0, 0, .65); }
+.cal-filme.pensando .cal-capa.grande .capa { box-shadow: 0 0 0 2px var(--acento-texto), 0 16px 36px rgba(0, 0, 0, .55); }
+.cal-filme-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cal-filme-titulo {
+  display: block; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
+  color: var(--texto); font: 700 16px/1.3 var(--display); letter-spacing: -.01em;
+}
+.cal-filme-titulo:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+.cal-filme-info h4 { margin: 0; }
+.cal-filme-info p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--texto-2); font-variant-numeric: tabular-nums; }
+.cal-filme-botoes { display: flex; align-items: center; gap: 6px; }
+.cal-filme-botoes .btn-assistir { flex: 1; min-width: 0; min-height: 44px; padding: 0 14px; font-size: 14px; gap: 6px; }
+.cal-filme-botoes .btn-assistir .ico { width: 15px; height: 15px; }
+.cal-filme-botoes .redondo { width: 44px; height: 44px; }
+.cal-filme-botoes .redondo .ico { width: 18px; height: 18px; }
+.cal-filme-mover { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.cal-filme-mover button {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0;
+  border: 0; background: none; cursor: pointer;
+  color: var(--acento-texto); font: 500 13px/1 var(--ui);
+  transition: color .15s ease-out;
+}
+.cal-filme-mover button:hover { color: var(--texto); }
+.cal-filme-mover .ico { width: 15px; height: 15px; }
+.cal-vazio {
+  margin: 0; max-width: 560px; padding: 18px 20px; border-radius: 12px;
+  background: rgba(232, 235, 240, .035);
+  color: var(--texto-2); font-size: 14px; line-height: 1.6;
+}
+.cal-vazio .ico { width: 15px; height: 15px; vertical-align: -2px; color: var(--acento-texto); }
+
+/* Vistos no dia: centralizados e maiores, como pôsteres em exposição */
+.cal-secao-vistos h3 { justify-content: center; }
+.cal-secao-vistos .cal-filmes { justify-content: center; grid-template-columns: repeat(auto-fit, minmax(240px, 280px)); gap: 32px 28px; }
+.cal-secao-vistos .cal-filme-info { align-items: center; text-align: center; }
+.cal-secao-vistos .cal-filme-titulo { text-align: center; font-size: 18px; }
+.cal-secao-vistos .cal-filme-info p { font-size: 14px; }
+.cal-secao-vistos .cal-capa.grande .capa { box-shadow: 0 22px 50px rgba(0, 0, 0, .6); }
+.cal-secao-vistos .cal-vazio { margin: 0 auto; text-align: center; }
+
+/* Sortear um filme para a watchlist de hoje */
+.cal-secao h3 .cal-sortear { margin-left: auto; }
+.cal-sortear {
+  min-height: 40px; padding: 0 16px; font-size: 13.5px; font-family: var(--ui); font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(155, 123, 220, .45); color: var(--acento-texto);
+}
+.cal-sortear:hover { background: rgba(109, 74, 168, .22); color: var(--texto); }
+.cal-sortear .ico { width: 17px; height: 17px; color: inherit; }
+.cal-sortear:disabled { opacity: .5; }
+/* A roleta: um cartão do tamanho dos outros onde as capas passam rápido */
+.cal-roleta .cal-capa.grande { cursor: default; }
+.cal-roleta .cal-capa.grande:hover { transform: none; }
+.cal-roleta .capa { box-shadow: 0 0 0 2px var(--acento-texto), 0 0 40px rgba(155, 123, 220, .35), 0 16px 36px rgba(0, 0, 0, .55); }
+.cal-roleta .capa img { width: 100%; height: 100%; object-fit: cover; }
+.cal-roleta .cal-filme-titulo { cursor: default; }
+.cal-roleta .cal-filme-titulo:hover { text-decoration: none; }
+.cal-roleta-status { color: var(--acento-texto) !important; font-weight: 600; }
+.cal-roleta.escolhido .capa { box-shadow: 0 0 0 3px var(--acento-texto), 0 0 60px rgba(155, 123, 220, .6), 0 16px 36px rgba(0, 0, 0, .55); }
+
+@media (max-width: 1000px) {
+  /* Os números do mês descem para uma linha própria, em todos os meses igual. */
+  .cal-topo { flex-wrap: wrap; }
+  .cal-stats { order: 3; width: 100%; }
+}
+
+@media (max-width: 719px) {
+  .calendario-caixa { width: 100vw; height: 100vh; max-height: none; border-radius: 0; padding: 18px 12px 20px; }
+  .cal-navegacao h2 { font-size: 26px; }
+  .cal-ir-hoje { display: none; }
+  .cal-semana, .cal-grade { gap: 4px; }
+  .cal-semana span { padding-left: 4px; text-align: center; }
+  .cal-grade { grid-auto-rows: minmax(64px, 1fr); }
+  .cal-cabeca { top: 6px; left: 6px; }
+  .cal-numero { font-size: 12px; }
+  .cal-hoje { display: none; }
+  /* Pequeno demais para capas nítidas: fica a capa desfocada de fundo e, na watchlist, um ponto roxo. */
+  .cal-vistos, .cal-dia > .cal-mais { display: none; }
+  .cal-fundo { filter: blur(6px) saturate(1.25) brightness(.65); }
+  .cal-wl { left: 6px; right: 6px; bottom: 6px; }
+  .cal-wl .cal-capa { width: 20px; }
+  .cal-wl .cal-capa:nth-child(n + 2), .cal-wl .cal-mais { display: none; }
+  .cal-dia-topo { margin: -18px -12px 8px; padding: 18px 12px 28px; border-radius: 0; }
+  .cal-dia-titulo h2 { font-size: 32px; }
+  .cal-filmes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 12px; }
+  .cal-secao-vistos .cal-filmes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Cartões estreitos: "Assistir" ocupa a linha e os botões redondos vão embaixo. */
+  .cal-filme-botoes { flex-wrap: wrap; }
+  .cal-filme-botoes .btn-assistir { flex-basis: 100%; }
+  .cal-sortear { padding: 0 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendario { animation: none; }
+  .cal-capa, .cal-dia, .cal-capa:hover, .cal-vistos .cal-capa:hover { transition: none; }
+  .cal-capa.grande:hover, .cal-wl .cal-capa:hover, .cal-vistos .cal-capa:hover { transform: none; }
+}
+
 /* ---------- Trailer em foco ---------- */
 
 .foco {

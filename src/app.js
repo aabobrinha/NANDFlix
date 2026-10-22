@@ -257,15 +257,21 @@ function itensDaLista(visiveis) {
   return itens;
 }
 
+// Botão e selo da watchlist de hoje (a "bolinha" do calendário na capa).
+const tituloHoje = (naLista) => (naLista ? 'Tirar da watchlist de hoje' : 'Pensando em ver hoje');
+const seloHojeHTML = () => `<span class="selo-hoje" title="Na watchlist de hoje">${icone('CalendarClock')}</span>`;
+
 function cartaoHTML(f) {
   const tituloVisto = f.visto ? 'Desmarcar visto' : 'Marcar como visto';
   const tituloFav = f.favorito ? 'Tirar dos favoritos' : 'Favoritar';
+  const hojeNaLista = naWatchlist(f.id);
   return `
     <article class="cartao${f.visto ? ' visto' : ''}" data-id="${f.id}" tabindex="0" aria-label="${esc(f.titulo)}${f.ano ? ` (${esc(f.ano)})` : ''}">
       <div class="capa-area">
         ${capaHTML(f)}
         ${f.visto ? `<span class="selo-visto" title="Visto">${icone('Check')}</span>` : ''}
         ${f.favorito ? `<span class="selo-fav" title="Favorito">${icone('Star', { preenchido: true })}</span>` : ''}
+        ${hojeNaLista ? seloHojeHTML() : ''}
       </div>
       <div class="info">
         <h3 title="${esc(f.titulo)}"><span>${esc(f.titulo)}</span></h3>
@@ -276,6 +282,7 @@ function cartaoHTML(f) {
       <div class="acoes">
         <button class="acao${f.visto ? ' visto-on' : ''}" data-acao="visto" title="${tituloVisto}" aria-label="${tituloVisto}">${icone('Check')}</button>
         <button class="acao${f.favorito ? ' fav-on' : ''}" data-acao="favorito" title="${tituloFav}" aria-label="${tituloFav}">${icone('Star', { preenchido: f.favorito })}</button>
+        <button class="acao${hojeNaLista ? ' hoje-on' : ''}" data-acao="hoje" title="${tituloHoje(hojeNaLista)}" aria-label="${tituloHoje(hojeNaLista)}">${icone('CalendarClock')}</button>
         <button class="acao acao-stremio" data-acao="stremio" title="Abrir no Stremio" aria-label="Abrir no Stremio">${icone('Play')}</button>
         <button class="acao acao-lb" data-acao="letterboxd" title="Abrir no Letterboxd" aria-label="Abrir no Letterboxd">${LB_PONTOS}</button>
       </div>
@@ -287,20 +294,24 @@ function cartaoHTML(f) {
 // cache, porque um elemento não pode estar em dois lugares.
 const cacheCartoes = new Map();
 const cacheFileira = new Map();
-// Visto e favorito ficam fora da assinatura: mudam o cartão no lugar (ver
-// atualizarCartao), sem recriar o elemento. Recriar tirava da página o botão
-// que acabou de ser clicado e, com ele focado, o Chromium rolava a página.
+// Visto, favorito e watchlist ficam fora da assinatura: mudam o cartão no lugar
+// (ver atualizarCartao), sem recriar o elemento. Recriar tirava da página o
+// botão que acabou de ser clicado e, com ele focado, o Chromium rolava a página.
 function assinatura(f) {
   return [f.titulo, f.ano, f.diretor, f.capaLocal, f.poster].join('\u0001');
 }
+const estadoCartao = (f) => `${Boolean(f.visto)}|${Boolean(f.favorito)}|${naWatchlist(f.id)}`;
 
 function atualizarCartao(el, f) {
   el.classList.toggle('visto', Boolean(f.visto));
   const area = $('.capa-area', el);
   $('.selo-visto', area)?.remove();
   $('.selo-fav', area)?.remove();
+  $('.selo-hoje', area)?.remove();
   if (f.visto) area.insertAdjacentHTML('beforeend', `<span class="selo-visto" title="Visto">${icone('Check')}</span>`);
   if (f.favorito) area.insertAdjacentHTML('beforeend', `<span class="selo-fav" title="Favorito">${icone('Star', { preenchido: true })}</span>`);
+  const hojeNaLista = naWatchlist(f.id);
+  if (hojeNaLista) area.insertAdjacentHTML('beforeend', seloHojeHTML());
   const visto = $('.acao[data-acao="visto"]', el);
   const tituloVisto = f.visto ? 'Desmarcar visto' : 'Marcar como visto';
   visto.classList.toggle('visto-on', Boolean(f.visto));
@@ -312,23 +323,27 @@ function atualizarCartao(el, f) {
   fav.title = tituloFav;
   fav.setAttribute('aria-label', tituloFav);
   fav.innerHTML = icone('Star', { preenchido: f.favorito });
+  const botaoHoje = $('.acao[data-acao="hoje"]', el);
+  botaoHoje.classList.toggle('hoje-on', hojeNaLista);
+  botaoHoje.title = tituloHoje(hojeNaLista);
+  botaoHoje.setAttribute('aria-label', tituloHoje(hojeNaLista));
 }
 
 function elementoCartao(f, cache = cacheCartoes) {
   const sig = assinatura(f);
   const c = cache.get(f.id);
   if (c && c.sig === sig) {
-    if (c.visto !== Boolean(f.visto) || c.favorito !== Boolean(f.favorito)) {
+    const atual = estadoCartao(f);
+    if (c.estado !== atual) {
       atualizarCartao(c.el, f);
-      c.visto = Boolean(f.visto);
-      c.favorito = Boolean(f.favorito);
+      c.estado = atual;
     }
     return c.el;
   }
   const tpl = document.createElement('template');
   tpl.innerHTML = cartaoHTML(f).trim();
   const el = tpl.content.firstElementChild;
-  cache.set(f.id, { el, sig, visto: Boolean(f.visto), favorito: Boolean(f.favorito) });
+  cache.set(f.id, { el, sig, estado: estadoCartao(f) });
   return el;
 }
 
@@ -466,13 +481,131 @@ function atualizarEstatisticas() {
 
 // ---------- Ações sobre filmes ----------
 
+// ---------- Dias: histórico de vistos e watchlist de hoje ----------
+
+// O dia vira às 5h: um filme visto de madrugada conta para a noite anterior,
+// e a watchlist de hoje dura até as 5h do dia seguinte.
+const HORA_VIRADA = 5;
+function diaDe(data = new Date()) {
+  const d = new Date(data.getTime() - HORA_VIRADA * 3600e3);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const hoje = () => diaDe();
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+function diaLegivel(dia, { comAno = false } = {}) {
+  const [a, m, d] = dia.split('-').map(Number);
+  return `${d} de ${MESES[m - 1]}${comAno ? ` de ${a}` : ''}`;
+}
+
+// Uma watchlist por dia: { 'AAAA-MM-DD': [ids] }. Valem hoje e os dias que vêm
+// (arrastando um filme para outro dia no calendário); a de um dia que já passou
+// some, mesmo que o filme não tenha sido visto.
+function watchlists() {
+  const c = estado.config;
+  let w = c.watchlists && typeof c.watchlists === 'object' ? c.watchlists : {};
+  // Formato antigo: uma lista só, a de um dia.
+  if (c.watchlistHoje && c.watchlistHoje.dia && !w[c.watchlistHoje.dia]) w = { ...w, [c.watchlistHoje.dia]: c.watchlistHoje.ids || [] };
+  return w;
+}
+function idsWatchlist(dia = hoje()) {
+  if (dia < hoje()) return [];
+  const ids = watchlists()[dia];
+  return Array.isArray(ids) ? ids.filter((id) => porId(id)) : [];
+}
+const naWatchlist = (id) => idsWatchlist().includes(id);
+
+function salvarWatchlist(ids, dia = hoje()) {
+  const w = {};
+  for (const [d, lista] of Object.entries(watchlists())) if (d >= hoje() && lista.length) w[d] = lista;
+  if (ids.length) w[dia] = ids;
+  else delete w[dia];
+  estado.config.watchlists = w;
+  delete estado.config.watchlistHoje;
+  api.salvarConfig({ watchlists: w, watchlistHoje: null });
+}
+
+// Arrastar no calendário: para hoje ou um dia que vem, o filme passa para a
+// watchlist daquele dia; para um dia que já passou, fica registrado como visto nele.
+function moverWatchlist(id, de, para) {
+  if (de === para) return;
+  const f = porId(id);
+  if (!f) return;
+  salvarWatchlist(idsWatchlist(de).filter((x) => x !== id), de);
+  if (para < hoje()) {
+    f.visto = true;
+    salvarVistoEm(f, [...(f.vistoEm || []), para]);
+    aviso(`“${f.titulo}” registrado como visto em ${diaLegivel(para)}.`, { tipo: 'ok' });
+    return;
+  }
+  const destino = idsWatchlist(para);
+  if (!destino.includes(id)) salvarWatchlist([...destino, id], para);
+  aviso(`“${f.titulo}” agora está na watchlist ${para === hoje() ? 'de hoje' : `de ${diaLegivel(para)}`}.`, { tipo: 'ok' });
+  aposMudarDia(id);
+}
+
+function tirarDaWatchlist(id, dia) {
+  salvarWatchlist(idsWatchlist(dia).filter((x) => x !== id), dia);
+  aposMudarDia(id);
+}
+
+function alternarWatchlist(id) {
+  const ids = idsWatchlist();
+  const entra = !ids.includes(id);
+  salvarWatchlist(entra ? [...ids, id] : ids.filter((x) => x !== id));
+  const f = porId(id);
+  aviso(entra ? `“${f.titulo}” está na sua watchlist de hoje.` : `“${f.titulo}” saiu da watchlist de hoje.`, {
+    tipo: 'ok',
+    acao: entra ? { rotulo: 'Ver calendário', fn: () => abrirCalendario(hoje()) } : undefined,
+  });
+  aposMudarDia(id);
+}
+
+// Redesenha o que mostra visto, datas ou watchlist depois de uma mudança.
+function aposMudarDia(id) {
+  agendarRender();
+  if (estado.painelId === id) renderPainel();
+  if (previaId === id) atualizarBotaoHojePrevia();
+  if (!calendario.hidden) renderCalendario();
+}
+
+// Grava as datas de um filme (cada vez que foi visto conta).
+async function salvarVistoEm(f, dias) {
+  f.vistoEm = [...dias].sort();
+  aposMudarDia(f.id);
+  await api.atualizarFilme(f.id, { vistoEm: f.vistoEm, visto: f.visto });
+}
+
+// "Vi de novo hoje": mais uma data para um filme que já foi visto antes.
+function viHoje(id) {
+  const f = porId(id);
+  const dias = f.vistoEm || [];
+  if (dias.includes(hoje())) return;
+  f.visto = true;
+  if (naWatchlist(id)) salvarWatchlist(idsWatchlist().filter((x) => x !== id));
+  salvarVistoEm(f, [...dias, hoje()]);
+  aviso(`“${f.titulo}” marcado como visto hoje.`, { tipo: 'ok' });
+}
+
 async function alternar(id, campo, valor) {
   const f = porId(id);
   if (!f) return;
   f[campo] = valor ?? !f[campo];
-  agendarRender();
-  if (estado.painelId === id) renderPainel();
-  await api.atualizarFilme(id, { [campo]: f[campo] });
+  const mudancas = { [campo]: f[campo] };
+  if (campo === 'visto') {
+    // Marcar grava o dia de hoje (e tira da watchlist); desmarcar desfaz o de hoje.
+    const dias = [...(f.vistoEm || [])];
+    if (f.visto) {
+      if (!dias.includes(hoje())) dias.push(hoje());
+      if (naWatchlist(id)) salvarWatchlist(idsWatchlist().filter((x) => x !== id));
+    } else {
+      const i = dias.lastIndexOf(hoje());
+      if (i >= 0) dias.splice(i, 1);
+    }
+    f.vistoEm = dias.sort();
+    mudancas.vistoEm = f.vistoEm;
+  }
+  aposMudarDia(id);
+  await api.atualizarFilme(id, mudancas);
 }
 
 async function abrirStremio(id) {
@@ -575,6 +708,7 @@ function renderPainel() {
             <button class="btn btn-assistir" data-p="stremio">${ICONE_PLAY} Assistir</button>
             <button class="redondo" data-p="visto">${icone('Check')}</button>
             <button class="redondo" data-p="favorito"></button>
+            <button class="redondo" data-p="hoje">${icone('CalendarClock')}</button>
             <button class="redondo" data-p="letterboxd" title="Abrir no Letterboxd" aria-label="Abrir no Letterboxd">${LB_PONTOS}</button>
             <button class="redondo" data-p="trailer" title="Ver o trailer em tela cheia" aria-label="Ver o trailer em tela cheia">${icone('Maximize')}</button>
           </div>
@@ -594,6 +728,7 @@ function renderPainel() {
     <div class="painel-corpo">
       <div>
         <p class="painel-meta" data-info="meta-painel">${painelMetaHTML(f)}</p>
+        <div class="painel-vistos">${vistosEmHTML(f)}</div>
         <div class="notas-linha">${notasHTML(f.info)}</div>
         <p class="painel-sinopse" data-info="sinopse-painel"${sinopse ? '' : ' hidden'}>${esc(sinopse)}</p>
       </div>
@@ -681,6 +816,29 @@ function atualizarBotoesPainel(f) {
   fav.title = tituloFav;
   fav.setAttribute('aria-label', tituloFav);
   fav.setAttribute('aria-pressed', String(Boolean(f.favorito)));
+  const botaoHoje = $('#painel .painel-botoes [data-p="hoje"]');
+  const hojeNaLista = naWatchlist(f.id);
+  botaoHoje.classList.toggle('hoje-on', hojeNaLista);
+  botaoHoje.title = tituloHoje(hojeNaLista);
+  botaoHoje.setAttribute('aria-label', tituloHoje(hojeNaLista));
+  botaoHoje.setAttribute('aria-pressed', String(hojeNaLista));
+}
+
+// "Vi em: 19 de outubro, 22 de outubro" (cada vez que viu), com ✕ para tirar uma
+// data, "Vi de novo hoje" e um campo para lançar um dia que passou.
+function vistosEmHTML(f) {
+  const dias = f.vistoEm || [];
+  const datas = dias.map((d) => `<span class="dia-visto">${esc(diaLegivel(d, { comAno: true }))}<button data-p="remover-dia" data-dia="${d}" title="Tirar esta data" aria-label="Tirar a data ${esc(diaLegivel(d))}">${icone('X')}</button></span>`).join('');
+  const jaHoje = dias.includes(hoje());
+  return `
+    <div class="vistos-em">
+      <b>${dias.length ? `Vi ${dias.length === 1 ? 'em' : `${dias.length} vezes:`}` : 'Ainda não registrado no calendário'}</b>
+      ${datas}
+    </div>
+    <div class="vistos-acoes">
+      ${f.visto && !jaHoje ? `<button class="btn btn-fantasma" data-p="vi-hoje">${icone('RotateCcw')} Vi de novo hoje</button>` : ''}
+      <label class="adicionar-dia">${icone('CalendarPlus')} Lançar outro dia <input type="date" data-adicionar-dia min="2026-10-01" max="${hoje()}"></label>
+    </div>`;
 }
 
 // Trailer tocando atrás do título, mudo como no destaque.
@@ -748,6 +906,15 @@ $('#painel').addEventListener('click', async (e) => {
     case 'som': alternarSom(); break;
     case 'visto': alternar(id, 'visto'); break;
     case 'favorito': alternar(id, 'favorito'); break;
+    case 'hoje': alternarWatchlist(id); break;
+    case 'vi-hoje': viHoje(id); break;
+    case 'remover-dia': {
+      const f = porId(id);
+      const dias = [...(f.vistoEm || [])];
+      dias.splice(dias.indexOf(b.dataset.dia), 1);
+      salvarVistoEm(f, dias);
+      break;
+    }
     case 'stremio': abrirStremio(id); break;
     case 'letterboxd': abrirLetterboxd(id); break;
     case 'trocar': abrirTrocarCapa(id); break;
@@ -765,6 +932,17 @@ $('#painel').addEventListener('click', async (e) => {
       break;
     }
   }
+});
+
+// Lançar um dia que passou ("vi ontem e esqueci de marcar").
+$('#painel').addEventListener('change', (e) => {
+  if (!e.target.matches('[data-adicionar-dia]') || !estado.painelId || !e.target.value) return;
+  const f = porId(estado.painelId);
+  const dia = e.target.value;
+  if (dia > hoje()) { aviso('Esse dia ainda não chegou.', { tipo: 'erro' }); return; }
+  f.visto = true;
+  salvarVistoEm(f, [...(f.vistoEm || []), dia]);
+  aviso(`“${f.titulo}” visto em ${diaLegivel(dia)}.`, { tipo: 'ok' });
 });
 
 $('#painel').addEventListener('change', async (e) => {
@@ -1530,6 +1708,7 @@ function previaHTML(f) {
         <button class="redondo branco" data-v="stremio" title="Assistir no Stremio">${ICONE_PLAY}</button>
         <button class="redondo${f.visto ? ' visto-on' : ''}" data-v="visto" title="${f.visto ? 'Desmarcar visto' : 'Marcar como visto'}" aria-label="Visto">${icone('Check')}</button>
         <button class="redondo${f.favorito ? ' fav-on' : ''}" data-v="favorito" title="${f.favorito ? 'Tirar dos favoritos' : 'Favoritar'}" aria-label="Favorito">${icone('Star')}</button>
+        <button class="redondo${naWatchlist(f.id) ? ' hoje-on' : ''}" data-v="hoje" title="${tituloHoje(naWatchlist(f.id))}" aria-label="${tituloHoje(naWatchlist(f.id))}">${icone('CalendarClock')}</button>
         <button class="redondo" data-v="letterboxd" title="Letterboxd">${LB_PONTOS}</button>
         <span class="espaco"></span>
         <button class="redondo" data-v="detalhes" title="Mais informações">${ICONE_MAIS_INFO}</button>
@@ -1640,8 +1819,18 @@ previa.addEventListener('click', async (e) => {
       $('[data-info="meta"]', previa).innerHTML = metaCurtaHTML(f);
       break;
     }
+    case 'hoje': alternarWatchlist(id); break;
   }
 });
+
+function atualizarBotaoHojePrevia() {
+  const b = $('[data-v="hoje"]', previa);
+  if (!b || !previaId) return;
+  const naLista = naWatchlist(previaId);
+  b.classList.toggle('hoje-on', naLista);
+  b.title = tituloHoje(naLista);
+  b.setAttribute('aria-label', tituloHoje(naLista));
+}
 
 principal.addEventListener('scroll', () => {
   clearTimeout(timerPrevia);
@@ -1956,6 +2145,7 @@ principal.addEventListener('click', (e) => {
   switch (botao.dataset.acao) {
     case 'visto': alternar(id, 'visto'); break;
     case 'favorito': alternar(id, 'favorito'); break;
+    case 'hoje': alternarWatchlist(id); break;
     case 'stremio': abrirStremio(id); break;
     case 'letterboxd': abrirLetterboxd(id); break;
     case 'diretor': filtrarDiretor(porId(id).diretor); break;
@@ -2072,6 +2262,12 @@ document.addEventListener('keydown', (e) => {
     fecharPainel();
     return;
   }
+  if (e.key === 'Escape' && !modal.open && !calendario.hidden) {
+    // Na página de um dia, Esc volta para o mês (como a seta); no mês, fecha.
+    if (diaCalendario) voltarParaMes();
+    else fecharCalendario();
+    return;
+  }
   if (e.key === 'Escape' && document.activeElement === $('#pesquisa')) {
     $('#pesquisa').value = '';
     estado.busca = '';
@@ -2080,11 +2276,506 @@ document.addEventListener('keydown', (e) => {
     fecharPesquisa();
     return;
   }
-  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && !modal.open && foco.hidden && !digitandoEm(document.activeElement)) {
+  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && !modal.open && foco.hidden && calendario.hidden && !digitandoEm(document.activeElement)) {
     e.preventDefault();
     sortear();
   }
 });
+
+// ---------- Calendário ----------
+
+// Um mês por vez, de outubro de 2026 (quando a lista começou a registrar os
+// dias) até o mês atual. Cada dia mostra as capas do que foi visto; hoje mostra
+// também a watchlist. Clicar num dia abre a página do dia, com as capas grandes.
+const PRIMEIRO_MES = '2026-10';
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const calendario = $('#calendario');
+let mesCalendario = null; // 'AAAA-MM'
+let diaCalendario = null; // 'AAAA-MM-DD' quando a página de um dia está aberta
+
+function abrirCalendario(dia = null) {
+  fecharPrevia(false);
+  mesCalendario = (dia || hoje()).slice(0, 7);
+  diaCalendario = dia;
+  calendario.hidden = false;
+  renderCalendario();
+  Movimento.animar($('#calendario-caixa'), [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 260 });
+  if (dia) animarDia(); else animarMes();
+  $('#calendario [data-c="fechar"], #calendario [data-c="voltar"]')?.focus({ preventScroll: true });
+}
+
+function fecharCalendario() {
+  if (calendario.hidden) return;
+  calendario.hidden = true;
+  $('#calendario-caixa').innerHTML = '';
+}
+
+function vistosPorDia() {
+  const mapa = new Map();
+  for (const f of estado.filmes) {
+    for (const dia of f.vistoEm || []) {
+      if (!mapa.has(dia)) mapa.set(dia, []);
+      if (!mapa.get(dia).includes(f)) mapa.get(dia).push(f);
+    }
+  }
+  return mapa;
+}
+
+const mesLegivel = (mes) => { const [a, m] = mes.split('-').map(Number); return `${MESES[m - 1]} de ${a}`; };
+function mesVizinho(mes, passo) {
+  const [a, m] = mes.split('-').map(Number);
+  const d = new Date(a, m - 1 + passo, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function renderCalendario() {
+  const caixa = $('#calendario-caixa');
+  caixa.innerHTML = diaCalendario ? paginaDiaHTML(diaCalendario) : mesHTML(mesCalendario);
+}
+
+// Entradas do calendário: o mês desliza na direção da troca e as capas chegam em
+// sequência; a página do dia sobe as capas grandes. Sem "reduzir movimento", nada anima.
+function animarMes(direcao = 0) {
+  const grade = $('#calendario .cal-grade');
+  if (!grade) return;
+  if (direcao) Movimento.animar(grade, [{ opacity: 0, transform: `translateX(${direcao * 24}px)` }, { opacity: 1, transform: 'none' }], { duration: 320 });
+  Movimento.sequencia($$('#calendario .cal-vistos, #calendario .cal-wl'), { y: 8, duracao: 420, passo: 40, atrasoInicial: direcao ? 80 : 120 });
+}
+function animarDia() {
+  const caixa = $('#calendario-caixa');
+  Movimento.animar($('.cal-dia-fundo', caixa), [{ opacity: 0, transform: 'scale(1.06)' }, { opacity: 1, transform: 'none' }], { duration: 600, fill: 'backwards' });
+  Movimento.sequencia([$('.cal-dia-titulo', caixa), ...$$('.cal-filme', caixa)], { y: 14, duracao: 460, passo: 60, atrasoInicial: 60 });
+}
+// Troca de mês pelas setas: o mês que sai desliza para um lado e some enquanto o
+// novo entra do outro, os dois cruzando no mesmo lugar. (A grade antiga fica por
+// cima, sem receber cliques, só durante a animação.)
+const DESLIZE_MES = 72;
+function irParaMes(mes) {
+  const direcao = mes > mesCalendario ? 1 : mes < mesCalendario ? -1 : 0;
+  const caixa = $('#calendario-caixa');
+  const velha = direcao && !diaCalendario && !Movimento.desligado() ? $('.cal-grade', caixa) : null;
+  mesCalendario = mes;
+  diaCalendario = null;
+  renderCalendario();
+  if (!velha) { animarMes(direcao); return; }
+
+  const nova = $('.cal-grade', caixa);
+  Object.assign(velha.style, {
+    position: 'absolute', margin: '0', pointerEvents: 'none', zIndex: '1',
+    left: `${nova.offsetLeft}px`, top: `${nova.offsetTop}px`,
+    width: `${nova.offsetWidth}px`, height: `${nova.offsetHeight}px`,
+  });
+  velha.setAttribute('aria-hidden', 'true');
+  caixa.append(velha);
+  const saida = velha.animate(
+    [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateX(${-direcao * DESLIZE_MES}px)` }],
+    { duration: 300, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'forwards' },
+  );
+  saida.onfinish = () => velha.remove();
+  saida.oncancel = () => velha.remove();
+  Movimento.animar(nova, [{ opacity: 0, transform: `translateX(${direcao * DESLIZE_MES}px)` }, { opacity: 1, transform: 'none' }],
+    { duration: 460, delay: 40, fill: 'backwards' });
+  Movimento.animar($('.cal-navegacao h2', caixa), [{ opacity: 0, transform: `translateX(${direcao * 16}px)` }, { opacity: 1, transform: 'none' }],
+    { duration: 360 });
+  Movimento.sequencia($$('.cal-vistos, .cal-wl', nova), { y: 8, duracao: 420, passo: 40, atrasoInicial: 200 });
+}
+
+function voltarParaMes() {
+  diaCalendario = null;
+  renderCalendario();
+  animarMes();
+}
+function irParaDia(dia) {
+  diaCalendario = dia;
+  renderCalendario();
+  animarDia();
+}
+
+// `arrastarDe`: capa da watchlist daquele dia, que pode ser arrastada para outro dia.
+// (A capa que se arrasta é um div que age como botão: clique e Enter abrem os
+// detalhes; o arrasto é feito com o ponteiro, mais abaixo.)
+function capinhaHTML(f, classe = '', arrastarDe = null) {
+  if (arrastarDe) {
+    return `<div class="cal-capa ${classe}" role="button" tabindex="0" data-arrastar="${arrastarDe}" data-c="detalhes" data-id="${f.id}" title="${esc(`${f.titulo} (arraste para outro dia)`)}" aria-label="${esc(f.titulo)}">${capaHTML(f)}</div>`;
+  }
+  return `<button class="cal-capa ${classe}" data-c="detalhes" data-id="${f.id}" title="${esc(f.titulo)}" aria-label="${esc(f.titulo)}">${capaHTML(f)}</button>`;
+}
+
+// Fundo desfocado de uma célula ou da página do dia: a própria capa do filme.
+const fundoCapa = (f) => {
+  const src = f && srcCapa(f);
+  return src ? `background-image: url("${src.replace(/"/g, '%22')}")` : '';
+};
+
+function mesHTML(mes) {
+  const [ano, m] = mes.split('-').map(Number);
+  const deslocamento = new Date(ano, m - 1, 1).getDay();
+  const diasNoMes = new Date(ano, m, 0).getDate();
+  const porDia = vistosPorDia();
+  const diaHoje = hoje();
+  const mesAtual = diaHoje.slice(0, 7);
+  const noMes = [...porDia.entries()].filter(([d]) => d.startsWith(mes)).reduce((n, [, fs]) => n + fs.length, 0);
+  const wlHoje = idsWatchlist(diaHoje).length;
+
+  let celulas = '';
+  for (let i = 0; i < deslocamento; i++) celulas += '<div class="cal-dia vazio" aria-hidden="true"></div>';
+  for (let d = 1; d <= diasNoMes; d++) {
+    const dia = `${mes}-${String(d).padStart(2, '0')}`;
+    const vistos = porDia.get(dia) || [];
+    const wl = idsWatchlist(dia).map(porId).filter(Boolean);
+    const ehHoje = dia === diaHoje;
+    const classes = ['cal-dia'];
+    if (ehHoje) classes.push('hoje');
+    if (dia > diaHoje) classes.push('futuro');
+    if (vistos.length) classes.push('com-vistos');
+    if (wl.length) classes.push('com-wl');
+    if (vistos.length && wl.length) classes.push('misto');
+    // O dia com filmes vistos ganha a capa do primeiro como fundo, como um pôster.
+    const fundo = vistos.length ? `<div class="cal-fundo" style="${esc(fundoCapa(vistos[0]))}" aria-hidden="true"></div>` : '';
+    const capas = vistos.length
+      ? `<div class="cal-vistos qtd-${Math.min(vistos.length, 3)}">${vistos.slice(0, 3).map((f) => capinhaHTML(f)).join('')}</div>`
+        + (vistos.length > 3 ? `<span class="cal-mais">+${vistos.length - 3}</span>` : '')
+      : '';
+    const pensando = wl.length
+      ? `<div class="cal-wl" title="Pensando em ver"><div class="cal-wl-capas">${wl.slice(0, 3).map((f) => capinhaHTML(f, '', dia)).join('')}${wl.length > 3 ? `<span class="cal-mais">+${wl.length - 3}</span>` : ''}</div></div>`
+      : '';
+    const rotulo = `${diaLegivel(dia)}${vistos.length ? `: ${vistos.length} visto${vistos.length === 1 ? '' : 's'}` : ''}${wl.length ? `, ${wl.length} na watchlist` : ''}`;
+    celulas += `
+      <div class="${classes.join(' ')}" data-c="dia" data-dia="${dia}" role="button" tabindex="0" aria-label="${esc(rotulo)}">
+        ${fundo}
+        <span class="cal-cabeca"><span class="cal-numero">${d}</span>${ehHoje ? '<span class="cal-hoje">hoje</span>' : ''}</span>
+        ${capas}${pensando}
+      </div>`;
+  }
+
+  const anterior = mesVizinho(mes, -1);
+  const proximo = mesVizinho(mes, 1);
+  return `
+    <div class="cal-topo">
+      <div class="cal-navegacao">
+        <h2>${esc(MESES[m - 1])} <span class="cal-ano">${ano}</span></h2>
+        <div class="cal-setas">
+          <button class="redondo" data-c="mes" data-mes="${anterior}" ${anterior < PRIMEIRO_MES ? 'disabled' : ''} title="Mês anterior" aria-label="Mês anterior">${icone('ChevronLeft')}</button>
+          <button class="redondo" data-c="mes" data-mes="${proximo}" ${proximo > mesVizinho(mesAtual, 1) ? 'disabled' : ''} title="Próximo mês" aria-label="Próximo mês">${icone('ChevronRight')}</button>
+        </div>
+        ${mes !== mesAtual ? `<button class="btn btn-fantasma cal-ir-hoje" data-c="mes" data-mes="${mesAtual}">Voltar para hoje</button>` : ''}
+      </div>
+      <div class="cal-stats">
+        <span class="cal-stat">${icone('Check')} ${noMes
+          ? `<b>${noMes}</b> ${noMes === 1 ? 'filme visto' : 'filmes vistos'} em ${esc(MESES[m - 1])}`
+          : `Nada visto em ${esc(MESES[m - 1])} ainda`}</span>
+        ${wlHoje ? `<button class="cal-stat roxo" data-c="dia" data-dia="${diaHoje}">${icone('CalendarClock')} <b>${wlHoje}</b> pensando em ver hoje</button>` : ''}
+      </div>
+      <span class="cal-dica-arrasto">${icone('Move')} Solte num dia: hoje ou depois, vai para a watchlist dele; antes de hoje, conta como visto nele</span>
+      <button class="redondo cal-fechar" data-c="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
+    </div>
+    <div class="cal-semana" aria-hidden="true">${DIAS_SEMANA.map((d) => `<span>${d}</span>`).join('')}</div>
+    <div class="cal-grade">${celulas}</div>`;
+}
+
+// `pensandoEm`: o dia da watchlist em que o filme está (hoje ou um dia que vem).
+function filmeDoDiaHTML(f, { pensandoEm = null } = {}) {
+  const meta = [f.ano, duracaoDe(f)].filter(Boolean).map(esc).join(' · ');
+  let acoes = '';
+  if (pensandoEm) {
+    const tirar = `<button class="redondo" data-c="tirar" data-id="${f.id}" data-dia="${pensandoEm}" title="Tirar da watchlist" aria-label="Tirar da watchlist">${icone('X')}</button>`;
+    // Sem arrastar: levar o filme para o dia seguinte, ou trazer de volta para hoje.
+    const mover = `<div class="cal-filme-mover">
+        ${pensandoEm > hoje() ? `<button data-c="mover" data-id="${f.id}" data-de="${pensandoEm}" data-para="${hoje()}">${icone('Undo2')} Trazer para hoje</button>` : ''}
+        <button data-c="mover" data-id="${f.id}" data-de="${pensandoEm}" data-para="${diaSeguinte(pensandoEm)}">${pensandoEm === hoje() ? 'Passar para amanhã' : 'Passar para o dia seguinte'} ${icone('ArrowRight')}</button>
+      </div>`;
+    const principais = pensandoEm === hoje()
+      ? `<button class="btn btn-assistir" data-c="assistir" data-id="${f.id}">${ICONE_PLAY} Assistir</button>
+         <button class="redondo" data-c="vi" data-id="${f.id}" title="Marcar como visto hoje" aria-label="Marcar como visto hoje">${icone('Check')}</button>`
+      : '';
+    acoes = `<div class="cal-filme-botoes">${principais}${tirar}</div>${mover}`;
+  }
+  return `
+    <article class="cal-filme${pensandoEm ? ' pensando' : ''}" data-id="${f.id}">
+      ${capinhaHTML(f, 'grande')}
+      <div class="cal-filme-info">
+        <h4><button class="cal-filme-titulo" data-c="detalhes" data-id="${f.id}">${esc(f.titulo)}</button></h4>
+        <p>${meta}${f.diretor ? `<br>${esc(f.diretor)}` : ''}</p>
+      </div>
+      ${acoes}
+    </article>`;
+}
+
+function diaSeguinte(dia) {
+  const [a, m, d] = dia.split('-').map(Number);
+  const x = new Date(a, m - 1, d + 1);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+
+function paginaDiaHTML(dia) {
+  const vistos = vistosPorDia().get(dia) || [];
+  const ehHoje = dia === hoje();
+  const futuro = dia > hoje();
+  const watchlist = idsWatchlist(dia).map(porId).filter(Boolean);
+  const [ano, m] = dia.split('-').map(Number);
+  const semana = new Date(ano, m - 1, Number(dia.slice(8))).toLocaleDateString('pt-BR', { weekday: 'long' });
+  const nomeSemana = semana.charAt(0).toUpperCase() + semana.slice(1);
+  const destaque = watchlist[0] || vistos[0];
+  const contagem = (n) => (n ? `<span class="cal-contagem">${n}</span>` : '');
+  return `
+    <div class="cal-dia-topo${destaque ? ' com-fundo' : ''}">
+      ${destaque ? `<div class="cal-dia-fundo" style="${esc(fundoCapa(destaque))}" aria-hidden="true"></div>` : ''}
+      <div class="cal-topo">
+        <div class="cal-navegacao">
+          <button class="redondo" data-c="voltar" title="Voltar para ${esc(MESES[m - 1])}" aria-label="Voltar para o mês">${icone('ChevronLeft')}</button>
+          <div class="cal-dia-titulo">
+            <span class="cal-dia-semana">${esc(nomeSemana)}${ehHoje ? ' <span class="cal-hoje">hoje</span>' : ''}</span>
+            <h2>${esc(diaLegivel(dia))}</h2>
+          </div>
+        </div>
+      </div>
+    </div>
+    ${ehHoje || futuro ? `
+      <section class="cal-secao" data-secao="watchlist">
+        <h3>${icone('CalendarClock')} ${ehHoje ? 'Pensando em ver hoje' : 'Pensando em ver neste dia'} ${contagem(watchlist.length)}
+          ${ehHoje ? `<button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje" title="Sortear um filme não visto para a watchlist de hoje">${icone('Dices')} Sortear um filme</button>` : ''}</h3>
+        ${watchlist.length
+          ? `<div class="cal-filmes">${watchlist.map((f) => filmeDoDiaHTML(f, { pensandoEm: dia })).join('')}</div>`
+          : `<p class="cal-vazio">${ehHoje
+            ? `Nenhum filme ainda. Use o ${icone('CalendarClock')} na capa de um filme, na prévia ou nos detalhes para colocar aqui o que você está pensando em ver hoje. A lista some quando o dia vira, às 5h.`
+            : 'Nenhum filme planejado para este dia. No mês, arraste uma capa da watchlist para cá.'}</p>`}
+      </section>` : ''}
+    ${futuro ? '' : `
+    <section class="cal-secao cal-secao-vistos">
+      <h3>${icone('Check')} ${ehHoje ? 'Vistos hoje' : 'Vistos neste dia'} ${contagem(vistos.length)}</h3>
+      ${vistos.length
+        ? `<div class="cal-filmes">${vistos.map((f) => filmeDoDiaHTML(f)).join('')}</div>`
+        : `<p class="cal-vazio">${ehHoje ? 'Nenhum filme visto hoje ainda.' : 'Nenhum filme visto neste dia.'}</p>`}
+    </section>`}`;
+}
+
+// ---------- Sortear um filme para a watchlist de hoje ----------
+
+// Entre os não vistos que ainda não estão na lista de hoje (de preferência com
+// capa). As capas passam rápido num cartão, desacelerando até parar no
+// sorteado, que entra na watchlist; com "reduzir movimento", vai direto.
+let sorteandoHoje = false;
+
+async function sortearParaHoje(botao) {
+  if (sorteandoHoje) return;
+  const naLista = new Set(idsWatchlist());
+  const candidatos = estado.filmes.filter((f) => !f.visto && !naLista.has(f.id));
+  if (!candidatos.length) { aviso('Não sobrou nenhum filme não visto para sortear.'); return; }
+  const comCapa = candidatos.filter((f) => srcCapa(f));
+  const sorteaveis = comCapa.length ? comCapa : candidatos;
+  const escolhido = sorteaveis[Math.floor(Math.random() * sorteaveis.length)];
+  sorteandoHoje = true;
+  if (botao) botao.disabled = true;
+  try {
+    if (!Movimento.desligado() && srcCapa(escolhido)) await roletaDeCapas(escolhido, comCapa);
+  } finally {
+    sorteandoHoje = false;
+  }
+  salvarWatchlist([...idsWatchlist(), escolhido.id]);
+  aposMudarDia(escolhido.id);
+  const cartao = $(`#calendario [data-secao="watchlist"] .cal-filme[data-id="${escolhido.id}"]`);
+  if (cartao) {
+    cartao.scrollIntoView({ block: 'nearest' });
+    Movimento.animar(cartao, [{ transform: 'scale(.94)', opacity: 0.6 }, { transform: 'scale(1.03)', opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 520 });
+  }
+  aviso(`Sorteado para hoje: “${escolhido.titulo}”.`, {
+    tipo: 'ok',
+    acao: { rotulo: 'Desfazer', fn: () => tirarDaWatchlist(escolhido.id, hoje()) },
+  });
+}
+
+function preCarregarImagem(src) {
+  return new Promise((r) => { const img = new Image(); img.onload = img.onerror = () => r(); img.src = src; });
+}
+
+async function roletaDeCapas(escolhido, capas) {
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+  const secao = $('#calendario [data-secao="watchlist"]');
+  if (!secao) return;
+  let grade = $('.cal-filmes', secao);
+  if (!grade) {
+    $('.cal-vazio', secao)?.remove();
+    grade = document.createElement('div');
+    grade.className = 'cal-filmes';
+    secao.append(grade);
+  }
+  const cartao = document.createElement('article');
+  cartao.className = 'cal-filme pensando cal-roleta';
+  cartao.innerHTML = `
+    <div class="cal-capa grande"><div class="capa"><img alt=""></div></div>
+    <div class="cal-filme-info">
+      <h4><span class="cal-filme-titulo"></span></h4>
+      <p class="cal-roleta-status" role="status">Sorteando…</p>
+    </div>`;
+  grade.append(cartao);
+  cartao.scrollIntoView({ block: 'nearest' });
+  const img = $('img', cartao);
+  const titulo = $('.cal-filme-titulo', cartao);
+  const capa = $('.capa', cartao);
+
+  // Umas 14 capas ao acaso e o sorteado por último, já carregadas para não piscar.
+  const outros = capas.filter((f) => f.id !== escolhido.id).sort(() => Math.random() - 0.5).slice(0, 14);
+  const fila = [...outros, escolhido];
+  await Promise.race([Promise.all(fila.map((f) => preCarregarImagem(srcCapa(f)))), espera(900)]);
+
+  let atraso = 50;
+  for (const [i, f] of fila.entries()) {
+    if (!cartao.isConnected) return; // a pessoa saiu da página do dia
+    img.src = srcCapa(f);
+    titulo.textContent = f.titulo;
+    capa.animate([{ transform: 'translateY(-5%) scale(.97)', opacity: 0.65 }, { transform: 'none', opacity: 1 }],
+      { duration: Math.min(atraso, 160), easing: 'ease-out' });
+    if (i < fila.length - 1) {
+      await espera(atraso);
+      atraso = Math.min(atraso * 1.2, 340);
+    }
+  }
+  cartao.classList.add('escolhido');
+  $('.cal-roleta-status', cartao).textContent = 'Sorteado!';
+  capa.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.07)' }, { transform: 'scale(1)' }],
+    { duration: 520, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+  await espera(900);
+}
+
+calendario.addEventListener('click', (e) => {
+  if (e.target === calendario) { fecharCalendario(); return; }
+  const alvo = e.target.closest('[data-c]');
+  if (!alvo) return;
+  const id = alvo.dataset.id;
+  switch (alvo.dataset.c) {
+    case 'fechar': fecharCalendario(); break;
+    case 'mes': irParaMes(alvo.dataset.mes); break;
+    case 'dia': irParaDia(alvo.dataset.dia); break;
+    case 'voltar': voltarParaMes(); break;
+    case 'sortear-hoje': sortearParaHoje(alvo); break;
+    case 'detalhes': abrirPainel(id); break;
+    case 'assistir': abrirStremio(id); break;
+    case 'vi': alternar(id, 'visto', true); aviso(`“${porId(id).titulo}” marcado como visto hoje.`, { tipo: 'ok' }); break;
+    case 'tirar': tirarDaWatchlist(id, alvo.dataset.dia || hoje()); break;
+    case 'mover': moverWatchlist(id, alvo.dataset.de, alvo.dataset.para); break;
+  }
+});
+
+// Arrastar uma capa da watchlist de um dia para outro dia, com o ponteiro.
+// (O drag-and-drop do HTML falhava muito aqui: começava pela imagem pequena e
+// um movimento curto virava clique.) Só vira arrasto depois de 5 px; uma cópia
+// da capa segue o mouse, o dia embaixo acende, e parar sobre as setas ‹ › troca
+// o mês para dar para levar um filme de um mês para o outro.
+let arrasto = null; // { id, de, x0, y0, ativo, fantasma, timerMes, mesAlvo }
+let ignorarClique = false;
+
+function diaSobPonteiro(x, y) {
+  const el = document.elementFromPoint(x, y);
+  return el && calendario.contains(el) ? el : null;
+}
+
+function terminarArrasto() {
+  if (!arrasto) return;
+  clearTimeout(arrasto.timerMes);
+  arrasto.fantasma?.remove();
+  arrasto = null;
+  calendario.classList.remove('arrastando');
+  $$('.cal-soltar, .cal-origem, .cal-seta-alvo', calendario).forEach((el) => el.classList.remove('cal-soltar', 'cal-origem', 'cal-seta-alvo'));
+}
+
+calendario.addEventListener('dragstart', (e) => e.preventDefault());
+
+calendario.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  const capa = e.target.closest('[data-arrastar]');
+  if (!capa) return;
+  arrasto = { id: capa.dataset.id, de: capa.dataset.arrastar, x0: e.clientX, y0: e.clientY, ativo: false };
+});
+
+document.addEventListener('pointermove', (e) => {
+  if (!arrasto) return;
+  if (!arrasto.ativo) {
+    if (Math.hypot(e.clientX - arrasto.x0, e.clientY - arrasto.y0) < 5) return;
+    arrasto.ativo = true;
+    const f = porId(arrasto.id);
+    const fantasma = document.createElement('div');
+    fantasma.className = 'cal-fantasma';
+    fantasma.innerHTML = capaHTML(f);
+    document.body.append(fantasma);
+    arrasto.fantasma = fantasma;
+    calendario.classList.add('arrastando');
+    $(`.cal-dia[data-dia="${arrasto.de}"]`, calendario)?.classList.add('cal-origem');
+  }
+  e.preventDefault();
+  arrasto.fantasma.style.transform = `translate(${e.clientX - 30}px, ${e.clientY - 44}px) rotate(-4deg)`;
+
+  const sob = diaSobPonteiro(e.clientX, e.clientY);
+  const celula = sob && sob.closest('.cal-dia[data-dia]');
+  $$('.cal-soltar', calendario).forEach((el) => { if (el !== celula) el.classList.remove('cal-soltar'); });
+  if (celula) celula.classList.add('cal-soltar');
+
+  // Parado sobre ‹ ou › por um instante: troca o mês sem soltar o filme.
+  const seta = sob && sob.closest('[data-c="mes"]:not(:disabled)');
+  const mesAlvo = seta ? seta.dataset.mes : null;
+  if (mesAlvo !== arrasto.mesAlvo) {
+    clearTimeout(arrasto.timerMes);
+    $$('.cal-seta-alvo', calendario).forEach((el) => el.classList.remove('cal-seta-alvo'));
+    arrasto.mesAlvo = mesAlvo;
+    if (seta) {
+      seta.classList.add('cal-seta-alvo');
+      arrasto.timerMes = setTimeout(() => {
+        if (!arrasto) return;
+        arrasto.mesAlvo = null;
+        irParaMes(mesAlvo);
+        calendario.classList.add('arrastando');
+      }, 600);
+    }
+  }
+});
+
+document.addEventListener('pointerup', (e) => {
+  if (!arrasto) return;
+  if (!arrasto.ativo) { arrasto = null; return; } // foi um clique: abre os detalhes normalmente
+  const sob = diaSobPonteiro(e.clientX, e.clientY);
+  const celula = sob && sob.closest('.cal-dia[data-dia]');
+  const { id, de } = arrasto;
+  terminarArrasto();
+  // O clique que vem depois de soltar não deve abrir os detalhes nem o dia.
+  ignorarClique = true;
+  setTimeout(() => { ignorarClique = false; }, 0);
+  if (celula) moverWatchlist(id, de, celula.dataset.dia);
+});
+
+document.addEventListener('pointercancel', terminarArrasto);
+window.addEventListener('blur', terminarArrasto);
+
+calendario.addEventListener('click', (e) => {
+  if (!ignorarClique) return;
+  ignorarClique = false;
+  e.stopImmediatePropagation();
+  e.preventDefault();
+}, true);
+
+
+calendario.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.cal-capa[role="button"]')) {
+    e.preventDefault();
+    e.stopPropagation();
+    abrirPainel(e.target.dataset.id);
+    return;
+  }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.cal-dia[data-c="dia"]')) {
+    e.preventDefault();
+    irParaDia(e.target.dataset.dia);
+  }
+});
+
+$('#btn-calendario').addEventListener('click', () => abrirCalendario());
+
+// Quando o dia vira (às 5h) com o app aberto, a watchlist de ontem some da tela.
+let diaAtual = hoje();
+setInterval(() => {
+  if (hoje() === diaAtual) return;
+  diaAtual = hoje();
+  agendarRender();
+  if (estado.painelId) renderPainel();
+  if (!calendario.hidden) renderCalendario();
+}, 60 * 1000);
 
 // ---------- Início ----------
 

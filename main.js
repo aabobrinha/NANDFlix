@@ -16,6 +16,8 @@ app.setName(armazem.NOME_APP);
 app.setPath('userData', process.env.FILMES_LEGAIS_DADOS || armazem.migrarPastaAntiga(app.getPath('appData')));
 // O trailer pode ser desmutado sem precisar de um clique dentro do vídeo.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+// Datas no formato brasileiro (dd/mm/aaaa) nos campos de data, como o "Lançar outro dia".
+app.commandLine.appendSwitch('lang', 'pt-BR');
 
 const PASTA = app.getPath('userData');
 const C = armazem.caminhos(PASTA);
@@ -377,7 +379,9 @@ function configPublica() {
 }
 
 ipcMain.handle('config:salvar', (_e, mudancas) => {
-  const permitidas = ['omdbKey', 'stremio', 'visualizacao', 'ordenacao'];
+  // watchlists: { 'AAAA-MM-DD': [ids] }, os filmes que a pessoa pensa em ver em cada dia
+  // (watchlistHoje é o formato antigo, de um dia só; o app o apaga ao salvar o novo).
+  const permitidas = ['omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje'];
   for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
   if ('omdbKey' in mudancas) config.limiteAtingidoEm = null;
   gravarConfig();
@@ -386,7 +390,7 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
 });
 
 ipcMain.handle('filme:atualizar', (_e, id, mudancas) => {
-  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'favorito', 'notas', 'linkLetterboxd', 'buscaCapa'];
+  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'linkLetterboxd', 'buscaCapa'];
   const limpo = {};
   for (const k of permitidas) if (k in mudancas) limpo[k] = mudancas[k];
   // Mudar a busca da capa dá ao filme uma nova chance na busca automática.

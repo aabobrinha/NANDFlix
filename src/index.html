@@ -24,6 +24,7 @@
           <input id="pesquisa" type="search" placeholder="Título, ano, diretor ou notas" autocomplete="off" spellcheck="false" tabindex="-1" aria-label="Pesquisar filmes">
           <button class="icone-btn" id="btn-lupa" data-dica="Pesquisar" aria-label="Pesquisar"><span data-icone="Search"></span></button>
         </div>
+        <button class="icone-btn" id="btn-calendario" data-dica="Calendário" aria-label="Calendário"><span data-icone="CalendarDays"></span></button>
         <button class="icone-btn" id="btn-sortear" data-dica="Sortear (R)" aria-label="Sortear"><span data-icone="Dices"></span></button>
         <button class="icone-btn btn-mais" id="btn-adicionar" data-dica="Adicionar filme" aria-label="Adicionar filme"><span data-icone="Plus"></span></button>
         <button class="icone-btn" id="btn-config" data-dica="Configurações" aria-label="Configurações"><span data-icone="Settings"></span></button>
@@ -129,6 +130,10 @@
   <div class="painel-fundo" id="painel-fundo"></div>
 
   <div class="previa" id="previa" hidden></div>
+
+  <div class="calendario" id="calendario" hidden>
+    <div class="calendario-caixa" id="calendario-caixa" role="dialog" aria-modal="true" aria-label="Calendário"></div>
+  </div>
 
   <div class="foco" id="foco" hidden>
     <div class="foco-caixa" id="foco-caixa"></div>
