@@ -381,7 +381,9 @@ function configPublica() {
 ipcMain.handle('config:salvar', (_e, mudancas) => {
   // watchlists: { 'AAAA-MM-DD': [ids] }, os filmes que a pessoa pensa em ver em cada dia
   // (watchlistHoje é o formato antigo, de um dia só; o app o apaga ao salvar o novo).
-  const permitidas = ['omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje'];
+  // filmesDoMes: { 'AAAA-MM': id }, o filme favorito de cada mês (só aparece no calendário).
+  // tierlist: [{ id, nome, cor, filmes: [ids] }], as tiers de cima para baixo.
+  const permitidas = ['omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist'];
   for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
   if ('omdbKey' in mudancas) config.limiteAtingidoEm = null;
   gravarConfig();

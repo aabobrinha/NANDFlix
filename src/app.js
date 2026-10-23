@@ -566,6 +566,7 @@ function aposMudarDia(id) {
   if (estado.painelId === id) renderPainel();
   if (previaId === id) atualizarBotaoHojePrevia();
   if (!calendario.hidden) renderCalendario();
+  if (!tierlist.hidden && !arrastoTl) renderTierlist();
 }
 
 // Grava as datas de um filme (cada vez que foi visto conta).
@@ -2268,6 +2269,11 @@ document.addEventListener('keydown', (e) => {
     else fecharCalendario();
     return;
   }
+  if (e.key === 'Escape' && !modal.open && !tierlist.hidden) {
+    if ($('#tierlist .tl-paleta')) { fecharPaletaTier(); return; }
+    fecharTierlist();
+    return;
+  }
   if (e.key === 'Escape' && document.activeElement === $('#pesquisa')) {
     $('#pesquisa').value = '';
     estado.busca = '';
@@ -2276,7 +2282,7 @@ document.addEventListener('keydown', (e) => {
     fecharPesquisa();
     return;
   }
-  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && !modal.open && foco.hidden && calendario.hidden && !digitandoEm(document.activeElement)) {
+  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && !modal.open && foco.hidden && calendario.hidden && tierlist.hidden && !digitandoEm(document.activeElement)) {
     e.preventDefault();
     sortear();
   }
@@ -2407,6 +2413,56 @@ const fundoCapa = (f) => {
   return src ? `background-image: url("${src.replace(/"/g, '%22')}")` : '';
 };
 
+// ---------- Filme do mês ----------
+
+// Um por mês, entre os filmes vistos naquele mês, guardado nas configurações
+// como { 'AAAA-MM': id }. Só aparece no calendário. Se o filme deixar de ter
+// uma data naquele mês (a data foi apagada), ele deixa de valer.
+function filmesVistosNoMes(mes) {
+  return estado.filmes.filter((f) => (f.vistoEm || []).some((d) => d.startsWith(mes)));
+}
+function filmeDoMes(mes) {
+  const id = (estado.config.filmesDoMes || {})[mes];
+  const f = id && porId(id);
+  return f && (f.vistoEm || []).some((d) => d.startsWith(mes)) ? f : null;
+}
+function definirFilmeDoMes(mes, id) {
+  const todos = { ...(estado.config.filmesDoMes || {}) };
+  if (id) todos[mes] = id;
+  else delete todos[mes];
+  estado.config.filmesDoMes = todos;
+  api.salvarConfig({ filmesDoMes: todos });
+  if (!calendario.hidden) renderCalendario();
+  const nomeMes = MESES[Number(mes.slice(5)) - 1];
+  if (id) aviso(`“${porId(id).titulo}” é o filme de ${nomeMes}.`, { tipo: 'ok' });
+  else aviso(`${nomeMes.charAt(0).toUpperCase()}${nomeMes.slice(1)} ficou sem filme do mês.`);
+}
+function alternarFilmeDoMes(id, mes) {
+  definirFilmeDoMes(mes, filmeDoMes(mes)?.id === id ? null : id);
+}
+
+// Janela para escolher (ou trocar) o filme do mês entre as capas dos vistos.
+function escolherFilmeDoMes(mes) {
+  const filmes = filmesVistosNoMes(mes);
+  const atual = filmeDoMes(mes);
+  const nomeMes = MESES[Number(mes.slice(5)) - 1];
+  abrirModal(`${cabecalhoModal(`Filme de ${mesLegivel(mes)}`)}
+    <div class="modal-corpo">
+      <p class="filme-mes-ajuda">Dos ${filmes.length} filmes que você viu em ${esc(nomeMes)}, qual foi o seu favorito?</p>
+      <div class="resultados filme-mes-opcoes">${filmes.map((f) => `
+        <button class="resultado${atual && atual.id === f.id ? ' atual' : ''}" data-id="${f.id}">
+          ${capaHTML(f)}
+          <strong>${esc(f.titulo)}</strong><span>${esc(f.ano)}</span>
+        </button>`).join('')}</div>
+    </div>
+    ${atual ? `<div class="modal-rodape"><button class="btn btn-fantasma" data-tirar-filme-do-mes>${icone('X')} Ficar sem filme do mês</button></div>` : ''}`);
+  $$('.filme-mes-opcoes .resultado', modal).forEach((b) => {
+    b.onclick = () => { fecharModal(); definirFilmeDoMes(mes, b.dataset.id); };
+  });
+  const tirar = $('[data-tirar-filme-do-mes]', modal);
+  if (tirar) tirar.onclick = () => { fecharModal(); definirFilmeDoMes(mes, null); };
+}
+
 function mesHTML(mes) {
   const [ano, m] = mes.split('-').map(Number);
   const deslocamento = new Date(ano, m - 1, 1).getDay();
@@ -2416,15 +2472,20 @@ function mesHTML(mes) {
   const mesAtual = diaHoje.slice(0, 7);
   const noMes = [...porDia.entries()].filter(([d]) => d.startsWith(mes)).reduce((n, [, fs]) => n + fs.length, 0);
   const wlHoje = idsWatchlist(diaHoje).length;
+  const doMes = filmeDoMes(mes);
 
   let celulas = '';
   for (let i = 0; i < deslocamento; i++) celulas += '<div class="cal-dia vazio" aria-hidden="true"></div>';
   for (let d = 1; d <= diasNoMes; d++) {
     const dia = `${mes}-${String(d).padStart(2, '0')}`;
-    const vistos = porDia.get(dia) || [];
+    let vistos = porDia.get(dia) || [];
+    // No dia em que o filme do mês foi visto, ele fica na frente das outras capas.
+    const temDoMes = Boolean(doMes && vistos.includes(doMes));
+    if (temDoMes) vistos = [doMes, ...vistos.filter((f) => f !== doMes)];
     const wl = idsWatchlist(dia).map(porId).filter(Boolean);
     const ehHoje = dia === diaHoje;
     const classes = ['cal-dia'];
+    if (temDoMes) classes.push('com-filme-do-mes');
     if (ehHoje) classes.push('hoje');
     if (dia > diaHoje) classes.push('futuro');
     if (vistos.length) classes.push('com-vistos');
@@ -2445,6 +2506,7 @@ function mesHTML(mes) {
         ${fundo}
         <span class="cal-cabeca"><span class="cal-numero">${d}</span>${ehHoje ? '<span class="cal-hoje">hoje</span>' : ''}</span>
         ${capas}${pensando}
+        ${temDoMes ? `<span class="cal-trofeu" title="Filme do mês: ${esc(doMes.titulo)}">${icone('Trophy')}</span>` : ''}
       </div>`;
   }
 
@@ -2464,6 +2526,9 @@ function mesHTML(mes) {
         <span class="cal-stat">${icone('Check')} ${noMes
           ? `<b>${noMes}</b> ${noMes === 1 ? 'filme visto' : 'filmes vistos'} em ${esc(MESES[m - 1])}`
           : `Nada visto em ${esc(MESES[m - 1])} ainda`}</span>
+        ${doMes
+          ? `<button class="cal-stat ouro" data-c="filme-do-mes" data-mes="${mes}" title="Filme do mês: ${esc(doMes.titulo)} (clique para trocar)">${icone('Trophy')} <b>${esc(doMes.titulo)}</b></button>`
+          : noMes ? `<button class="cal-stat ouro vazio" data-c="filme-do-mes" data-mes="${mes}" title="Escolher o seu filme favorito deste mês">${icone('Trophy')} Filme do mês</button>` : ''}
         ${wlHoje ? `<button class="cal-stat roxo" data-c="dia" data-dia="${diaHoje}">${icone('CalendarClock')} <b>${wlHoje}</b> pensando em ver hoje</button>` : ''}
       </div>
       <span class="cal-dica-arrasto">${icone('Move')} Solte num dia: hoje ou depois, vai para a watchlist dele; antes de hoje, conta como visto nele</span>
@@ -2474,9 +2539,15 @@ function mesHTML(mes) {
 }
 
 // `pensandoEm`: o dia da watchlist em que o filme está (hoje ou um dia que vem).
-function filmeDoDiaHTML(f, { pensandoEm = null } = {}) {
+// `vistoNoMes`: o mês em que o filme foi visto (cartões de vistos), para o botão de filme do mês.
+function filmeDoDiaHTML(f, { pensandoEm = null, vistoNoMes = null } = {}) {
   const meta = [f.ano, duracaoDe(f)].filter(Boolean).map(esc).join(' · ');
   let acoes = '';
+  const ehDoMes = Boolean(vistoNoMes && filmeDoMes(vistoNoMes)?.id === f.id);
+  if (vistoNoMes) {
+    acoes = `<button class="cal-trofeu-btn${ehDoMes ? ' on' : ''}" data-c="alternar-filme-do-mes" data-id="${f.id}" data-mes="${vistoNoMes}" aria-pressed="${ehDoMes}"
+      title="${ehDoMes ? 'Deixar de ser o filme do mês' : 'Marcar como o seu filme favorito deste mês'}">${icone('Trophy')} ${ehDoMes ? 'Filme do mês' : 'Marcar como filme do mês'}</button>`;
+  }
   if (pensandoEm) {
     const tirar = `<button class="redondo" data-c="tirar" data-id="${f.id}" data-dia="${pensandoEm}" title="Tirar da watchlist" aria-label="Tirar da watchlist">${icone('X')}</button>`;
     // Sem arrastar: levar o filme para o dia seguinte, ou trazer de volta para hoje.
@@ -2491,7 +2562,7 @@ function filmeDoDiaHTML(f, { pensandoEm = null } = {}) {
     acoes = `<div class="cal-filme-botoes">${principais}${tirar}</div>${mover}`;
   }
   return `
-    <article class="cal-filme${pensandoEm ? ' pensando' : ''}" data-id="${f.id}">
+    <article class="cal-filme${pensandoEm ? ' pensando' : ''}${ehDoMes ? ' do-mes' : ''}" data-id="${f.id}">
       ${capinhaHTML(f, 'grande')}
       <div class="cal-filme-info">
         <h4><button class="cal-filme-titulo" data-c="detalhes" data-id="${f.id}">${esc(f.titulo)}</button></h4>
@@ -2544,7 +2615,7 @@ function paginaDiaHTML(dia) {
     <section class="cal-secao cal-secao-vistos">
       <h3>${icone('Check')} ${ehHoje ? 'Vistos hoje' : 'Vistos neste dia'} ${contagem(vistos.length)}</h3>
       ${vistos.length
-        ? `<div class="cal-filmes">${vistos.map((f) => filmeDoDiaHTML(f)).join('')}</div>`
+        ? `<div class="cal-filmes">${vistos.map((f) => filmeDoDiaHTML(f, { vistoNoMes: dia.slice(0, 7) })).join('')}</div>`
         : `<p class="cal-vazio">${ehHoje ? 'Nenhum filme visto hoje ainda.' : 'Nenhum filme visto neste dia.'}</p>`}
     </section>`}`;
 }
@@ -2653,6 +2724,8 @@ calendario.addEventListener('click', (e) => {
     case 'vi': alternar(id, 'visto', true); aviso(`“${porId(id).titulo}” marcado como visto hoje.`, { tipo: 'ok' }); break;
     case 'tirar': tirarDaWatchlist(id, alvo.dataset.dia || hoje()); break;
     case 'mover': moverWatchlist(id, alvo.dataset.de, alvo.dataset.para); break;
+    case 'filme-do-mes': escolherFilmeDoMes(alvo.dataset.mes); break;
+    case 'alternar-filme-do-mes': alternarFilmeDoMes(id, alvo.dataset.mes); break;
   }
 });
 
@@ -2776,6 +2849,431 @@ setInterval(() => {
   if (estado.painelId) renderPainel();
   if (!calendario.hidden) renderCalendario();
 }, 60 * 1000);
+
+// ---------- Tierlist ----------
+
+// Os filmes vistos, arrastados para tiers (várias por filme não; vários filmes por
+// tier sim). Guardada nas configurações como [{ id, nome, cor, filmes: [ids] }],
+// na ordem de cima para baixo. O que não está em nenhuma tier fica na bandeja
+// "Sem tier", embaixo. Clicar no nome da tier renomeia.
+const CORES_TIER = ['#FF6B6B', '#FF9F5A', '#FFC857', '#F2E55C', '#A8E063', '#5BD69A', '#3DD6D0', '#5AB8FF', '#7B8CFF', '#9B7BDC', '#E57AD8', '#FF7AA8', '#D9DCE1', '#8A8F98'];
+const TIERS_PADRAO = ['S', 'A', 'B', 'C', 'D', 'F'];
+const tierlist = $('#tierlist');
+let buscaTl = '';
+
+function tiers() {
+  if (!Array.isArray(estado.config.tierlist)) {
+    estado.config.tierlist = TIERS_PADRAO.map((nome, i) => ({ id: `t${i}`, nome, cor: CORES_TIER[i], filmes: [] }));
+  }
+  return estado.config.tierlist;
+}
+function salvarTiers() { api.salvarConfig({ tierlist: tiers() }); }
+const tierPorId = (id) => tiers().find((t) => t.id === id);
+
+function abrirTierlist() {
+  fecharPrevia(false);
+  tierlist.hidden = false;
+  buscaTl = '';
+  renderTierlist();
+  Movimento.animar($('#tierlist-caixa'), [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 260 });
+  Movimento.sequencia($$('#tierlist .tl-tier'), { x: -10, duracao: 360, passo: 40, atrasoInicial: 80 });
+  $('#tierlist [data-t="fechar"]')?.focus({ preventScroll: true });
+}
+
+function fecharTierlist() {
+  if (tierlist.hidden) return;
+  terminarArrastoTl();
+  tierlist.hidden = true;
+  $('#tierlist-caixa').innerHTML = '';
+}
+
+function capaTlHTML(f) {
+  return `<div class="tl-capa" role="button" tabindex="0" data-id="${f.id}" title="${esc(`${f.titulo}${f.ano ? ` (${f.ano})` : ''}`)}" aria-label="${esc(f.titulo)}">${capaHTML(f)}</div>`;
+}
+
+function renderTierlist() {
+  const caixa = $('#tierlist-caixa');
+  // Redesenhar não pode mandar as listas de volta para o topo.
+  const rolagem = [...$$('.tl-tiers, .tl-sem', caixa)].map((el) => el.scrollTop);
+  const vistos = estado.filmes.filter((f) => f.visto);
+  const vistosIds = new Set(vistos.map((f) => f.id));
+  const naTier = new Set();
+  const linhas = tiers().map((t) => {
+    const filmes = t.filmes.filter((id) => vistosIds.has(id) && !naTier.has(id)).map(porId);
+    filmes.forEach((f) => naTier.add(f.id));
+    return `
+      <div class="tl-tier" data-tier="${t.id}" style="--cor: ${esc(t.cor)}">
+        <span class="tl-alca" title="Arraste para mudar a tier de posição" aria-hidden="true">${icone('GripVertical')}</span>
+        <button class="tl-rotulo" data-t="renomear" title="Clique para renomear, arraste para mudar de posição"><span class="tl-nome">${esc(t.nome) || '&nbsp;'}</span></button>
+        <div class="tl-filmes" data-soltar="${t.id}">${filmes.map(capaTlHTML).join('')}</div>
+        <div class="tl-acoes">
+          <button class="tl-acao" data-t="cor" title="Trocar a cor" aria-label="Trocar a cor">${icone('Palette')}</button>
+          <button class="tl-acao" data-t="apagar" title="Apagar a tier (os filmes voltam para Sem tier)" aria-label="Apagar a tier">${icone('Trash2')}</button>
+        </div>
+      </div>`;
+  }).join('');
+  const termo = normalizar(buscaTl.trim());
+  const soltos = vistos.filter((f) => !naTier.has(f.id));
+  caixa.innerHTML = `
+    <div class="tl-topo">
+      <h2>Tierlist</h2>
+      <span class="cal-stat">${icone('Check')} <b>${naTier.size}</b> de ${vistos.length} ${vistos.length === 1 ? 'filme visto' : 'filmes vistos'} classificados</span>
+      <button class="btn btn-fantasma tl-nova" data-t="nova">${icone('Plus')} Nova tier</button>
+      <button class="redondo tl-fechar" data-t="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
+    </div>
+    <div class="tl-tiers">${linhas || '<p class="tl-nenhuma">Nenhuma tier. Crie uma em “Nova tier”.</p>'}</div>
+    <div class="tl-bandeja">
+      <div class="tl-bandeja-topo">
+        <h3>Sem tier <span>${soltos.length}</span></h3>
+        <label class="tl-busca">${icone('Search')}<input type="search" placeholder="Filtrar" value="${esc(buscaTl)}" spellcheck="false" aria-label="Filtrar filmes sem tier"></label>
+      </div>
+      <div class="tl-filmes tl-sem" data-soltar="">${soltos.map((f) => capaTlHTML(f).replace('class="tl-capa"',
+        `class="tl-capa"${termo && !normalizar(`${f.titulo} ${f.ano} ${f.diretor || ''}`).includes(termo) ? ' hidden' : ''}`)).join('')}</div>
+      ${vistos.length ? '' : '<p class="tl-nenhuma">Os filmes que você marcar como vistos aparecem aqui.</p>'}
+    </div>`;
+  ajustarTamanhoTl();
+  [...$$('.tl-tiers, .tl-sem', caixa)].forEach((el, i) => { el.scrollTop = rolagem[i] || 0; });
+}
+
+// As tiers dividem a altura disponível entre si, e as capas acompanham a altura
+// da faixa: com poucas tiers, todas cabem sem rolar. Abaixo de 76 px por faixa
+// elas param de encolher e a lista passa a rolar.
+function ajustarTamanhoTl() {
+  const caixa = $('#tierlist-caixa');
+  const lista = $('.tl-tiers', caixa);
+  const n = tiers().length;
+  if (!lista || !n) return;
+  const altura = Math.floor((lista.clientHeight - 6 * (n - 1)) / n);
+  const faixa = Math.max(76, Math.min(140, altura));
+  caixa.style.setProperty('--alt-tier', `${faixa}px`);
+  caixa.style.setProperty('--larg-capa-tl', `${Math.round((faixa - 16) * 2 / 3)}px`);
+  ajustarFonteRotulos();
+}
+
+// O nome da tier começa grande e vai diminuindo até caber no rótulo ("S" fica
+// enorme, "Obras-primas absolutas" fica pequeno). Só no tamanho mínimo uma
+// palavra longa demais pode ser quebrada no meio.
+function ajustarFonteRotulos() {
+  for (const rotulo of $$('#tierlist button.tl-rotulo')) {
+    const nome = $('.tl-nome', rotulo);
+    rotulo.classList.remove('quebrar');
+    const larg = rotulo.clientWidth - 16;
+    const alt = rotulo.clientHeight - 12;
+    let tam = 34;
+    for (; tam > 12; tam -= 1) {
+      nome.style.fontSize = `${tam}px`;
+      if (nome.scrollWidth <= larg && nome.offsetHeight <= alt) break;
+    }
+    if (tam <= 12) rotulo.classList.add('quebrar');
+  }
+}
+window.addEventListener('resize', () => { if (!tierlist.hidden) ajustarTamanhoTl(); });
+
+function renomearTier(botao) {
+  const t = tierPorId(botao.closest('.tl-tier').dataset.tier);
+  const campo = document.createElement('input');
+  campo.className = 'tl-rotulo tl-rotulo-campo';
+  campo.value = t.nome;
+  campo.maxLength = 40;
+  campo.setAttribute('aria-label', 'Nome da tier');
+  botao.replaceWith(campo);
+  campo.focus();
+  campo.select();
+  let feito = false;
+  const terminar = (salvar) => {
+    if (feito) return;
+    feito = true;
+    if (salvar) { t.nome = campo.value.trim(); salvarTiers(); }
+    renderTierlist();
+  };
+  campo.addEventListener('keydown', (e) => {
+    e.stopPropagation(); // Esc cancela a edição, não fecha a tierlist
+    if (e.key === 'Enter') terminar(true);
+    if (e.key === 'Escape') terminar(false);
+  });
+  campo.addEventListener('blur', () => terminar(true));
+}
+
+tierlist.addEventListener('click', (e) => {
+  if (e.target === tierlist) { fecharTierlist(); return; }
+  const capa = e.target.closest('.tl-capa');
+  if (capa) { abrirPainel(capa.dataset.id); return; }
+  const alvo = e.target.closest('[data-t]');
+  if (!alvo) return;
+  const t = alvo.closest('.tl-tier') && tierPorId(alvo.closest('.tl-tier').dataset.tier);
+  switch (alvo.dataset.t) {
+    case 'fechar': fecharTierlist(); break;
+    case 'renomear': renomearTier(alvo); break;
+    case 'cor': abrirPaletaTier(alvo, t); break;
+    case 'apagar': {
+      const lista = tiers();
+      const i = lista.indexOf(t);
+      lista.splice(i, 1);
+      salvarTiers();
+      renderTierlist();
+      aviso(`Tier “${t.nome || 'sem nome'}” apagada.`, { acao: { rotulo: 'Desfazer', fn: () => { tiers().splice(i, 0, t); salvarTiers(); if (!tierlist.hidden) renderTierlist(); } } });
+      break;
+    }
+    case 'nova': {
+      const usadas = new Set(tiers().map((x) => x.cor));
+      tiers().push({ id: `t${Date.now().toString(36)}`, nome: 'Nova', cor: CORES_TIER.find((c) => !usadas.has(c)) || CORES_TIER[tiers().length % CORES_TIER.length], filmes: [] });
+      salvarTiers();
+      renderTierlist();
+      const rotulos = $$('#tierlist .tl-tier .tl-rotulo');
+      const novo = rotulos[rotulos.length - 1];
+      novo.scrollIntoView({ block: 'nearest' });
+      renomearTier(novo);
+      break;
+    }
+  }
+});
+
+// Paleta de cores que abre ao lado do botão: as cores prontas e "Outra cor",
+// que abre o seletor do sistema. A cor muda na hora; fecha ao clicar fora ou com Esc.
+function fecharPaletaTier() {
+  $('#tierlist .tl-paleta')?.remove();
+  $$('#tierlist .tl-acoes.aberta').forEach((el) => el.classList.remove('aberta'));
+}
+function abrirPaletaTier(botao, t) {
+  const jaAberta = $('#tierlist .tl-paleta')?.dataset.tier === t.id;
+  fecharPaletaTier();
+  if (jaAberta) return;
+  const linha = botao.closest('.tl-tier');
+  const paleta = document.createElement('div');
+  paleta.className = 'tl-paleta';
+  paleta.dataset.tier = t.id;
+  paleta.setAttribute('role', 'dialog');
+  paleta.setAttribute('aria-label', `Cor da tier ${t.nome}`);
+  paleta.innerHTML = `
+    <div class="tl-paleta-cores">${CORES_TIER.map((c) => `
+      <button class="tl-cor${c.toLowerCase() === t.cor.toLowerCase() ? ' on' : ''}" data-cor="${c}" style="--c: ${c}" aria-label="Cor ${c}"></button>`).join('')}
+    </div>
+    <label class="tl-outra-cor">${icone('Pipette')} Outra cor<input type="color" value="${esc(t.cor)}"></label>`;
+  $('#tierlist-caixa').append(paleta);
+  botao.closest('.tl-acoes').classList.add('aberta');
+  // À esquerda do botão, sem sair da caixa por baixo.
+  const caixa = $('#tierlist-caixa').getBoundingClientRect();
+  const rb = botao.getBoundingClientRect();
+  const alt = paleta.offsetHeight;
+  paleta.style.left = `${rb.left - caixa.left - paleta.offsetWidth - 10}px`;
+  paleta.style.top = `${Math.min(rb.top - caixa.top + $('#tierlist-caixa').scrollTop - 8, caixa.height - alt - 12)}px`;
+  Movimento.animar(paleta, [{ opacity: 0, transform: 'translateX(6px) scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 180 });
+
+  const aplicar = (cor) => {
+    t.cor = cor;
+    linha.style.setProperty('--cor', cor);
+    $$('.tl-cor', paleta).forEach((b) => b.classList.toggle('on', b.dataset.cor === cor));
+    salvarTiers();
+  };
+  paleta.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const b = e.target.closest('.tl-cor');
+    if (b) { aplicar(b.dataset.cor); fecharPaletaTier(); }
+  });
+  $('input', paleta).addEventListener('input', (e) => aplicar(e.target.value));
+  $('.tl-cor.on', paleta)?.focus({ preventScroll: true });
+}
+tierlist.addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('.tl-paleta, [data-t="cor"]')) fecharPaletaTier();
+}, true);
+
+tierlist.addEventListener('input', (e) => {
+  if (!e.target.matches('.tl-busca input')) return;
+  buscaTl = e.target.value;
+  const termo = normalizar(buscaTl.trim());
+  $$('#tierlist .tl-sem .tl-capa').forEach((el) => {
+    const f = porId(el.dataset.id);
+    el.hidden = Boolean(termo) && !normalizar(`${f.titulo} ${f.ano} ${f.diretor || ''}`).includes(termo);
+  });
+});
+tierlist.addEventListener('keydown', (e) => {
+  if (e.target.matches('.tl-busca input') && e.key === 'Escape' && e.target.value) {
+    e.stopPropagation();
+    e.target.value = '';
+    e.target.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.tl-capa')) {
+    e.preventDefault();
+    abrirPainel(e.target.dataset.id);
+  }
+});
+
+// Arrastar com o ponteiro, como no calendário: depois de 5 px uma cópia da capa
+// segue o mouse e a própria capa (apagadinha) vai andando pelas tiers até o
+// lugar onde vai ficar. Ao soltar, a ordem que está na tela é a que fica salva.
+let arrastoTl = null; // { el, x0, y0, ativo, fantasma }
+let ignorarCliqueTl = false;
+
+function terminarArrastoTl() {
+  if (!arrastoTl) return;
+  arrastoTl.fantasma?.remove();
+  arrastoTl.el.classList.remove('tl-origem');
+  arrastoTl = null;
+  tierlist.classList.remove('arrastando');
+  $$('.tl-alvo', tierlist).forEach((el) => el.classList.remove('tl-alvo'));
+}
+
+// Muda o DOM e faz cada elemento escorregar da posição antiga para a nova
+// (em vez de pular). Não passa pelo Movimento: é o que mostra para onde a capa
+// ou a tier foi, então anima mesmo com as animações do Windows desligadas.
+function escorregar(els, mudar) {
+  const antes = new Map(els.map((el) => [el, el.getBoundingClientRect()]));
+  mudar();
+  for (const [el, r] of antes) {
+    const n = el.getBoundingClientRect();
+    const dx = r.left - n.left;
+    const dy = r.top - n.top;
+    if (dx || dy) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 220, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+  }
+}
+
+// Centro de um item pelo layout (offsetTop/Left), não pelo que está na tela:
+// no meio de uma animação o retângulo visível ainda está saindo do lugar antigo.
+function centroNoLayout(item, lista) {
+  const r = lista.getBoundingClientRect();
+  return {
+    x: r.left + lista.clientLeft + item.offsetLeft - lista.scrollLeft + item.offsetWidth / 2,
+    y: r.top + lista.clientTop + item.offsetTop - lista.scrollTop + item.offsetHeight / 2,
+  };
+}
+
+// Põe a capa arrastada antes ou depois da capa mais próxima do ponteiro na lista.
+function posicionarCapaTl(lista, el, x, y) {
+  let perto = null;
+  let menor = Infinity;
+  const capas = $$('.tl-capa:not([hidden])', lista);
+  for (const c of capas) {
+    if (c === el) continue;
+    const p = centroNoLayout(c, lista);
+    const d = Math.hypot(x - p.x, y - p.y);
+    if (d < menor) { menor = d; perto = c; }
+  }
+  let mudar = null;
+  if (!perto) { if (el.parentElement !== lista) mudar = () => lista.append(el); }
+  else if (x < centroNoLayout(perto, lista).x) { if (perto.previousElementSibling !== el) mudar = () => perto.before(el); }
+  else if (perto.nextElementSibling !== el) mudar = () => perto.after(el);
+  if (!mudar) return;
+  const vizinhas = new Set([...capas, ...$$('.tl-capa:not([hidden])', el.parentElement)]);
+  escorregar([...vizinhas].slice(0, 200), mudar);
+}
+
+tierlist.addEventListener('dragstart', (e) => e.preventDefault());
+
+// Arrastar pelo rótulo move a tier inteira para cima ou para baixo; um clique
+// (sem passar de 5 px) continua renomeando.
+let arrastoTier = null; // { el, y0, ativo }
+
+tierlist.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  const rotulo = e.target.closest('button.tl-rotulo, .tl-alca');
+  if (rotulo) { arrastoTier = { el: rotulo.closest('.tl-tier'), y0: e.clientY, ativo: false }; return; }
+  const capa = e.target.closest('.tl-capa');
+  if (!capa) return;
+  arrastoTl = { el: capa, x0: e.clientX, y0: e.clientY, ativo: false };
+});
+
+document.addEventListener('pointermove', (e) => {
+  if (!arrastoTl) return;
+  if (!arrastoTl.ativo) {
+    if (Math.hypot(e.clientX - arrastoTl.x0, e.clientY - arrastoTl.y0) < 5) return;
+    arrastoTl.ativo = true;
+    const fantasma = document.createElement('div');
+    fantasma.className = 'cal-fantasma tl-fantasma';
+    fantasma.innerHTML = capaHTML(porId(arrastoTl.el.dataset.id));
+    document.body.append(fantasma);
+    arrastoTl.fantasma = fantasma;
+    arrastoTl.el.classList.add('tl-origem');
+    tierlist.classList.add('arrastando');
+  }
+  e.preventDefault();
+  arrastoTl.fantasma.style.transform = `translate(${e.clientX - 36}px, ${e.clientY - 54}px) rotate(-4deg)`;
+
+  const sob = document.elementFromPoint(e.clientX, e.clientY);
+  const linha = sob && tierlist.contains(sob) && sob.closest('.tl-tier, .tl-bandeja');
+  const lista = linha && $('[data-soltar]', linha);
+  $$('.tl-alvo', tierlist).forEach((el) => { if (el !== linha) el.classList.remove('tl-alvo'); });
+  if (lista) {
+    linha.classList.add('tl-alvo');
+    posicionarCapaTl(lista, arrastoTl.el, e.clientX, e.clientY);
+  }
+
+  // Perto da borda de cima ou de baixo das tiers, elas rolam sozinhas.
+  const tiersEl = $('.tl-tiers', tierlist);
+  const r = tiersEl.getBoundingClientRect();
+  if (e.clientX >= r.left && e.clientX <= r.right) {
+    if (e.clientY < r.top + 40 && e.clientY > r.top - 30) tiersEl.scrollTop -= 14;
+    else if (e.clientY > r.bottom - 40 && e.clientY < r.bottom + 10) tiersEl.scrollTop += 14;
+  }
+});
+
+document.addEventListener('pointerup', () => {
+  if (!arrastoTl) return;
+  if (!arrastoTl.ativo) { arrastoTl = null; return; } // foi um clique: abre os detalhes
+  terminarArrastoTl();
+  ignorarCliqueTl = true;
+  setTimeout(() => { ignorarCliqueTl = false; }, 0);
+  // A ordem da tela vira a ordem salva. Filmes que estão numa tier mas não
+  // aparecem (desmarcados como vistos) continuam guardados no fim dela.
+  const naTela = new Set($$('#tierlist .tl-capa').map((el) => el.dataset.id));
+  for (const t of tiers()) {
+    const lista = $(`#tierlist [data-soltar="${t.id}"]`);
+    const ids = lista ? $$('.tl-capa', lista).map((el) => el.dataset.id) : [];
+    t.filmes = [...ids, ...t.filmes.filter((id) => !naTela.has(id) && !ids.includes(id))];
+  }
+  salvarTiers();
+  renderTierlist();
+});
+
+document.addEventListener('pointermove', (e) => {
+  if (!arrastoTier) return;
+  if (!arrastoTier.ativo) {
+    if (Math.abs(e.clientY - arrastoTier.y0) < 5) return;
+    arrastoTier.ativo = true;
+    arrastoTier.el.classList.add('tl-movendo');
+    tierlist.classList.add('arrastando');
+  }
+  e.preventDefault();
+  // Fica antes da primeira tier cujo meio está abaixo do ponteiro.
+  const lista = $('.tl-tiers', tierlist);
+  const outras = $$('.tl-tier', lista).filter((t) => t !== arrastoTier.el);
+  const depois = outras.find((t) => e.clientY < centroNoLayout(t, lista).y);
+  const el = arrastoTier.el;
+  if (depois) { if (el.nextElementSibling !== depois) escorregar($$('.tl-tier', lista), () => depois.before(el)); }
+  else if (lista.lastElementChild !== el) escorregar($$('.tl-tier', lista), () => lista.append(el));
+  const r = lista.getBoundingClientRect();
+  if (e.clientY < r.top + 40) lista.scrollTop -= 14;
+  else if (e.clientY > r.bottom - 40) lista.scrollTop += 14;
+});
+
+function terminarArrastoTier() {
+  if (!arrastoTier) return;
+  const { el, ativo } = arrastoTier;
+  arrastoTier = null;
+  if (!ativo) return; // foi um clique: renomeia
+  el.classList.remove('tl-movendo');
+  tierlist.classList.remove('arrastando');
+  ignorarCliqueTl = true;
+  setTimeout(() => { ignorarCliqueTl = false; }, 0);
+  const ordem = $$('#tierlist .tl-tier').map((t) => t.dataset.tier);
+  tiers().sort((a, b) => ordem.indexOf(a.id) - ordem.indexOf(b.id));
+  salvarTiers();
+}
+document.addEventListener('pointerup', terminarArrastoTier);
+document.addEventListener('pointercancel', terminarArrastoTier);
+window.addEventListener('blur', terminarArrastoTier);
+
+document.addEventListener('pointercancel', terminarArrastoTl);
+window.addEventListener('blur', terminarArrastoTl);
+
+tierlist.addEventListener('click', (e) => {
+  if (!ignorarCliqueTl) return;
+  ignorarCliqueTl = false;
+  e.stopImmediatePropagation();
+  e.preventDefault();
+}, true);
+
+$('#btn-tierlist').addEventListener('click', () => abrirTierlist());
 
 // ---------- Início ----------
 

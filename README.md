@@ -18,8 +18,8 @@ O NANDFlix é um app de desktop para catalogar os filmes que você quer ver. Ele
 | Arquivo | O que é |
 |---|---|
 | [`NANDFlix.exe`](NANDFlix.exe) | Versão portátil para Windows: é só abrir, não precisa instalar. |
-| [`dist/NANDFlix-Setup-1.0.3.exe`](dist/NANDFlix-Setup-1.0.3.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
-| [`dist/NANDFlix-1.0.3-portable.exe`](dist/NANDFlix-1.0.3-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
+| [`dist/NANDFlix-Setup-1.0.4.exe`](dist/NANDFlix-Setup-1.0.4.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
+| [`dist/NANDFlix-1.0.4-portable.exe`](dist/NANDFlix-1.0.4-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
 
 Os mesmos arquivos estão na página de [Releases](../../releases).
 
@@ -63,8 +63,19 @@ Um diário dos filmes que você vê e um planejador do que vai ver, aberto pelo 
 - **Sortear um filme**: na página de hoje, as capas passam rápido até parar num filme não visto, que entra na watchlist de hoje (com opção de desfazer).
 - **Página do dia**: clique num dia para ver as capas grandes, com os vistos centralizados e a watchlist com Assistir, marcar visto ou tirar da lista.
 - **Planeje arrastando**: arraste a capa de um filme da watchlist para outro dia. Hoje ou depois, ele vai para a watchlist daquele dia; antes de hoje, fica registrado como visto nele. Segure sobre as setas ‹ › para trocar de mês sem soltar. Sem arrastar: **Passar para amanhã** e **Trazer para hoje** na página do dia.
+- **Filme do mês**: escolha o seu favorito entre os filmes vistos em cada mês, pelo botão dourado no topo do mês ou por **Marcar como filme do mês** na página do dia. Ele aparece no topo com um troféu, e a capa dele vai para a frente no dia em que foi visto, com aro dourado.
 - O dia vira às 5h da manhã: um filme visto de madrugada conta para a noite anterior.
 - Respeita o "reduzir movimento" do sistema: com os efeitos de animação desligados no Windows, o calendário não anima.
+
+### Tierlist
+Uma tierlist dos filmes que você já viu, aberta pelo botão de medalha ao lado do calendário.
+
+- Começa com as tiers **S, A, B, C, D e F**; os filmes vistos que ainda não estão em nenhuma ficam na bandeja **Sem tier**, embaixo, com um campo para filtrar.
+- **Arraste as capas** para as tiers, entre elas ou de volta para a bandeja. As outras capas abrem espaço deslizando, e a ordem dentro de cada tier fica salva.
+- **Clique no nome** de uma tier para renomeá-la; a fonte diminui sozinha para nomes longos caberem.
+- **Arraste pela alça ⋮⋮** (ou pelo rótulo) para mudar a tier de posição.
+- Cada tier tem uma **paleta de cores** (ou qualquer cor pelo seletor do sistema) e pode ser apagada, com opção de desfazer. **Nova tier** cria quantas você quiser.
+- As tiers dividem a altura da janela, então as seis padrão aparecem inteiras; com muitas tiers, a lista passa a rolar.
 
 ### Stremio e Letterboxd
 - **Assistir** abre o filme no app do Stremio e traz a janela para a frente. Também dá para usar o Stremio Web.

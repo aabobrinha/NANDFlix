@@ -819,6 +819,191 @@ span.grupo-nome { color: var(--texto-2); }
 .cal-stat.roxo:hover { background: rgba(109, 74, 168, .4); }
 .cal-fechar { margin-left: auto; }
 
+/* ---------- Filme do mês (dourado, só no calendário) ---------- */
+.cal-stat.ouro { background: rgba(245, 179, 1, .14); color: var(--dourado); cursor: pointer; transition: background-color .15s ease-out; }
+.cal-stat.ouro b { color: #FFE08A; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-stat.ouro:hover { background: rgba(245, 179, 1, .26); }
+.cal-stat.ouro.vazio { background: transparent; box-shadow: inset 0 0 0 1px rgba(245, 179, 1, .45); }
+/* No dia: a capa do filme do mês na frente, com aro dourado e um troféu */
+.cal-dia.com-filme-do-mes .cal-vistos .cal-capa:first-child .capa {
+  box-shadow: 0 0 0 2px var(--dourado), 0 0 22px rgba(245, 179, 1, .35), 0 6px 18px rgba(0, 0, 0, .55);
+}
+.cal-trofeu {
+  position: absolute; right: 4px; bottom: 4px; z-index: 4;
+  width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--dourado); color: #2A1F00;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .55), 0 0 0 2px var(--superficie);
+  pointer-events: none;
+}
+.cal-trofeu .ico { width: 14px; height: 14px; stroke-width: 2.2; }
+/* Na página do dia: botão para marcar e o cartão do escolhido */
+.cal-trofeu-btn {
+  display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
+  min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; cursor: pointer;
+  background: transparent; box-shadow: inset 0 0 0 1px rgba(245, 179, 1, .4);
+  color: var(--dourado); font: 600 13px/1 var(--ui);
+  transition: background-color .15s ease-out, color .15s ease-out;
+}
+.cal-trofeu-btn:hover { background: rgba(245, 179, 1, .14); }
+.cal-trofeu-btn.on { background: var(--dourado); color: #2A1F00; box-shadow: none; }
+.cal-trofeu-btn .ico { width: 16px; height: 16px; }
+.cal-secao-vistos .cal-trofeu-btn { align-self: center; }
+.cal-filme.do-mes .cal-capa.grande .capa { box-shadow: 0 0 0 3px var(--dourado), 0 0 50px rgba(245, 179, 1, .3), 0 22px 50px rgba(0, 0, 0, .6); }
+/* Janela de escolha */
+.filme-mes-ajuda { margin: 0 0 16px; color: var(--texto-2); }
+.filme-mes-opcoes .resultado.atual .capa::after { box-shadow: inset 0 0 0 3px var(--dourado); }
+
+/* ---------- Tierlist ----------
+   Usa a caixa do calendário. Cada tier é uma faixa escura com o rótulo colorido
+   à esquerda e um brilho da mesma cor saindo dele; as tiers rolam, e a bandeja
+   "Sem tier" fica sempre à vista embaixo, para dar para arrastar de lá. */
+.tierlist-caixa { gap: 16px; }
+/* As tiers ficam com a altura que sobra (não a do conteúdo), para o app.js dividir entre elas */
+.tierlist-caixa > .tl-tiers { flex: 1 1 0; }
+.tl-topo { display: flex; align-items: center; gap: 16px; }
+.tl-topo h2 { margin: 0 8px 0 0; font: 700 34px/1.1 var(--display); letter-spacing: -.02em; }
+.tl-nova { min-height: 40px; padding: 0 16px; font-size: 13px; box-shadow: inset 0 0 0 1px var(--divisor); margin-left: auto; }
+.tl-nova .ico { width: 16px; height: 16px; }
+
+.tl-tiers {
+  flex: 1 1 auto; min-height: 120px; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 6px; padding: 0 4px 0 28px;
+}
+.tl-tiers::-webkit-scrollbar, .tl-sem::-webkit-scrollbar { width: 10px; }
+.tl-tiers::-webkit-scrollbar-thumb, .tl-sem::-webkit-scrollbar-thumb { background: var(--superficie-2); border-radius: 5px; border: 3px solid var(--superficie); }
+
+.tl-tier {
+  position: relative; flex: none;
+  display: flex; align-items: stretch; min-height: var(--alt-tier, 116px);
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--cor) 16%, transparent), transparent 260px),
+    rgba(232, 235, 240, .035);
+  box-shadow: inset 0 0 0 1px rgba(232, 235, 240, .05);
+  transition: box-shadow .15s ease-out;
+}
+.tl-tier.tl-alvo { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--cor) 70%, transparent); }
+.tl-rotulo {
+  flex: none; width: 104px; padding: 8px; border: 0; cursor: text;
+  display: grid; place-items: center;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--cor) 100%, white 18%), var(--cor) 55%, color-mix(in srgb, var(--cor) 82%, black));
+  color: #16120E; text-align: center; overflow-wrap: anywhere;
+  font: 800 30px/1.05 var(--display); letter-spacing: -.01em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .25);
+}
+.tl-rotulo:hover { filter: brightness(1.06); }
+button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflow: hidden; border-radius: 12px 0 0 12px; }
+.tl-nome { display: block; max-width: 100%; overflow-wrap: normal; word-break: normal; line-height: 1.05; }
+.tl-rotulo.quebrar .tl-nome { overflow-wrap: anywhere; }
+/* Alça de arrastar (⋮⋮) do lado de fora, à esquerda da tier */
+.tl-alca {
+  position: absolute; left: -26px; top: 50%; translate: 0 -50%;
+  width: 22px; height: 40px; border-radius: 6px;
+  display: grid; place-items: center; cursor: grab; touch-action: none;
+  color: rgba(232, 235, 240, .22);
+  transition: color .15s ease-out, background-color .15s ease-out;
+}
+.tl-alca .ico { width: 18px; height: 18px; }
+.tl-tier:hover .tl-alca, .tl-tier.tl-movendo .tl-alca { color: var(--cor); }
+.tl-alca:hover { background: rgba(232, 235, 240, .06); }
+.tl-tiers, .tl-filmes { position: relative; }
+/* A tier sendo levada pelo rótulo: sobe um pouco e ganha contorno da cor dela */
+.tl-tier.tl-movendo {
+  z-index: 2;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .6), inset 0 0 0 2px color-mix(in srgb, var(--cor) 80%, transparent);
+  transform: scale(1.01);
+}
+/* Nomes longos ficam menores para caber no rótulo */
+.tl-rotulo-campo { border-radius: 12px 0 0 12px; font-size: 18px; outline: none; box-shadow: inset 0 0 0 3px rgba(22, 18, 14, .45); }
+.tl-filmes {
+  flex: 1; min-width: 0;
+  display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px;
+  padding: 8px 12px;
+}
+.tl-tier .tl-filmes:not(:has(.tl-capa))::before {
+  content: 'Arraste filmes para cá'; align-self: center; margin: auto 0;
+  color: rgba(232, 235, 240, .22); font-size: 13px; font-weight: 500;
+}
+.tl-capa {
+  position: relative; flex: none; width: var(--larg-capa-tl, 64px); border-radius: 6px; cursor: grab;
+  transition: transform .15s var(--saida), opacity .15s ease-out;
+  touch-action: none;
+}
+.tl-capa .capa { border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, .45); }
+.tl-capa .capa-vazia strong { font-size: 7px; }
+.tl-capa .capa-vazia span { display: none; }
+.tl-capa:hover { transform: translateY(-3px) scale(1.04); z-index: 1; }
+.tl-capa:focus-visible { outline: 2px solid var(--anel-foco); outline-offset: 2px; }
+/* O lugar onde a capa arrastada vai cair */
+.tl-capa.tl-origem { opacity: .3; transform: none; }
+.tl-capa.tl-origem .capa { box-shadow: 0 0 0 2px var(--acento-texto); }
+.tierlist.arrastando .tl-capa:hover:not(.tl-origem) { transform: none; }
+.tl-fantasma { width: 72px; }
+
+.tl-acoes {
+  flex: none; display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  padding: 0 10px; opacity: 0; transition: opacity .15s ease-out;
+}
+.tl-tier:hover .tl-acoes, .tl-acoes:focus-within, .tl-acoes.aberta { opacity: 1; }
+
+/* Paleta de cores da tier */
+.tl-paleta {
+  position: absolute; z-index: 20; width: 212px; padding: 12px;
+  border-radius: 14px; background: var(--superficie-2);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .65), inset 0 0 0 1px rgba(232, 235, 240, .08);
+}
+.tl-paleta-cores { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.tl-cor {
+  aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: var(--c);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .18);
+  transition: transform .15s var(--saida), box-shadow .15s ease-out;
+}
+.tl-cor:hover { transform: scale(1.15); }
+.tl-cor:focus-visible { outline: 2px solid var(--anel-foco); outline-offset: 2px; }
+.tl-cor.on { box-shadow: 0 0 0 2px var(--superficie-2), 0 0 0 4px var(--c); transform: scale(.9); }
+.tl-outra-cor {
+  position: relative; display: flex; align-items: center; gap: 8px; margin-top: 10px;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  color: var(--texto-2); font: 500 13px/1 var(--ui);
+}
+.tl-outra-cor:hover { background: rgba(232, 235, 240, .06); color: var(--texto); }
+.tl-outra-cor .ico { width: 15px; height: 15px; }
+.tl-outra-cor input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+/* Trocar de cor (pela paleta ou na hora de arrastar) tinge a faixa com suavidade */
+.tl-rotulo { transition: filter .15s ease-out, background .2s ease-out; }
+.tierlist.arrastando .tl-acoes { opacity: 0; }
+.tl-acao {
+  width: 32px; height: 32px; border: 0; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center;
+  background: rgba(232, 235, 240, .06); color: var(--texto-2);
+}
+.tl-acao:hover { background: rgba(232, 235, 240, .14); color: var(--texto); }
+.tl-acao .ico { width: 16px; height: 16px; }
+
+.tl-bandeja {
+  flex: none; display: flex; flex-direction: column;
+  max-height: 30%; min-height: 140px;
+  border-radius: 12px; background: rgba(5, 6, 8, .55);
+  box-shadow: inset 0 0 0 1px rgba(232, 235, 240, .06);
+  transition: box-shadow .15s ease-out;
+}
+.tl-bandeja.tl-alvo { box-shadow: inset 0 0 0 2px rgba(155, 123, 220, .6); }
+.tl-bandeja-topo { display: flex; align-items: center; gap: 12px; padding: 12px 14px 0; }
+.tl-bandeja-topo h3 { margin: 0; font: 700 15px/1 var(--ui); }
+.tl-bandeja-topo h3 span { margin-left: 6px; color: var(--texto-2); font-weight: 500; font-variant-numeric: tabular-nums; }
+.tl-busca {
+  margin-left: auto; display: flex; align-items: center; gap: 8px;
+  height: 34px; padding: 0 12px; border-radius: 999px;
+  background: rgba(232, 235, 240, .06); color: var(--texto-2);
+}
+.tl-busca .ico { width: 15px; height: 15px; flex: none; }
+.tl-busca input { width: 160px; border: 0; background: none; outline: none; color: var(--texto); font: 500 13px var(--ui); }
+.tl-busca:focus-within { box-shadow: inset 0 0 0 1px var(--anel-foco); }
+.tl-sem { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.tl-nenhuma { margin: 8px 14px 14px; color: var(--texto-2); font-size: 13px; }
+
 /* Grade do mês */
 .cal-semana, .cal-grade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .cal-semana { margin-bottom: 8px; }
