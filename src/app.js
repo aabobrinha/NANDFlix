@@ -49,6 +49,12 @@ function esc(texto) {
   return String(texto ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+function htmlParaNo(html) {
+  const t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild;
+}
+
 function normalizar(texto) {
   return String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’‘`´]/g, "'").toLowerCase();
 }
@@ -88,6 +94,27 @@ function srcCapa(f) {
   return f.poster || '';
 }
 
+// Título do filme no destaque e nos detalhes: a logo do TMDB (arte do título,
+// como na Netflix) quando houver; senão, o texto.
+function srcLogo(f) {
+  if (f.logoLocal) return `capa://img/${f.logoLocal}`;
+  return f.logo || '';
+}
+function tituloHTML(f) {
+  const src = srcLogo(f);
+  return src
+    ? `<h2 class="titulo-logo"><img src="${esc(src)}" alt="${esc(f.titulo)}" title="${esc(f.titulo)}" data-titulo-texto="${esc(f.titulo)}"></h2>`
+    : `<h2>${esc(f.titulo)}</h2>`;
+}
+// Se a logo não carregar, volta para o título em texto.
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || !img.dataset.tituloTexto) return;
+  const h2 = img.closest('h2');
+  h2.classList.remove('titulo-logo');
+  h2.textContent = img.dataset.tituloTexto;
+}, true);
+
 function capaHTML(f, { tamanho = 'normal' } = {}) {
   const src = srcCapa(f);
   const vazia = `<div class="capa-vazia"><strong>${esc(f.titulo)}</strong><span>${esc(f.ano)}</span></div>`;
@@ -114,7 +141,7 @@ document.addEventListener('error', (e) => {
 
 // ---------- Países ----------
 
-// O OMDb dá os países em inglês ("United States, Canada"), o principal primeiro.
+// O TMDB (e o OMDb) dá os países em inglês ("United States, Canada"), o principal primeiro.
 // Aqui viram português pelo Intl; a tabela cobre o que ele não reconhece.
 const PAISES_ESPECIAIS = {
   'Soviet Union': 'União Soviética', 'West Germany': 'Alemanha Ocidental', 'East Germany': 'Alemanha Oriental',
@@ -122,6 +149,8 @@ const PAISES_ESPECIAIS = {
   'Serbia and Montenegro': 'Sérvia e Montenegro', 'Hong Kong': 'Hong Kong', Macao: 'Macau', 'Czech Republic': 'Tchéquia',
   'Republic of North Macedonia': 'Macedônia do Norte', UK: 'Reino Unido', USA: 'Estados Unidos',
   'Ivory Coast': 'Costa do Marfim', Burma: 'Mianmar', Korea: 'Coreia do Sul',
+  // Nomes do TMDB que o Intl não reconhece
+  'United States of America': 'Estados Unidos', 'Northern Ireland': 'Irlanda do Norte', Turkey: 'Turquia',
 };
 const codigosPais = (() => {
   const mapa = new Map();
@@ -207,7 +236,7 @@ const AGRUPAMENTOS = {
   diretor: { chave: (f) => (f.diretor || '').trim(), semChave: 'Diretor não informado', filtrar: filtrarDiretor, dica: 'Ver só os filmes deste diretor' },
   pais: {
     chave: paisPrincipal, semChave: 'País não informado', semChavePendente: 'País ainda não carregado',
-    pendente: (f) => f.imdbID && !f.info, buscar: () => buscarInfos(),
+    pendente: (f) => !f.tmdbEm, buscar: () => buscarCapas({ incluirNaoEncontradas: true }),
     filtrar: filtrarPais, dica: 'Ver só os filmes deste país',
   },
 };
@@ -225,8 +254,8 @@ function cabecalhoGrupo(chave, fs, ag) {
     }
     cacheGrupos.set(id, el);
   }
-  // Grupo sem a informação: se ainda há filmes por buscar no OMDb, diz isso e
-  // oferece buscar agora; senão o OMDb simplesmente não informa.
+  // Grupo sem a informação: se ainda há filmes por buscar no TMDB, diz isso e
+  // oferece buscar agora; senão o TMDB simplesmente não informa.
   if (!chave) {
     const pendentes = ag.pendente ? fs.some(ag.pendente) : false;
     if (el.dataset.pendentes !== String(pendentes)) {
@@ -703,7 +732,7 @@ function renderPainel() {
         <div class="painel-cabecalho">
           <div class="destaque-identidade">
             <div class="destaque-poster" data-p="trocar" title="Trocar capa (ou arraste uma imagem para cá)">${capaHTML(f, { tamanho: 'grande' })}</div>
-            <div class="destaque-titulo"><h2>${esc(f.titulo)}</h2></div>
+            <div class="destaque-titulo">${tituloHTML(f)}</div>
           </div>
           <div class="painel-botoes">
             <button class="btn btn-assistir" data-p="stremio">${ICONE_PLAY} Assistir</button>
@@ -729,6 +758,7 @@ function renderPainel() {
     <div class="painel-corpo">
       <div>
         <p class="painel-meta" data-info="meta-painel">${painelMetaHTML(f)}</p>
+        <div class="minha-nota-linha"><b>Sua nota</b>${estrelasHTML(f)}</div>
         <div class="painel-vistos">${vistosEmHTML(f)}</div>
         <div class="notas-linha">${notasHTML(f.info)}</div>
         <p class="painel-sinopse" data-info="sinopse-painel"${sinopse ? '' : ' hidden'}>${esc(sinopse)}</p>
@@ -741,6 +771,7 @@ function renderPainel() {
         ${f.notas ? `<p class="painel-ficha"><b>Suas notas:</b> <span>${esc(f.notas)}</span></p>` : ''}
       </div>
     </div>
+    <div id="painel-relacionados"></div>
     <div class="capa-acoes">
       <button class="btn btn-fantasma" data-p="baixar" title="Salvar a imagem da capa no computador">${icone('Download')} Baixar capa</button>
       <button class="btn btn-fantasma" data-p="arquivo" title="Usar uma imagem sua como capa (ou arraste a imagem para a capa)">${icone('FolderOpen')} Usar imagem minha</button>
@@ -761,7 +792,7 @@ function renderPainel() {
     <div class="campo">
       <label for="c-buscaCapa">Busca da capa</label>
       <input id="c-buscaCapa" data-campo="buscaCapa" value="${esc(f.buscaCapa)}" placeholder="Título em inglês ou código tt…" spellcheck="false">
-      <span class="ajuda">${f.imdbID ? `IMDb: ${esc(f.imdbID)}` : 'Sem código do IMDb ainda.'}${f.capaPersonalizada ? ' · Capa escolhida por você.' : f.capaNaoEncontrada && !f.poster ? ' · Capa não encontrada no OMDb.' : ''}</span>
+      <span class="ajuda">${f.imdbID ? `IMDb: ${esc(f.imdbID)}` : 'Sem código do IMDb ainda.'}${f.capaPersonalizada ? ' · Capa escolhida por você.' : f.tmdbEm && !f.tmdbId ? ' · Não encontrado no TMDB.' : ''}</span>
     </div>
     <div class="campo">
       <label for="c-trailer">Trailer (link do YouTube)</label>
@@ -773,6 +804,8 @@ function renderPainel() {
       <button class="btn" data-p="trocar">${icone('Image')} Trocar capa</button>
       <button class="btn btn-perigo" data-p="excluir">${icone('Trash2')} Excluir</button>
     </div>`;
+
+  carregarRelacionados(f);
 
   if (!f.info) {
     const id = f.id;
@@ -825,6 +858,162 @@ function atualizarBotoesPainel(f) {
   botaoHoje.setAttribute('aria-pressed', String(hojeNaLista));
 }
 
+// ---------- Outros filmes do diretor e "Mais como este" (TMDB) ----------
+
+// Nos detalhes, duas fileiras de capas: a filmografia de quem dirigiu e as
+// recomendações do TMDB. Cada capa diz se o filme já está na lista (ou já foi
+// visto); as que não estão têm + para adicionar. Clicar abre o filme: o da
+// lista nos detalhes; os outros, no Letterboxd.
+const relacionadosPorFilme = new Map(); // tmdbId → { diretores, recomendacoes }
+
+async function carregarRelacionados(f) {
+  const area = $('#painel-relacionados');
+  if (!area || !f.tmdbId || !estado.config.tmdbKey) return;
+  let dados = relacionadosPorFilme.get(f.tmdbId);
+  if (!dados) {
+    const r = await api.relacionadosTmdb(f.id);
+    if (!r.ok || !r.dados) return;
+    dados = r.dados;
+    relacionadosPorFilme.set(f.tmdbId, dados);
+  }
+  if (estado.painelId !== f.id || !$('#painel-relacionados')) return;
+  $('#painel-relacionados').innerHTML = relacionadosHTML(dados);
+  prepararSetasRelacionados();
+}
+
+function relacionadosHTML({ diretores, recomendacoes }) {
+  const naLista = new Map(estado.filmes.filter((x) => x.tmdbId).map((x) => [String(x.tmdbId), x]));
+  const cartao = (r) => {
+    const meu = naLista.get(String(r.tmdbId));
+    const selo = meu
+      ? (meu.visto ? `<span class="rel-selo visto" title="Você já viu">${icone('Check')}</span>` : `<span class="rel-selo na-lista" title="Na sua lista">${icone('Bookmark')}</span>`)
+      : `<button class="rel-mais" data-p="rel-adicionar" data-tmdb="${r.tmdbId}" data-titulo="${esc(r.titulo)}" data-ano="${esc(r.ano)}" title="Adicionar à lista" aria-label="Adicionar ${esc(r.titulo)} à lista">${icone('Plus')}</button>`;
+    return `
+      <div class="rel-filme${meu ? ' na-lista' : ''}">
+        <button class="rel-capa" data-p="rel-abrir" data-tmdb="${r.tmdbId}"${meu ? ` data-meu="${meu.id}"` : ''} title="${esc(meu ? `${r.titulo}: abrir nos detalhes` : `${r.titulo}: ver no Letterboxd`)}">
+          <div class="capa">${r.poster ? `<img src="${esc(r.poster)}" alt="" loading="lazy" data-titulo="${esc(r.titulo)}" data-ano="${esc(r.ano)}">` : `<div class="capa-vazia"><strong>${esc(r.titulo)}</strong><span>${esc(r.ano)}</span></div>`}</div>
+        </button>
+        ${selo}
+        <strong>${esc(r.titulo)}</strong><span>${esc(r.ano)}</span>
+      </div>`;
+  };
+  const fileira = (titulo, itens) => (itens.length ? `
+    <section class="relacionados">
+      <h3>${titulo}</h3>
+      <div class="rel-envoltorio">
+        <button class="rel-seta esq" data-p="rel-rolar" data-lado="-1" aria-label="Voltar" hidden>${icone('ChevronLeft')}</button>
+        <div class="rel-fileira">${itens.map(cartao).join('')}</div>
+        <button class="rel-seta dir" data-p="rel-rolar" data-lado="1" aria-label="Mais">${icone('ChevronRight')}</button>
+      </div>
+    </section>` : '');
+  return diretores.map((d) => fileira(`Outros filmes de ${esc(d.nome)}`, d.filmes)).join('') + fileira('Mais como este', recomendacoes);
+}
+
+// Esconde a seta do lado em que a fileira já chegou ao fim.
+function atualizarSetasRelacionados(fileira) {
+  const env = fileira.closest('.rel-envoltorio');
+  const fim = fileira.scrollWidth - fileira.clientWidth - 2;
+  $('.rel-seta.esq', env).hidden = fileira.scrollLeft <= 2;
+  $('.rel-seta.dir', env).hidden = fileira.scrollLeft >= fim;
+}
+function prepararSetasRelacionados() {
+  $$('#painel-relacionados .rel-fileira').forEach(atualizarSetasRelacionados);
+}
+// Um listener só, no painel (rolagem não sobe, então na fase de captura):
+// os detalhes são redesenhados com frequência e as fileiras são recriadas.
+$('#painel').addEventListener('scroll', (e) => {
+  if (e.target instanceof Element && e.target.matches('.rel-fileira')) atualizarSetasRelacionados(e.target);
+}, { capture: true, passive: true });
+
+async function adicionarRelacionado(botao) {
+  const { tmdb, titulo, ano } = botao.dataset;
+  botao.disabled = true;
+  const repetido = await api.acharRepetido({ tmdbId: tmdb, titulo, ano });
+  if (repetido) { aviso(`“${repetido.titulo}” já está na sua lista.`); botao.disabled = false; return; }
+  const novo = await api.adicionarFilme({ titulo, ano, tmdbId: tmdb });
+  estado.filmes.push(novo);
+  novo.tmdbId = Number(tmdb); // até o TMDB responder, já conta como "na lista"
+  render();
+  const f = porId(estado.painelId);
+  const dados = f && relacionadosPorFilme.get(f.tmdbId);
+  if (dados && $('#painel-relacionados')) { $('#painel-relacionados').innerHTML = relacionadosHTML(dados); prepararSetasRelacionados(); }
+  aviso(`“${titulo}” foi adicionado à lista.`, { tipo: 'ok', acao: { rotulo: 'Ver', fn: () => abrirPainel(novo.id) } });
+}
+
+// ---------- Sua nota (estrelas) ----------
+
+// De ½ a 5 estrelas, dada nos detalhes do filme; aparece também na tierlist.
+// Passar o mouse mostra a nota que vai ficar; clicar na mesma nota tira a nota.
+const notaLegivel = (n) => String(n).replace('.', ',');
+
+function estrelasHTML(f) {
+  const n = f.minhaNota || 0;
+  const estrelas = [0, 1, 2, 3, 4].map((i) => `
+    <span class="estrela">${icone('Star')}<span class="estrela-cheia" style="width:${Math.max(0, Math.min(1, n - i)) * 100}%">${icone('Star', { preenchido: true })}</span></span>`).join('');
+  return `<div class="minha-nota" role="slider" tabindex="0" aria-label="Sua nota" aria-valuemin="0" aria-valuemax="5" aria-valuenow="${n}" aria-valuetext="${n ? `${notaLegivel(n)} estrelas` : 'Sem nota'}" data-nota="${n}">
+      <div class="estrelas">${estrelas}</div>
+      <span class="nota-texto">${n ? notaLegivel(n) : 'Dê sua nota'}</span>
+    </div>`;
+}
+
+// Só para ler (na página do dia do calendário): as estrelas e o número.
+function notaFixaHTML(n) {
+  const estrelas = [0, 1, 2, 3, 4].map((i) => `
+    <span class="estrela">${icone('Star')}<span class="estrela-cheia" style="width:${Math.max(0, Math.min(1, n - i)) * 100}%">${icone('Star', { preenchido: true })}</span></span>`).join('');
+  return `<div class="nota-fixa" title="Sua nota: ${notaLegivel(n)}" aria-label="Sua nota: ${notaLegivel(n)} estrelas"><div class="estrelas">${estrelas}</div><b>${notaLegivel(n)}</b></div>`;
+}
+
+function pintarEstrelas(el, n, provisoria = false) {
+  $$('.estrela-cheia', el).forEach((s, i) => { s.style.width = `${Math.max(0, Math.min(1, n - i)) * 100}%`; });
+  $('.nota-texto', el).textContent = n ? notaLegivel(n) : 'Dê sua nota';
+  el.classList.toggle('provisoria', provisoria);
+}
+
+function notaNoPonteiro(el, x) {
+  const r = $('.estrelas', el).getBoundingClientRect();
+  return Math.max(0.5, Math.min(5, Math.ceil(((x - r.left) / r.width) * 10) / 2));
+}
+
+async function definirMinhaNota(id, n) {
+  const f = porId(id);
+  if (!f) return;
+  f.minhaNota = n;
+  const el = $('#painel .minha-nota');
+  if (el && estado.painelId === id) {
+    el.dataset.nota = String(n);
+    el.setAttribute('aria-valuenow', String(n));
+    el.setAttribute('aria-valuetext', n ? `${notaLegivel(n)} estrelas` : 'Sem nota');
+    pintarEstrelas(el, n);
+    Movimento.animar($('.estrelas', el), [{ transform: 'scale(1.08)' }, { transform: 'none' }], { duration: 260 });
+  }
+  if (!tierlist.hidden) renderTierlist();
+  if (!calendario.hidden) renderCalendario();
+  await api.atualizarFilme(id, { minhaNota: n });
+}
+
+$('#painel').addEventListener('pointermove', (e) => {
+  const el = e.target.closest('.minha-nota');
+  if (el && e.target.closest('.estrelas')) pintarEstrelas(el, notaNoPonteiro(el, e.clientX), true);
+});
+$('#painel').addEventListener('pointerout', (e) => {
+  const el = e.target.closest('.minha-nota');
+  if (el && !el.contains(e.relatedTarget)) pintarEstrelas(el, Number(el.dataset.nota) || 0);
+});
+$('#painel').addEventListener('click', (e) => {
+  const el = e.target.closest('.minha-nota');
+  if (!el || !e.target.closest('.estrelas') || !estado.painelId) return;
+  const n = notaNoPonteiro(el, e.clientX);
+  definirMinhaNota(estado.painelId, n === Number(el.dataset.nota) ? 0 : n);
+});
+$('#painel').addEventListener('keydown', (e) => {
+  const el = e.target.closest('.minha-nota');
+  if (!el || !estado.painelId) return;
+  const atual = Number(el.dataset.nota) || 0;
+  const passos = { ArrowRight: 0.5, ArrowUp: 0.5, ArrowLeft: -0.5, ArrowDown: -0.5 };
+  if (e.key in passos) { e.preventDefault(); definirMinhaNota(estado.painelId, Math.max(0, Math.min(5, atual + passos[e.key]))); }
+  if (e.key === 'Delete' || e.key === 'Backspace' || e.key === '0') { e.preventDefault(); definirMinhaNota(estado.painelId, 0); }
+});
+
 // "Vi em: 19 de outubro, 22 de outubro" (cada vez que viu), com ✕ para tirar uma
 // data, "Vi de novo hoje" e um campo para lançar um dia que passou.
 function vistosEmHTML(f) {
@@ -838,7 +1027,7 @@ function vistosEmHTML(f) {
     </div>
     <div class="vistos-acoes">
       ${f.visto && !jaHoje ? `<button class="btn btn-fantasma" data-p="vi-hoje">${icone('RotateCcw')} Vi de novo hoje</button>` : ''}
-      <label class="adicionar-dia">${icone('CalendarPlus')} Lançar outro dia <input type="date" data-adicionar-dia min="2026-10-01" max="${hoje()}"></label>
+      <label class="adicionar-dia">${icone('CalendarPlus')} Lançar outro dia <input type="date" data-adicionar-dia max="${hoje()}"></label>
     </div>`;
 }
 
@@ -923,6 +1112,16 @@ $('#painel').addEventListener('click', async (e) => {
     case 'baixar': baixarCapa(id); break;
     case 'arquivo': usarArquivoCapa(id); break;
     case 'trailer': abrirTrailer(id); break;
+    case 'rel-adicionar': adicionarRelacionado(b); break;
+    case 'rel-rolar': {
+      const fileira = $('.rel-fileira', b.closest('.rel-envoltorio'));
+      fileira.scrollBy({ left: Number(b.dataset.lado) * fileira.clientWidth * 0.85, behavior: 'smooth' });
+      break;
+    }
+    case 'rel-abrir':
+      if (b.dataset.meu) abrirPainel(b.dataset.meu);
+      else window.open(`https://letterboxd.com/tmdb/${b.dataset.tmdb}/`);
+      break;
     case 'mesmo-diretor': filtrarDiretor(porId(id).diretor); break;
     case 'pais': filtrarPais(b.dataset.pais); break;
     case 'diretor-letterboxd': {
@@ -1098,50 +1297,44 @@ function perguntar({ titulo, texto, botoes }) {
   return promessa;
 }
 
-function resultadosHTML(itens, atualId) {
+function resultadosHTML(itens, atualTmdb) {
   return itens.map((r, i) => `
-    <button class="resultado${r.imdbID && r.imdbID === atualId ? ' atual' : ''}" data-i="${i}">
+    <button class="resultado${r.tmdbId && String(r.tmdbId) === String(atualTmdb) ? ' atual' : ''}" data-i="${i}">
       <div class="capa">${r.poster ? `<img src="${esc(r.poster)}" alt="" loading="lazy" data-titulo="${esc(r.titulo)}" data-ano="${esc(r.ano)}">` : `<div class="capa-vazia"><strong>${esc(r.titulo)}</strong></div>`}</div>
       <strong>${esc(r.titulo)}</strong><span>${esc(r.ano)}${r.imdbID ? ` · ${esc(r.imdbID)}` : ''}</span>
     </button>`).join('');
 }
 
-function mensagemErroOmdb(erro) {
-  if (erro.tipo === 'chave') return `${erro.mensagem}`;
-  if (erro.tipo === 'limite') return erro.mensagem;
-  return 'Sem conexão com o OMDb. Verifique a internet e tente de novo.';
+function mensagemErroTmdb(erro) {
+  if (erro.tipo === 'chave') return erro.mensagem;
+  return 'Sem conexão com o TMDB. Verifique a internet e tente de novo.';
 }
 
-// Caixa de busca no OMDb usada por "Trocar capa" e "Adicionar".
-function montarBuscaOmdb({ termoInicial, atualId, aoEscolher }) {
-  const input = $('#busca-omdb', modal);
-  const area = $('#resultados-omdb', modal);
+// Caixa de busca no TMDB usada por "Trocar capa" e "Adicionar".
+function montarBuscaTmdb({ termoInicial, atualTmdb, aoEscolher }) {
+  const input = $('#busca-tmdb', modal);
+  const area = $('#resultados-tmdb', modal);
   let itens = [];
   let geracao = 0;
 
   async function buscar() {
     const termo = input.value.trim();
     if (!termo) { area.innerHTML = ''; return; }
+    if (!estado.config.tmdbKey) { area.innerHTML = '<p class="mensagem">Coloque a chave do TMDB em Configurações para buscar.</p>'; return; }
     const minha = ++geracao;
-    area.innerHTML = '<p class="mensagem carregando">Buscando no OMDb</p>';
-    let r;
-    if (/^tt\d+$/i.test(termo)) {
-      r = await api.detalhesOmdb(termo.toLowerCase());
-      if (r.ok) r.dados = r.dados ? [r.dados] : [];
-    } else {
-      r = await api.pesquisarOmdb(termo);
-    }
+    area.innerHTML = '<p class="mensagem carregando">Buscando no TMDB</p>';
+    const r = await api.pesquisarTmdb(termo);
     if (minha !== geracao || !modal.open) return;
-    if (!r.ok) { area.innerHTML = `<p class="mensagem">${esc(mensagemErroOmdb(r.erro))}</p>`; return; }
+    if (!r.ok) { area.innerHTML = `<p class="mensagem">${esc(mensagemErroTmdb(r.erro))}</p>`; return; }
     itens = r.dados;
     area.innerHTML = itens.length
-      ? `<div class="resultados">${resultadosHTML(itens, atualId)}</div>`
-      : '<p class="mensagem">Nada encontrado. Tente o título em inglês ou o código do IMDb (tt…).</p>';
+      ? `<div class="resultados">${resultadosHTML(itens, atualTmdb)}</div>`
+      : '<p class="mensagem">Nada encontrado. Tente o título original ou o código do IMDb (tt…).</p>';
   }
 
   input.value = termoInicial || '';
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); buscar(); } });
-  $('#btn-busca-omdb', modal).onclick = buscar;
+  $('#btn-busca-tmdb', modal).onclick = buscar;
   area.addEventListener('click', (e) => {
     const b = e.target.closest('.resultado');
     if (b) aoEscolher(itens[Number(b.dataset.i)], b);
@@ -1151,35 +1344,60 @@ function montarBuscaOmdb({ termoInicial, atualId, aoEscolher }) {
   if (termoInicial) buscar();
 }
 
+// Duas partes: as outras capas deste mesmo filme no TMDB (idioma original
+// primeiro) e, embaixo, a busca para quando o filme achado é o errado.
 async function abrirTrocarCapa(id) {
   const f = porId(id);
+  const trocar = async (escolha, botao, mensagem) => {
+    botao.disabled = true;
+    botao.classList.add('carregando');
+    const novo = await api.trocarCapa(id, escolha);
+    if (novo && novo.erro) { aviso(novo.erro, { tipo: 'erro' }); botao.disabled = false; return; }
+    if (novo) Object.assign(f, novo);
+    fecharModal();
+    render();
+    if (estado.painelId === id) renderPainel();
+    if (filmeNoDestaque() === id) mostrarDestaque({ rapido: true });
+    aviso(mensagem, { tipo: 'ok' });
+  };
   abrirModal(`${cabecalhoModal(`Trocar capa — ${f.titulo}`)}
     <div class="modal-corpo">
-      <div class="busca-linha"><input id="busca-omdb" placeholder="Título (de preferência em inglês) ou código tt…" spellcheck="false"><button class="btn btn-laranja" id="btn-busca-omdb">Buscar</button></div>
-      <div id="resultados-omdb"></div>
+      ${f.tmdbId ? `<h3 class="trocar-subtitulo">Outras capas deste filme</h3>
+      <div id="outras-capas"><p class="mensagem carregando">Carregando as capas</p></div>
+      <h3 class="trocar-subtitulo">É outro filme? Busque o certo</h3>` : ''}
+      <div class="busca-linha"><input id="busca-tmdb" placeholder="Título ou código tt…" spellcheck="false"><button class="btn btn-laranja" id="btn-busca-tmdb">Buscar</button></div>
+      <div id="resultados-tmdb"></div>
     </div>
     <div class="modal-rodape"><button class="btn" id="btn-capa-arquivo">${icone('FolderOpen')} Usar imagem minha…</button></div>`);
   $('#btn-capa-arquivo', modal).onclick = () => { fecharModal(); usarArquivoCapa(id); };
-  montarBuscaOmdb({
-    termoInicial: f.buscaCapa || f.titulo,
-    atualId: f.imdbID,
-    aoEscolher: async (escolha, botao) => {
-      botao.disabled = true;
-      const novo = await api.trocarCapa(id, { imdbID: escolha.imdbID, poster: escolha.poster });
-      if (novo) Object.assign(f, novo);
-      fecharModal();
-      render();
-      if (estado.painelId === id) renderPainel();
-      aviso(escolha.poster ? 'Capa trocada.' : 'Esse resultado não tem capa no OMDb; guardei só o código do IMDb.', { tipo: 'ok' });
-    },
+  montarBuscaTmdb({
+    termoInicial: f.tmdbId ? '' : (f.buscaCapa || f.titulo),
+    atualTmdb: f.tmdbId,
+    aoEscolher: (escolha, botao) => trocar({ tmdbId: escolha.tmdbId }, botao, 'Filme trocado: capa, logo, trailer e informações atualizados.'),
+  });
+  if (!f.tmdbId) return;
+  $('#busca-tmdb', modal).value = f.buscaCapa || f.titulo;
+  const r = await api.capasTmdb(id);
+  const area = $('#outras-capas', modal);
+  if (!area) return;
+  if (!r.ok || !r.dados.length) { area.innerHTML = `<p class="mensagem">${r.ok ? 'O TMDB não tem outras capas deste filme.' : esc(mensagemErroTmdb(r.erro))}</p>`; return; }
+  const capas = r.dados.slice(0, 40);
+  area.innerHTML = `<div class="resultados outras-capas">${capas.map((c, i) => `
+    <button class="resultado${c.poster === f.poster ? ' atual' : ''}" data-i="${i}" title="${c.idioma ? `Idioma: ${esc(c.idioma)}` : 'Sem texto'}">
+      <div class="capa"><img src="${esc(c.miniatura)}" alt="" loading="lazy"></div>
+      <span>${c.idioma ? esc(c.idioma.toUpperCase()) : 'sem texto'}</span>
+    </button>`).join('')}</div>`;
+  area.addEventListener('click', (e) => {
+    const b = e.target.closest('.resultado');
+    if (b) trocar({ tmdbId: f.tmdbId, poster: capas[Number(b.dataset.i)].poster }, b, 'Capa trocada.');
   });
 }
 
 async function abrirAdicionar() {
   abrirModal(`${cabecalhoModal('Adicionar filme')}
     <div class="modal-corpo">
-      <div class="busca-linha"><input id="busca-omdb" placeholder="Digite o título e tecle Enter" spellcheck="false"><button class="btn btn-laranja" id="btn-busca-omdb">Buscar</button></div>
-      <div id="resultados-omdb"><p class="mensagem">Busque o filme no OMDb e clique no resultado certo.</p></div>
+      <div class="busca-linha"><input id="busca-tmdb" placeholder="Digite o título e tecle Enter" spellcheck="false"><button class="btn btn-laranja" id="btn-busca-tmdb">Buscar</button></div>
+      <div id="resultados-tmdb"><p class="mensagem">Busque o filme no TMDB e clique no resultado certo.</p></div>
     </div>
     <div class="modal-rodape"><button class="btn btn-fantasma" id="btn-sem-buscar">Adicionar sem buscar</button></div>`);
 
@@ -1206,23 +1424,23 @@ async function abrirAdicionar() {
   };
 
   $('#btn-sem-buscar', modal).onclick = () => {
-    const titulo = $('#busca-omdb', modal).value.trim();
-    if (!titulo) { $('#busca-omdb', modal).focus(); aviso('Digite o título primeiro.'); return; }
+    const titulo = $('#busca-tmdb', modal).value.trim();
+    if (!titulo) { $('#busca-tmdb', modal).focus(); aviso('Digite o título primeiro.'); return; }
     adicionar({ titulo });
   };
 
-  montarBuscaOmdb({
+  montarBuscaTmdb({
     termoInicial: '',
     aoEscolher: async (escolha, botao) => {
       botao.classList.add('carregando');
-      const r = await api.detalhesOmdb(escolha.imdbID);
+      const r = await api.detalhesTmdb(escolha.tmdbId);
       const d = r.ok && r.dados ? r.dados : null;
       await adicionar({
         titulo: (d && d.titulo) || escolha.titulo,
         ano: (d && d.ano) || escolha.ano || '',
         diretor: (d && d.diretor) || '',
-        imdbID: escolha.imdbID,
-        poster: (d && d.poster) || escolha.poster || '',
+        imdbID: (d && d.imdbID) || '',
+        tmdbId: escolha.tmdbId,
       });
     },
   });
@@ -1393,7 +1611,7 @@ function abrirTrailer(id) {
   abrirFoco(id, Number($('#painel .painel-video')?.dataset.tempo) || 0);
 }
 
-// ---------- Informações do OMDb (notas, duração, sinopse) ----------
+// ---------- Informações (TMDB; notas do OMDb) ----------
 
 function duracaoLegivel(texto) {
   const min = parseInt(texto, 10);
@@ -1402,7 +1620,7 @@ function duracaoLegivel(texto) {
   return h ? `${h}h ${String(min % 60).padStart(2, '0')}m` : `${min}m`;
 }
 
-// Duração do Wikidata (f.duracao, em minutos) ou, se não houver, a do OMDb.
+// Duração do TMDB (f.duracao, em minutos) ou, se não houver, a do OMDb.
 const duracaoDe = (f) => duracaoLegivel(f.duracao || (f.info && f.info.duracao) || '');
 const generos = (info) => (info && info.genero ? info.genero.split(',').map((g) => g.trim()).filter(Boolean) : []);
 
@@ -1474,11 +1692,130 @@ const filmeNoDestaque = () => estado.historico[estado.indiceDestaque] || null;
 // O próximo sorteio já é escolhido antes, para o trailer dele ir sendo buscado.
 let proximoSorteio = null;
 
+// ---------- Filtros do sorteio ----------
+
+// Guardados nas configurações. Valem só para o sorteio (a lista da tela não muda):
+// duração máxima ("tenho 1h40"), gêneros, décadas, países e "só da watchlist de hoje".
+const FILTROS_SORTEIO_VAZIOS = { duracao: 0, generos: [], decadas: [], paises: [], soWatchlist: false };
+const filtrosSorteio = () => ({ ...FILTROS_SORTEIO_VAZIOS, ...(estado.config.filtrosSorteio || {}) });
+const minutosDe = (f) => f.duracao || parseInt(f.info && f.info.duracao, 10) || 0;
+const decadaDe = (f) => { const a = anoNumero(f.ano); return Number.isFinite(a) ? Math.floor(a / 10) * 10 : null; };
+
+function filtrosSorteioAtivos(fs = filtrosSorteio()) {
+  return Boolean(fs.duracao || fs.generos.length || fs.decadas.length || fs.paises.length || fs.soWatchlist);
+}
+
+function passaNoSorteio(f, fs) {
+  if (fs.duracao) { const m = minutosDe(f); if (!m || m > fs.duracao) return false; }
+  if (fs.generos.length && !generos(f.info).some((g) => fs.generos.includes(g))) return false;
+  if (fs.decadas.length && !fs.decadas.includes(decadaDe(f))) return false;
+  if (fs.paises.length && !paisesDe(f).some((p) => fs.paises.includes(p))) return false;
+  return true;
+}
+
+// Quem pode ser sorteado: os não vistos da tela (ou da watchlist de hoje) que passam nos filtros.
+// `paraHoje` (página de hoje do calendário): qualquer não visto que ainda não está na watchlist.
+function candidatosSorteio(fs = filtrosSorteio(), { paraHoje = false } = {}) {
+  if (paraHoje) {
+    const naLista = new Set(idsWatchlist());
+    return estado.filmes.filter((f) => !f.visto && !naLista.has(f.id) && passaNoSorteio(f, fs));
+  }
+  const base = fs.soWatchlist ? idsWatchlist(hoje()).map(porId).filter(Boolean) : filtrados();
+  return base.filter((f) => !f.visto && passaNoSorteio(f, fs));
+}
+
+function resumoFiltrosSorteio(fs = filtrosSorteio()) {
+  const partes = [];
+  if (fs.soWatchlist) partes.push('watchlist de hoje');
+  if (fs.duracao) partes.push(`até ${duracaoLegivel(fs.duracao)}`);
+  if (fs.generos.length) partes.push(fs.generos.join(', '));
+  if (fs.decadas.length) partes.push(fs.decadas.map((d) => `anos ${String(d).slice(2)}`).join(', '));
+  if (fs.paises.length) partes.push(fs.paises.join(', '));
+  return partes;
+}
+
+// `paraHoje`: aberto pela página de hoje do calendário; "Sortear" faz a roleta
+// de capas e põe o escolhido na watchlist de hoje (e "Sortear de" não aparece).
+function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
+  let fs = filtrosSorteio();
+  const naoVistos = estado.filmes.filter((f) => !f.visto);
+  const contar = (lista) => [...lista.reduce((m, v) => m.set(v, (m.get(v) || 0) + 1), new Map())].sort((a, b) => b[1] - a[1]);
+  const generosTodos = contar(naoVistos.flatMap((f) => generos(f.info)));
+  const decadasTodas = contar(naoVistos.map(decadaDe).filter((d) => d !== null)).sort((a, b) => a[0] - b[0]);
+  const paisesTodos = contar(naoVistos.flatMap((f) => paisesDe(f)));
+  const DURACOES = [0, 90, 100, 120, 150];
+  const chip = (grupo, valor, rotulo, ativo, qtd) => `<button class="chip${ativo ? ' ativo' : ''}" data-grupo="${grupo}" data-valor="${esc(valor)}" aria-pressed="${ativo}">${esc(rotulo)}${qtd ? `<span class="chip-qtd">${qtd}</span>` : ''}</button>`;
+  const secao = (titulo, nome, classe = '') => `<div class="secao"><h3>${titulo}</h3><div class="chips-linha ${classe}" data-secao="${nome}"></div></div>`;
+
+  abrirModal(`${cabecalhoModal('Filtros do sorteio')}
+    <div class="modal-corpo filtros-sorteio">
+      ${paraHoje ? '' : secao('Sortear de', 'origem')}
+      ${secao('Quanto tempo você tem?', 'duracao')}
+      ${generosTodos.length ? secao('Gêneros', 'generos') : ''}
+      ${decadasTodas.length ? secao('Década', 'decadas') : ''}
+      ${paisesTodos.length ? secao('País', 'paises', 'chips-rolam') : ''}
+    </div>
+    <div class="modal-rodape">
+      <span class="filtros-contagem" id="filtros-contagem"></span>
+      <button class="btn btn-fantasma" id="filtros-limpar">Limpar filtros</button>
+      <button class="btn btn-primario" id="filtros-sortear">${icone('Dices')} Sortear</button>
+    </div>`, 'modal-filtros');
+
+  const desenhar = () => {
+    const html = {
+      origem: chip('origem', 'tela', 'Não vistos da lista', !fs.soWatchlist) + chip('origem', 'watchlist', 'Só da watchlist de hoje', fs.soWatchlist, idsWatchlist(hoje()).length || ''),
+      duracao: DURACOES.map((m) => chip('duracao', m, m ? `Até ${duracaoLegivel(m)}` : 'Qualquer duração', fs.duracao === m)).join(''),
+      generos: generosTodos.map(([g, n]) => chip('generos', g, g, fs.generos.includes(g), n)).join(''),
+      decadas: decadasTodas.map(([d, n]) => chip('decadas', d, `Anos ${d < 2000 ? String(d).slice(2) : d}`, fs.decadas.includes(d), n)).join(''),
+      paises: paisesTodos.map(([p, n]) => chip('paises', p, p, fs.paises.includes(p), n)).join(''),
+    };
+    for (const [nome, h] of Object.entries(html)) { const el = $(`[data-secao="${nome}"]`, modal); if (el) el.innerHTML = h; }
+    const n = candidatosSorteio(fs, { paraHoje }).length;
+    $('#filtros-contagem', modal).textContent = n === 1 ? '1 filme pode ser sorteado' : `${n} filmes podem ser sorteados`;
+    $('#filtros-sortear', modal).disabled = !n;
+    $('#filtros-limpar', modal).disabled = !filtrosSorteioAtivos(fs);
+  };
+  const salvar = () => {
+    estado.config.filtrosSorteio = fs;
+    api.salvarConfig({ filtrosSorteio: fs });
+    atualizarBotaoFiltros();
+    desenhar();
+  };
+  $('.filtros-sorteio', modal).addEventListener('click', (e) => {
+    const b = e.target.closest('[data-grupo]');
+    if (!b) return;
+    const { grupo, valor } = b.dataset;
+    const alternarEm = (lista, v) => (lista.includes(v) ? lista.filter((x) => x !== v) : [...lista, v]);
+    if (grupo === 'origem') fs = { ...fs, soWatchlist: valor === 'watchlist' };
+    if (grupo === 'duracao') fs = { ...fs, duracao: Number(valor) };
+    if (grupo === 'generos') fs = { ...fs, generos: alternarEm(fs.generos, valor) };
+    if (grupo === 'decadas') fs = { ...fs, decadas: alternarEm(fs.decadas, Number(valor)) };
+    if (grupo === 'paises') fs = { ...fs, paises: alternarEm(fs.paises, valor) };
+    salvar();
+  });
+  $('#filtros-limpar', modal).onclick = () => { fs = { ...FILTROS_SORTEIO_VAZIOS }; salvar(); };
+  $('#filtros-sortear', modal).onclick = () => { fecharModal(); if (paraHoje) sortearParaHoje(botao, { comFiltro: true }); else sortear(); };
+  desenhar();
+}
+
+// No dado do topo: ao passar o mouse, aparece "Sortear com filtro" embaixo dele.
+// Com filtro ligado, o dado ganha um ponto roxo e o botão diz quantos filtros há.
+function atualizarBotaoFiltros() {
+  const grupo = $('#sortear-topo');
+  const resumo = resumoFiltrosSorteio();
+  grupo.classList.toggle('filtro-on', resumo.length > 0);
+  $('.sortear-filtros-texto', grupo).textContent = resumo.length ? `Filtros (${resumo.length})` : 'Sortear com filtro';
+  $('.sortear-filtros', grupo).title = resumo.length ? `Filtros do sorteio: ${resumo.join(' · ')}` : 'Sortear só por duração, gênero, década, país ou da watchlist de hoje';
+}
+
 function sortear({ rolar = true, avisarSeVazio = true } = {}) {
   if (!estado.filmes.length) return;
-  const candidatos = filtrados().filter((f) => !f.visto);
+  const fs = filtrosSorteio();
+  const candidatos = candidatosSorteio(fs);
   if (!candidatos.length) {
-    if (avisarSeVazio) aviso('Você já viu todos! 🎉', { tipo: 'ok' });
+    if (!avisarSeVazio) return;
+    if (filtrosSorteioAtivos(fs)) aviso('Nenhum filme não visto passa nos filtros do sorteio.', { acao: { rotulo: 'Ajustar filtros', fn: abrirFiltrosSorteio } });
+    else aviso('Você já viu todos! 🎉', { tipo: 'ok' });
     return;
   }
   // Evita repetir os últimos sorteados quando há outras opções.
@@ -1492,10 +1829,12 @@ function sortear({ rolar = true, avisarSeVazio = true } = {}) {
   if (proximoSorteio) trailerDe(proximoSorteio);
 
   const filtros = [];
-  if (estado.filtro === 'favoritos') filtros.push('★ Favoritos');
-  if (estado.diretor) filtros.push(estado.diretor);
-  if (estado.pais) filtros.push(estado.pais);
-  if (estado.busca.trim()) filtros.push(`“${estado.busca.trim()}”`);
+  const daTela = !fs.soWatchlist; // a watchlist de hoje ignora os filtros da tela
+  if (daTela && estado.filtro === 'favoritos') filtros.push('★ Favoritos');
+  if (daTela && estado.diretor) filtros.push(estado.diretor);
+  if (daTela && estado.pais) filtros.push(estado.pais);
+  filtros.push(...resumoFiltrosSorteio(fs));
+  if (daTela && estado.busca.trim()) filtros.push(`“${estado.busca.trim()}”`);
   origemSorteio.set(f.id, `Sorteado entre ${candidatos.length} não visto${candidatos.length === 1 ? '' : 's'}${filtros.length ? ` · ${filtros.join(' · ')}` : ''}`);
 
   estado.historico = estado.historico.filter((id) => id !== f.id);
@@ -1526,7 +1865,7 @@ function mostrarDestaque(opcoes = {}) {
       <div class="destaque-identidade">
         <div class="destaque-poster" data-d="detalhes" title="Mais informações">${capaHTML(f, { tamanho: 'grande' })}</div>
         <div class="destaque-titulo">
-          <h2>${esc(f.titulo)}</h2>
+          ${tituloHTML(f)}
           <div class="meta-linha" data-info="meta">${metaHTML(f)}</div>
         </div>
       </div>
@@ -1548,6 +1887,7 @@ function mostrarDestaque(opcoes = {}) {
     ${n > 1 ? `<div class="pontos">${estado.historico.map((_, k) => `<button data-ir="${k}" class="${k === i ? 'ativo' : ''}" title="Sorteio ${k + 1}" aria-label="Sorteio ${k + 1}"></button>`).join('')}</div>` : ''}
     <span class="dica-foco">Clique no trailer para ver em tela cheia</span>`;
   fundoDesfocado(el, f);
+  atualizarBotaoFiltros();
   entradaDestaque(el, opcoes);
   carregarExtrasDestaque(f, token);
 }
@@ -1614,6 +1954,7 @@ $('#destaque').addEventListener('click', async (e) => {
     case 'assistir': abrirStremio(id); break;
     case 'letterboxd': abrirLetterboxd(id); break;
     case 'sortear': girarDado(b); sortear({ rolar: false }); break;
+    case 'filtros': abrirFiltrosSorteio(); break;
     case 'detalhes': abrirPainel(id); break;
     case 'som': alternarSom(); break;
     case 'anterior': estado.indiceDestaque--; mostrarDestaque({ rapido: true }); break;
@@ -1842,34 +2183,70 @@ window.addEventListener('blur', () => { clearTimeout(timerPrevia); fecharPrevia(
 
 // ---------- Configurações, importação e exportação ----------
 
-// ---------- Chave do OMDb ----------
+// ---------- Chaves do TMDB e do OMDb ----------
 
-// Confere a chave no OMDb e salva. Sem internet (ou com o limite do dia
-// esgotado) não dá para conferir, mas a chave é salva assim mesmo.
-async function salvarChaveOmdb(chave) {
-  chave = chave.trim();
-  if (!chave) return { ok: false, mensagem: 'Cole a chave que chegou no seu e-mail.' };
-  const r = await api.testarChave(chave);
-  if (!r.ok && r.erro.tipo === 'chave') {
-    return { ok: false, mensagem: 'Essa chave não funcionou. Confira se copiou certinho e se já clicou no link de ativação do e-mail.' };
-  }
-  estado.config = await api.salvarConfig({ omdbKey: chave });
-  return { ok: true, conferida: r.ok || r.erro.tipo === 'limite' };
-}
-
-// Abre ao iniciar enquanto não houver chave salva; também dá para abrir pelo aviso de "configure a chave".
-function pedirChaveOmdb() {
-  abrirModal(`${cabecalhoModal('Chave do OMDb')}
-    <div class="modal-corpo chave-omdb">
-      <p>O nandflix usa o <b>OMDb</b> para buscar as capas, notas e sinopses dos filmes. Para isso, cada pessoa precisa da própria chave, que é <b>gratuita</b> (1.000 consultas por dia).</p>
+// O TMDB é obrigatório (capas, logos, trailers e informações); o OMDb é opcional
+// e só traz as notas do IMDb, Metascore e Rotten Tomatoes.
+const CHAVES = {
+  tmdb: {
+    campo: 'tmdbKey',
+    titulo: 'Chave do TMDB',
+    testar: (chave) => api.testarChaveTmdb(chave),
+    erro: 'Essa chave não funcionou. Confira se copiou a “Chave da API” inteira (ou o “Token de leitura”).',
+    vazia: 'Cole a chave da API do TMDB.',
+    semConexao: 'sem conexão com o TMDB',
+    corpo: `
+      <p>O nandflix usa o <b>TMDB</b> (The Movie Database) para buscar as capas, logos, trailers, sinopses e o resto das informações dos filmes. Cada pessoa usa a própria chave, que é <b>gratuita</b> e sem limite diário.</p>
       <ol>
-        <li>Abra a página de cadastro do OMDb: <button class="link-chave" id="chave-site">omdbapi.com/apikey.aspx</button></li>
+        <li>Crie uma conta grátis no TMDB: <button class="link-chave" data-abrir="https://www.themoviedb.org/signup">themoviedb.org/signup</button> e confirme pelo e-mail.</li>
+        <li>Abra <button class="link-chave" data-abrir="https://www.themoviedb.org/settings/api">themoviedb.org/settings/api</button> e peça uma chave (<b>Developer</b>). No formulário, o uso pode ser “app pessoal de catálogo de filmes”.</li>
+        <li>Copie a <b>Chave da API</b> (32 letras e números) e cole aqui:</li>
+      </ol>`,
+    placeholder: 'Sua chave do TMDB',
+  },
+  omdb: {
+    campo: 'omdbKey',
+    titulo: 'Chave do OMDb (opcional)',
+    testar: (chave) => api.testarChave(chave),
+    erro: 'Essa chave não funcionou. Confira se copiou certinho e se já clicou no link de ativação do e-mail.',
+    vazia: 'Cole a chave que chegou no seu e-mail.',
+    semConexao: 'sem conexão com o OMDb',
+    corpo: `
+      <p>Opcional: com uma chave do <b>OMDb</b>, os filmes mostram as notas do <b>IMDb</b>, do <b>Rotten Tomatoes</b> e o <b>Metascore</b>. Sem ela, o app funciona igual, só sem essas notas. A chave é <b>gratuita</b> (1.000 consultas por dia).</p>
+      <ol>
+        <li>Abra a página de cadastro do OMDb: <button class="link-chave" data-abrir="https://www.omdbapi.com/apikey.aspx">omdbapi.com/apikey.aspx</button></li>
         <li>Escolha o plano <b>FREE</b>, preencha seu e-mail e o resto do formulário e clique em <b>Submit</b>.</li>
         <li>Abra o e-mail que o OMDb mandou e clique no <b>link de ativação</b>. Sem isso a chave não funciona.</li>
         <li>Copie a chave que veio no mesmo e-mail (8 letras e números, como <code>1a2b3c4d</code>) e cole aqui:</li>
-      </ol>
+      </ol>`,
+    placeholder: 'Sua chave do OMDb',
+  },
+};
+
+// Confere a chave e salva. Sem internet não dá para conferir, mas a chave é
+// salva assim mesmo. Chave vazia (só no OMDb, que é opcional) tira a chave.
+async function salvarChave(tipo, chave) {
+  const c = CHAVES[tipo];
+  chave = chave.trim();
+  if (!chave && tipo === 'omdb') {
+    estado.config = await api.salvarConfig({ omdbKey: '' });
+    return { ok: true, removida: true };
+  }
+  if (!chave) return { ok: false, mensagem: c.vazia };
+  const r = await c.testar(chave);
+  if (!r.ok && r.erro.tipo === 'chave') return { ok: false, mensagem: c.erro };
+  estado.config = await api.salvarConfig({ [c.campo]: chave });
+  return { ok: true, conferida: r.ok || r.erro.tipo === 'limite' };
+}
+
+// A do TMDB abre ao iniciar enquanto não houver chave salva.
+function pedirChave(tipo = 'tmdb') {
+  const c = CHAVES[tipo];
+  abrirModal(`${cabecalhoModal(c.titulo)}
+    <div class="modal-corpo chave-omdb">
+      ${c.corpo}
       <div class="busca-linha">
-        <input id="chave-campo" placeholder="Sua chave do OMDb" spellcheck="false" autocomplete="off">
+        <input id="chave-campo" placeholder="${c.placeholder}" value="${esc(estado.config[c.campo] || '')}" spellcheck="false" autocomplete="off">
         <button class="btn btn-primario" id="chave-salvar">Salvar chave</button>
       </div>
       <p class="chave-status" id="chave-status" role="status"></p>
@@ -1879,12 +2256,12 @@ function pedirChaveOmdb() {
   const campo = $('#chave-campo', modal);
   const status = $('#chave-status', modal);
   const botao = $('#chave-salvar', modal);
-  $('#chave-site', modal).onclick = () => window.open('https://www.omdbapi.com/apikey.aspx');
+  $$('[data-abrir]', modal).forEach((b) => { b.onclick = () => window.open(b.dataset.abrir); });
   const salvar = async () => {
     botao.disabled = true;
     status.className = 'chave-status carregando';
     status.textContent = 'Conferindo a chave';
-    const r = await salvarChaveOmdb(campo.value);
+    const r = await salvarChave(tipo, campo.value);
     botao.disabled = false;
     if (!r.ok) {
       status.className = 'chave-status erro';
@@ -1893,28 +2270,39 @@ function pedirChaveOmdb() {
       return;
     }
     fecharModal();
-    aviso(r.conferida ? 'Chave salva. As capas vão começar a aparecer.' : 'Chave salva (não deu para conferir agora: sem conexão com o OMDb).', { tipo: 'ok', duracao: 5000 });
-    if (estado.filmes.length) buscarCapas({ automatica: true });
+    if (r.removida) { aviso('Chave do OMDb removida: as notas do IMDb, Metascore e Rotten Tomatoes não serão mais buscadas.'); return; }
+    const pronto = tipo === 'tmdb' ? 'Chave salva. As capas e informações vão começar a aparecer.' : 'Chave salva. As notas vão começar a aparecer.';
+    aviso(r.conferida ? pronto : `Chave salva (não deu para conferir agora: ${c.semConexao}).`, { tipo: 'ok', duracao: 5000 });
   };
   botao.onclick = salvar;
   campo.addEventListener('keydown', (e) => { if (e.key === 'Enter') salvar(); });
   campo.focus();
 }
+const pedirChaveTmdb = () => pedirChave('tmdb');
+const pedirChaveOmdb = () => pedirChave('omdb');
 
 function abrirConfiguracoes() {
   const c = estado.config;
-  const semCapa = estado.filmes.filter((f) => !f.poster).length;
-  const naoEncontradas = estado.filmes.filter((f) => !f.poster && f.capaNaoEncontrada).length;
+  const pendentes = paraAtualizar();
+  const naoEncontrados = estado.filmes.filter((f) => f.tmdbEm && !f.tmdbId).length;
   const mod = MAC ? '⌘' : 'Ctrl';
   abrirModal(`${cabecalhoModal('Configurações')}
     <div class="modal-corpo">
       <div class="secao">
-        <h3>OMDb (capas e dados dos filmes)</h3>
+        <h3>TMDB (capas, logos, trailers e informações)</h3>
         <div class="busca-linha" style="margin:0">
-          <input id="cfg-chave" value="${esc(c.omdbKey)}" placeholder="Chave da API" spellcheck="false">
+          <input id="cfg-chave-tmdb" value="${esc(c.tmdbKey || '')}" placeholder="Chave da API do TMDB" spellcheck="false">
+          <button class="btn btn-laranja" id="cfg-salvar-tmdb">Salvar chave</button>
+        </div>
+        <p>Chave gratuita e sem limite diário. <button class="link-chave" id="cfg-como-tmdb">Como pegar a minha chave</button></p>
+      </div>
+      <div class="secao">
+        <h3>OMDb (opcional: notas do IMDb, Metascore e Rotten Tomatoes)</h3>
+        <div class="busca-linha" style="margin:0">
+          <input id="cfg-chave" value="${esc(c.omdbKey || '')}" placeholder="Chave do OMDb (deixe vazio para não usar)" spellcheck="false">
           <button class="btn btn-laranja" id="cfg-salvar-chave">Salvar chave</button>
         </div>
-        <p>Chave gratuita (1.000 consultas por dia). <button class="link-chave" id="cfg-como-chave">Como pegar a minha chave</button></p>
+        <p>Sem ela, o app funciona igual, só sem essas notas. <button class="link-chave" id="cfg-como-chave">Como pegar a minha chave</button></p>
       </div>
       <div class="secao">
         <h3>Abrir Stremio pelo</h3>
@@ -1926,10 +2314,10 @@ function abrirConfiguracoes() {
       <div class="secao">
         <h3>Capas e informações</h3>
         <div class="linha-botoes">
-          <button class="btn" id="cfg-capas" ${semCapa ? '' : 'disabled'}>${icone('ImagePlus')} Buscar capas que faltam (${semCapa})</button>
-          <button class="btn" id="cfg-infos" ${semInformacoes() ? '' : 'disabled'} title="País, notas, gêneros e sinopse dos filmes que ainda não têm">${icone('RefreshCw')} Buscar informações que faltam (${semInformacoes()})</button>
+          <button class="btn" id="cfg-capas" ${pendentes || naoEncontrados ? '' : 'disabled'} title="Capas, logos, trailers e informações pelo TMDB">${icone('RefreshCw')} Atualizar pelo TMDB${pendentes ? ` (${pendentes})` : ''}</button>
+          ${c.omdbKey ? `<button class="btn" id="cfg-infos" ${semNotas() ? '' : 'disabled'} title="Notas do IMDb, Metascore e Rotten Tomatoes">${icone('Star')} Buscar notas que faltam (${semNotas()})</button>` : ''}
         </div>
-        <p>${naoEncontradas ? `${naoEncontradas} filme(s) não foram encontrados no OMDb e ficam fora da busca automática. Use “Trocar capa” ou preencha “Busca da capa” com o título em inglês.` : 'A busca automática roda ao abrir o app.'}</p>
+        <p>${naoEncontrados ? `${naoEncontrados} filme(s) não foram encontrados no TMDB. Use “Trocar capa” ou preencha “Busca da capa” com o título original ou o código do IMDb (tt…).` : 'A atualização roda sozinha ao abrir o app.'}</p>
       </div>
       <div class="secao">
         <h3>Planilha e backup</h3>
@@ -1938,6 +2326,7 @@ function abrirConfiguracoes() {
           <button class="btn" id="cfg-exportar">Exportar para Excel</button>
           <button class="btn" id="cfg-backup-exp">Exportar backup</button>
           <button class="btn" id="cfg-backup-imp">Importar backup</button>
+          <button class="btn" id="cfg-letterboxd" title="A pasta do export de dados do Letterboxd (Settings → Import &amp; Export), descompactada">${LB_PONTOS} Importar do Letterboxd</button>
           <button class="btn" id="cfg-capas-todas">${icone('Download')} Baixar todas as capas</button>
           <button class="btn btn-fantasma" id="cfg-pasta">Abrir pasta de dados</button>
         </div>
@@ -1952,19 +2341,24 @@ function abrirConfiguracoes() {
           <kbd>Esc</kbd><span>Fechar painel ou janela</span>
         </div>
       </div>
+      <p class="creditos-tmdb">NANDFlix ${esc(estado.versao || '')} · Este app usa a API do TMDB, mas não é endossado nem certificado pelo TMDB.</p>
     </div>`);
 
-  $('#cfg-salvar-chave', modal).onclick = async () => {
-    const r = await salvarChaveOmdb($('#cfg-chave', modal).value);
+  const salvarDoCampo = (tipo, seletor) => async () => {
+    const r = await salvarChave(tipo, $(seletor, modal).value);
     if (!r.ok) { aviso(r.mensagem, { tipo: 'erro', duracao: 7000 }); return; }
-    aviso(r.conferida ? 'Chave salva e conferida.' : 'Chave salva (não deu para conferir agora: sem conexão com o OMDb).', { tipo: 'ok' });
+    if (r.removida) { aviso('Chave do OMDb removida.'); return; }
+    aviso(r.conferida ? 'Chave salva e conferida.' : `Chave salva (não deu para conferir agora: ${CHAVES[tipo].semConexao}).`, { tipo: 'ok' });
   };
+  $('#cfg-salvar-tmdb', modal).onclick = salvarDoCampo('tmdb', '#cfg-chave-tmdb');
+  $('#cfg-salvar-chave', modal).onclick = salvarDoCampo('omdb', '#cfg-chave');
+  $('#cfg-como-tmdb', modal).onclick = pedirChaveTmdb;
   $('#cfg-como-chave', modal).onclick = pedirChaveOmdb;
   $$('input[name="stremio"]', modal).forEach((r) => {
     r.onchange = async () => { estado.config = await api.salvarConfig({ stremio: r.value }); };
   });
   $('#cfg-capas', modal).onclick = () => { fecharModal(); buscarCapas({ incluirNaoEncontradas: true }); };
-  $('#cfg-infos', modal).onclick = () => { fecharModal(); buscarInfos(); };
+  $('#cfg-infos', modal)?.addEventListener('click', () => { fecharModal(); buscarInfos(); });
   $('#cfg-importar', modal).onclick = () => { fecharModal(); importarPlanilha(); };
   $('#cfg-exportar', modal).onclick = exportarPlanilha;
   $('#cfg-backup-exp', modal).onclick = async () => {
@@ -1972,6 +2366,7 @@ function abrirConfiguracoes() {
     if (r.arquivo) aviso(`Backup salvo em ${r.arquivo}`, { tipo: 'ok', duracao: 6000 });
   };
   $('#cfg-backup-imp', modal).onclick = importarBackup;
+  $('#cfg-letterboxd', modal).onclick = () => { fecharModal(); importarLetterboxd(); };
   $('#cfg-pasta', modal).onclick = () => api.abrirPastaDados();
   $('#cfg-capas-todas', modal).onclick = async () => {
     const r = await api.baixarTodasCapas();
@@ -2037,6 +2432,34 @@ async function importarPlanilha() {
   buscarCapas({ automatica: true });
 }
 
+// Pasta do export do Letterboxd: vistos (com as datas do diário de antes do
+// calendário daqui), notas e a watchlist como filmes novos.
+async function importarLetterboxd() {
+  const r = await api.importarLetterboxd();
+  if (r.cancelado) return;
+  if (r.erro) { aviso(r.erro, { tipo: 'erro', duracao: 7000 }); return; }
+  estado.filmes = r.filmes;
+  cacheCartoes.clear();
+  cacheFileira.clear();
+  render();
+  if (!calendario.hidden) renderCalendario();
+  const linha = (n, texto) => (n ? `<li><b>${n}</b> ${texto}</li>` : '');
+  const nada = !(r.novosWatchlist || r.novosVistos || r.marcadosVistos || r.datas || r.notas);
+  abrirModal(`${cabecalhoModal('Letterboxd importado')}
+    <div class="modal-corpo">
+      ${nada ? '<p style="margin:0;color:var(--texto-2)">Nada novo: tudo do export já estava no NANDFlix.</p>' : `<ul class="resumo-importacao">
+        ${linha(r.novosWatchlist, `filme${r.novosWatchlist === 1 ? '' : 's'} da watchlist adicionado${r.novosWatchlist === 1 ? '' : 's'} à lista`)}
+        ${linha(r.novosVistos, `filme${r.novosVistos === 1 ? '' : 's'} visto${r.novosVistos === 1 ? '' : 's'} que não estava${r.novosVistos === 1 ? '' : 'm'} na lista`)}
+        ${linha(r.marcadosVistos, `filme${r.marcadosVistos === 1 ? '' : 's'} da lista marcado${r.marcadosVistos === 1 ? '' : 's'} como visto${r.marcadosVistos === 1 ? '' : 's'}`)}
+        ${linha(r.datas, `dia${r.datas === 1 ? '' : 's'} de filme no calendário`)}
+        ${linha(r.notas, `nota${r.notas === 1 ? '' : 's'}`)}
+      </ul>
+      <p style="margin:12px 0 0;color:var(--texto-2)">As capas e informações dos filmes novos chegam em seguida, pelo TMDB.${r.primeiroDia ? ` O calendário agora começa em ${esc(mesLegivel(r.primeiroDia.slice(0, 7)))}.` : ''}</p>`}
+    </div>
+    <div class="modal-rodape">${r.datas ? '<button class="btn btn-fantasma" id="lb-calendario">Ver no calendário</button>' : ''}<button class="btn btn-laranja" data-fechar>OK</button></div>`);
+  $('#lb-calendario', modal)?.addEventListener('click', () => { fecharModal(); abrirCalendario(`${r.primeiroDia}`); });
+}
+
 async function importarBackup() {
   const ok = await perguntar({
     titulo: 'Importar backup',
@@ -2055,45 +2478,47 @@ async function importarBackup() {
   buscarCapas({ automatica: true });
 }
 
-// ---------- Busca de capas em segundo plano ----------
+// ---------- Atualização pelo TMDB em segundo plano ----------
 
-async function buscarCapas(opcoes) {
-  if (!estado.config.omdbKey) {
-    aviso('Coloque a sua chave do OMDb para buscar as capas.', { acao: { rotulo: 'Colocar chave', fn: pedirChaveOmdb } });
+// Filmes que ainda não passaram pelo TMDB (os que vieram do OMDb, os novos e os
+// que tiveram a "Busca da capa" mudada).
+const paraAtualizar = () => estado.filmes.filter((f) => !f.tmdbEm).length;
+
+async function buscarCapas(opcoes = {}) {
+  if (!estado.config.tmdbKey) {
+    if (!opcoes.automatica) aviso('Coloque a sua chave do TMDB para buscar as capas.', { acao: { rotulo: 'Colocar chave', fn: pedirChaveTmdb } });
     return;
   }
-  const r = await api.buscarCapas(opcoes);
-  if (r && r.pulada === 'limite' && !opcoes.automatica) aviso('O limite diário do OMDb já foi atingido hoje.');
+  await api.buscarCapas(opcoes);
 }
 
-// ---------- Busca das informações que faltam (país, notas, gêneros, sinopse) ----------
+// ---------- Notas do OMDb (IMDb, Metascore, Rotten Tomatoes), opcionais ----------
 
-const semInformacoes = () => estado.filmes.filter((f) => f.imdbID && !f.info).length;
+const semNotas = () => estado.filmes.filter((f) => f.imdbID && !(f.info && 'imdb' in f.info)).length;
 
 async function buscarInfos() {
   const r = await api.buscarInfos();
   if (r.pulada === 'chave') { pedirChaveOmdb(); return; }
-  if (r.emAndamento) { aviso('A busca de informações já está rodando.'); return; }
-  if (!r.total) aviso('Todos os filmes já têm as informações do OMDb.', { tipo: 'ok' });
+  if (r.emAndamento) { aviso('A busca de notas já está rodando.'); return; }
+  if (!r.total) aviso('Todos os filmes já têm as notas.', { tipo: 'ok' });
 }
 
 api.aoProgressoInfos(({ feitos, total }) => {
   estado.buscandoInfos = true;
+  if (estado.buscandoCapas) return; // a barra mostra a atualização pelo TMDB primeiro
   $('#progresso-capas').hidden = false;
   $('#progresso-cheio').style.width = `${total ? (feitos / total) * 100 : 0}%`;
-  $('#progresso-texto').textContent = `Buscando países e notas… ${feitos} de ${total}`;
+  $('#progresso-texto').textContent = `Buscando notas do IMDb… ${feitos} de ${total}`;
 });
 
-api.aoFimInfos(({ total, faltam, erro }) => {
+api.aoFimInfos(({ faltam, erro }) => {
   estado.buscandoInfos = false;
   if (!estado.buscandoCapas) $('#progresso-capas').hidden = true;
   if (erro && erro.tipo === 'limite') {
-    aviso(`O limite diário do OMDb acabou. Faltam ${faltam} filme(s); a busca continua amanhã, ao abrir o app.`, { tipo: 'erro', duracao: 9000 });
+    aviso(`O limite diário do OMDb acabou. Faltam as notas de ${faltam} filme(s); a busca continua amanhã, ao abrir o app.`, { tipo: 'erro', duracao: 9000 });
   } else if (erro) {
     const acao = erro.tipo === 'chave' ? { rotulo: 'Colocar chave', fn: pedirChaveOmdb } : undefined;
     aviso(erro.mensagem, { tipo: 'erro', duracao: 9000, acao });
-  } else {
-    aviso(`Informações carregadas: ${total - faltam} filme(s).`, { tipo: 'ok' });
   }
 });
 
@@ -2101,7 +2526,7 @@ api.aoProgressoCapas(({ feitos, total }) => {
   estado.buscandoCapas = true;
   $('#progresso-capas').hidden = false;
   $('#progresso-cheio').style.width = `${total ? (feitos / total) * 100 : 0}%`;
-  $('#progresso-texto').textContent = `Buscando capas… ${feitos} de ${total}`;
+  $('#progresso-texto').textContent = `Atualizando capas e informações pelo TMDB… ${feitos} de ${total}`;
   $('#btn-capas-faltam').hidden = true;
 });
 
@@ -2112,8 +2537,8 @@ api.aoFimCapas((r) => {
   if (r.erro) {
     const acao = r.erro.tipo === 'chave' ? { rotulo: 'Configurações', fn: abrirConfiguracoes } : undefined;
     aviso(r.erro.mensagem, { tipo: 'erro', duracao: 9000, acao });
-  } else if (r.total) {
-    aviso(`Busca de capas concluída: ${r.encontradas} encontrada(s).`, { tipo: 'ok' });
+  } else if (r.total > 1) {
+    aviso(`Atualização pelo TMDB concluída: ${r.encontradas} filme(s) atualizados.`, { tipo: 'ok' });
   }
 });
 
@@ -2121,7 +2546,14 @@ api.aoMudarFilme((novo) => {
   const f = porId(novo.id);
   if (!f) return;
   // Só os campos da capa: o que o usuário está digitando no painel não é sobrescrito.
-  for (const k of ['imdbID', 'poster', 'capaLocal', 'capaNaoEncontrada', 'info', 'duracao', 'duracaoDe']) f[k] = novo[k];
+  const logoAntes = srcLogo(f);
+  for (const k of ['imdbID', 'tmdbId', 'tmdbEm', 'poster', 'capaLocal', 'capaNaoEncontrada', 'capaPersonalizada', 'logo', 'logoLocal', 'info', 'duracao', 'duracaoDe', 'trailerId', 'trailerManual']) f[k] = novo[k];
+  if (!f.diretor && novo.diretor) f.diretor = novo.diretor;
+  // A logo chegou (ou mudou): troca o título em texto por ela.
+  if (srcLogo(f) !== logoAntes) {
+    if (filmeNoDestaque() === f.id) $('#destaque .destaque-titulo h2')?.replaceWith(htmlParaNo(tituloHTML(f)));
+    if (estado.painelId === f.id) $('#painel .destaque-titulo h2')?.replaceWith(htmlParaNo(tituloHTML(f)));
+  }
   agendarRender();
   if (filmeNoDestaque() === f.id) {
     const capa = $('#destaque .destaque-poster .capa');
@@ -2203,6 +2635,7 @@ $$('.alternar-vista .btn').forEach((b) => {
 });
 
 $('#btn-sortear').addEventListener('click', (e) => { girarDado(e.currentTarget); sortear(); });
+$('#btn-sortear-filtro').addEventListener('click', (e) => { e.currentTarget.blur(); abrirFiltrosSorteio(); });
 
 // Retorno do botão de sortear: o dado dá meia-volta.
 function girarDado(botao) {
@@ -2269,6 +2702,10 @@ document.addEventListener('keydown', (e) => {
     else fecharCalendario();
     return;
   }
+  if (e.key === 'Escape' && !modal.open && !estatisticas.hidden && !estado.painelId) {
+    fecharEstatisticas();
+    return;
+  }
   if (e.key === 'Escape' && !modal.open && !tierlist.hidden) {
     if ($('#tierlist .tl-paleta')) { fecharPaletaTier(); return; }
     fecharTierlist();
@@ -2282,7 +2719,7 @@ document.addEventListener('keydown', (e) => {
     fecharPesquisa();
     return;
   }
-  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && !modal.open && foco.hidden && calendario.hidden && tierlist.hidden && !digitandoEm(document.activeElement)) {
+  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && !modal.open && foco.hidden && calendario.hidden && tierlist.hidden && estatisticas.hidden && !digitandoEm(document.activeElement)) {
     e.preventDefault();
     sortear();
   }
@@ -2291,9 +2728,11 @@ document.addEventListener('keydown', (e) => {
 // ---------- Calendário ----------
 
 // Um mês por vez, de outubro de 2026 (quando a lista começou a registrar os
-// dias) até o mês atual. Cada dia mostra as capas do que foi visto; hoje mostra
+// dias), ou do mês mais antigo com um filme visto (as datas importadas do
+// Letterboxd), até o mês atual. Cada dia mostra as capas do que foi visto; hoje mostra
 // também a watchlist. Clicar num dia abre a página do dia, com as capas grandes.
 const PRIMEIRO_MES = '2026-10';
+const primeiroMes = () => estado.filmes.flatMap((f) => f.vistoEm || []).reduce((m, d) => (d.slice(0, 7) < m ? d.slice(0, 7) : m), PRIMEIRO_MES);
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const calendario = $('#calendario');
 let mesCalendario = null; // 'AAAA-MM'
@@ -2517,7 +2956,7 @@ function mesHTML(mes) {
       <div class="cal-navegacao">
         <h2>${esc(MESES[m - 1])} <span class="cal-ano">${ano}</span></h2>
         <div class="cal-setas">
-          <button class="redondo" data-c="mes" data-mes="${anterior}" ${anterior < PRIMEIRO_MES ? 'disabled' : ''} title="Mês anterior" aria-label="Mês anterior">${icone('ChevronLeft')}</button>
+          <button class="redondo" data-c="mes" data-mes="${anterior}" ${anterior < primeiroMes() ? 'disabled' : ''} title="Mês anterior" aria-label="Mês anterior">${icone('ChevronLeft')}</button>
           <button class="redondo" data-c="mes" data-mes="${proximo}" ${proximo > mesVizinho(mesAtual, 1) ? 'disabled' : ''} title="Próximo mês" aria-label="Próximo mês">${icone('ChevronRight')}</button>
         </div>
         ${mes !== mesAtual ? `<button class="btn btn-fantasma cal-ir-hoje" data-c="mes" data-mes="${mesAtual}">Voltar para hoje</button>` : ''}
@@ -2567,6 +3006,7 @@ function filmeDoDiaHTML(f, { pensandoEm = null, vistoNoMes = null } = {}) {
       <div class="cal-filme-info">
         <h4><button class="cal-filme-titulo" data-c="detalhes" data-id="${f.id}">${esc(f.titulo)}</button></h4>
         <p>${meta}${f.diretor ? `<br>${esc(f.diretor)}` : ''}</p>
+        ${vistoNoMes && f.minhaNota ? notaFixaHTML(f.minhaNota) : ''}
       </div>
       ${acoes}
     </article>`;
@@ -2604,7 +3044,7 @@ function paginaDiaHTML(dia) {
     ${ehHoje || futuro ? `
       <section class="cal-secao" data-secao="watchlist">
         <h3>${icone('CalendarClock')} ${ehHoje ? 'Pensando em ver hoje' : 'Pensando em ver neste dia'} ${contagem(watchlist.length)}
-          ${ehHoje ? `<button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje" title="Sortear um filme não visto para a watchlist de hoje">${icone('Dices')} Sortear um filme</button>` : ''}</h3>
+          ${ehHoje ? `<span class="cal-sortear-botoes"><button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje" title="Sortear um filme não visto para a watchlist de hoje">${icone('Dices')} Sortear um filme</button><button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje-filtro" title="Sortear só por duração, gênero, década ou país">${icone('SlidersHorizontal')} Sortear com filtro</button></span>` : ''}</h3>
         ${watchlist.length
           ? `<div class="cal-filmes">${watchlist.map((f) => filmeDoDiaHTML(f, { pensandoEm: dia })).join('')}</div>`
           : `<p class="cal-vazio">${ehHoje
@@ -2627,11 +3067,15 @@ function paginaDiaHTML(dia) {
 // sorteado, que entra na watchlist; com "reduzir movimento", vai direto.
 let sorteandoHoje = false;
 
-async function sortearParaHoje(botao) {
+// `comFiltro`: só entre os que passam nos filtros do sorteio (duração, gênero, década, país).
+async function sortearParaHoje(botao, { comFiltro = false } = {}) {
   if (sorteandoHoje) return;
-  const naLista = new Set(idsWatchlist());
-  const candidatos = estado.filmes.filter((f) => !f.visto && !naLista.has(f.id));
-  if (!candidatos.length) { aviso('Não sobrou nenhum filme não visto para sortear.'); return; }
+  const candidatos = candidatosSorteio(comFiltro ? filtrosSorteio() : FILTROS_SORTEIO_VAZIOS, { paraHoje: true });
+  if (!candidatos.length) {
+    if (comFiltro) aviso('Nenhum filme não visto passa nos filtros do sorteio.', { acao: { rotulo: 'Ajustar filtros', fn: () => abrirFiltrosSorteio({ paraHoje: true, botao }) } });
+    else aviso('Não sobrou nenhum filme não visto para sortear.');
+    return;
+  }
   const comCapa = candidatos.filter((f) => srcCapa(f));
   const sorteaveis = comCapa.length ? comCapa : candidatos;
   const escolhido = sorteaveis[Math.floor(Math.random() * sorteaveis.length)];
@@ -2719,6 +3163,7 @@ calendario.addEventListener('click', (e) => {
     case 'dia': irParaDia(alvo.dataset.dia); break;
     case 'voltar': voltarParaMes(); break;
     case 'sortear-hoje': sortearParaHoje(alvo); break;
+    case 'sortear-hoje-filtro': abrirFiltrosSorteio({ paraHoje: true, botao: $('#calendario [data-c="sortear-hoje"]') }); break;
     case 'detalhes': abrirPainel(id); break;
     case 'assistir': abrirStremio(id); break;
     case 'vi': alternar(id, 'visto', true); aviso(`“${porId(id).titulo}” marcado como visto hoje.`, { tipo: 'ok' }); break;
@@ -2888,7 +3333,8 @@ function fecharTierlist() {
 }
 
 function capaTlHTML(f) {
-  return `<div class="tl-capa" role="button" tabindex="0" data-id="${f.id}" title="${esc(`${f.titulo}${f.ano ? ` (${f.ano})` : ''}`)}" aria-label="${esc(f.titulo)}">${capaHTML(f)}</div>`;
+  const nota = f.minhaNota ? `<span class="tl-nota" title="Sua nota">${icone('Star', { preenchido: true })}${notaLegivel(f.minhaNota)}</span>` : '';
+  return `<div class="tl-capa" role="button" tabindex="0" data-id="${f.id}" title="${esc(`${f.titulo}${f.ano ? ` (${f.ano})` : ''}`)}" aria-label="${esc(f.titulo)}">${capaHTML(f)}${nota}</div>`;
 }
 
 function renderTierlist() {
@@ -3275,6 +3721,208 @@ tierlist.addEventListener('click', (e) => {
 
 $('#btn-tierlist').addEventListener('click', () => abrirTierlist());
 
+// ---------- Atualização automática ----------
+
+// Instalado: a versão nova já foi baixada; reiniciar instala (ou instala ao fechar).
+api.aoAtualizacaoPronta(({ versao }) => {
+  aviso(`A versão ${versao} do NANDFlix está pronta.`, { tipo: 'ok', duracao: 30000, acao: { rotulo: 'Reiniciar e atualizar', fn: () => api.instalarAtualizacao() } });
+});
+// Portátil: só avisa, com o link para baixar o .exe novo.
+api.aoAtualizacaoDisponivel(({ versao, url }) => {
+  aviso(`Saiu a versão ${versao} do NANDFlix.`, { duracao: 30000, acao: { rotulo: 'Baixar', fn: () => window.open(url) } });
+});
+
+// ---------- Estatísticas e retrospectiva ----------
+
+// Tudo sai do que já está guardado: os dias em que cada filme foi visto
+// (vistoEm), duração, diretor, país, gêneros, ano e a sua nota. "Tudo" conta
+// também os filmes marcados como vistos sem data (vieram da planilha); um ano
+// conta só o que tem data naquele ano. Cada vez que um filme foi visto é uma sessão.
+const estatisticas = $('#retrospectiva');
+// Os diretores de um filme como estão escritos (para mostrar; diretoresDe normaliza para comparar).
+const nomesDiretores = (texto) => String(texto || '').split(/\s*(?:,|;|\/|&)\s*/).map((d) => d.trim()).filter(Boolean);
+let periodoEst = 'tudo'; // 'tudo' | 'AAAA'
+
+function abrirEstatisticas() {
+  fecharPrevia(false);
+  const anos = anosComFilmes();
+  periodoEst = anos.includes(hoje().slice(0, 4)) ? hoje().slice(0, 4) : 'tudo';
+  estatisticas.hidden = false;
+  renderEstatisticas();
+  Movimento.animar($('#retrospectiva-caixa'), [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 260 });
+  $('#retrospectiva [data-e="fechar"]')?.focus({ preventScroll: true });
+}
+
+function fecharEstatisticas() {
+  if (estatisticas.hidden) return;
+  estatisticas.hidden = true;
+  $('#retrospectiva-caixa').innerHTML = '';
+}
+
+const anosComFilmes = () => [...new Set(estado.filmes.flatMap((f) => (f.vistoEm || []).map((d) => d.slice(0, 4))))].sort();
+
+function dadosDoPeriodo(periodo) {
+  const sessoes = []; // { f, dia }
+  const filmes = new Set();
+  for (const f of estado.filmes) {
+    const dias = (f.vistoEm || []).filter((d) => periodo === 'tudo' || d.startsWith(periodo));
+    dias.forEach((dia) => sessoes.push({ f, dia }));
+    if (dias.length || (periodo === 'tudo' && f.visto)) filmes.add(f);
+  }
+  const lista = [...filmes];
+  // Horas: cada sessão conta; vistos sem data contam uma vez.
+  const minutos = sessoes.reduce((t, s) => t + minutosDe(s.f), 0)
+    + lista.filter((f) => !(f.vistoEm || []).length).reduce((t, f) => t + minutosDe(f), 0);
+  const dias = [...new Set(sessoes.map((s) => s.dia))].sort();
+  let sequencia = 0;
+  let atual = 0;
+  dias.forEach((d, i) => {
+    atual = i && diaSeguinte(dias[i - 1]) === d ? atual + 1 : 1;
+    sequencia = Math.max(sequencia, atual);
+  });
+  const comNota = lista.filter((f) => f.minhaNota);
+  const media = comNota.length ? comNota.reduce((t, f) => t + f.minhaNota, 0) / comNota.length : 0;
+  const revistos = lista.filter((f) => (f.vistoEm || []).filter((d) => periodo === 'tudo' || d.startsWith(periodo)).length > 1);
+  return { sessoes, lista, minutos, dias, sequencia, comNota, media, revistos };
+}
+
+function ranking(valores, max = 8) {
+  const m = new Map();
+  for (const v of valores) if (v) m.set(v, (m.get(v) || 0) + 1);
+  return [...m].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]), 'pt')).slice(0, max);
+}
+
+// Colunas de um valor só (uma cor): a maior leva o número em cima; as outras mostram ao passar o mouse.
+function colunasHTML(itens, rotuloDica) {
+  const max = Math.max(1, ...itens.map((i) => i.valor));
+  const maior = itens.reduce((m, i) => (i.valor > m.valor ? i : m), itens[0]);
+  return `<div class="est-colunas" style="--n:${itens.length}">${itens.map((i) => `
+    <div class="est-col" tabindex="0" aria-label="${esc(`${i.rotuloLongo || i.rotulo}: ${rotuloDica(i.valor)}`)}">
+      <span class="est-dica">${esc(i.rotuloLongo || i.rotulo)} · ${esc(rotuloDica(i.valor))}</span>
+      <div class="est-trilho">${i === maior && i.valor ? `<span class="est-valor">${i.valor}</span>` : ''}<div class="est-barra" style="height:${(i.valor / max) * 100}%"></div></div>
+      <span class="est-rotulo">${esc(i.rotulo)}</span>
+    </div>`).join('')}</div>`;
+}
+
+// Ranking em barras deitadas, com o nome e o número em texto (não na cor).
+function barrasHTML(itens, { clicar } = {}) {
+  if (!itens.length) return '<p class="est-vazio">Sem dados ainda.</p>';
+  const max = Math.max(...itens.map(([, n]) => n));
+  return `<ol class="est-barras">${itens.map(([nome, n]) => `
+    <li${clicar ? ` data-e="${clicar}" data-valor="${esc(nome)}" tabindex="0" role="button" title="Ver na lista"` : ''}>
+      <span class="est-nome">${esc(nome)}</span>
+      <span class="est-faixa"><span style="width:${(n / max) * 100}%"></span></span>
+      <span class="est-num">${n}</span>
+    </li>`).join('')}</ol>`;
+}
+
+function capasEstHTML(filmes, legenda = () => '') {
+  return `<div class="est-capas">${filmes.map((f) => `
+    <button class="est-capa" data-e="filme" data-id="${f.id}" title="${esc(f.titulo)}">${capaHTML(f)}<span>${legenda(f)}</span></button>`).join('')}</div>`;
+}
+
+function renderEstatisticas() {
+  const caixa = $('#retrospectiva-caixa');
+  const anos = anosComFilmes();
+  const periodo = periodoEst;
+  const d = dadosDoPeriodo(periodo);
+  const horas = Math.round(d.minutos / 60);
+  const numero = (n) => n.toLocaleString('pt-BR');
+  const nomeMes = (m) => MESES[m].slice(0, 3);
+
+  // Filmes por mês: os 12 meses do ano escolhido; em "Tudo", do primeiro mês com data até hoje.
+  let meses;
+  if (periodo === 'tudo') {
+    const primeiro = d.dias[0] ? d.dias[0].slice(0, 7) : hoje().slice(0, 7);
+    meses = [];
+    for (let m = primeiro; m <= hoje().slice(0, 7); m = mesVizinho(m, 1)) meses.push(m);
+  } else {
+    meses = Array.from({ length: 12 }, (_, i) => `${periodo}-${String(i + 1).padStart(2, '0')}`);
+  }
+  const porMes = meses.map((m) => {
+    const n = d.sessoes.filter((s) => s.dia.startsWith(m)).length;
+    const [a, mm] = m.split('-').map(Number);
+    return { rotulo: periodo === 'tudo' && meses.length > 12 ? `${nomeMes(mm - 1)}/${String(a).slice(2)}` : nomeMes(mm - 1), rotuloLongo: mesLegivel(m), valor: n };
+  });
+
+  const notas = Array.from({ length: 10 }, (_, i) => (i + 1) / 2).map((n) => ({
+    rotulo: notaLegivel(n), rotuloLongo: `${notaLegivel(n)} estrela${n === 1 ? '' : 's'}`, valor: d.comNota.filter((f) => f.minhaNota === n).length,
+  }));
+  const melhores = [...d.comNota].sort((a, b) => b.minhaNota - a.minhaNota || a.titulo.localeCompare(b.titulo)).slice(0, 8);
+  const maisRevistos = [...d.revistos].sort((a, b) => b.vistoEm.length - a.vistoEm.length).slice(0, 8);
+  const doMes = Object.entries(estado.config.filmesDoMes || {})
+    .filter(([m]) => periodo === 'tudo' || m.startsWith(periodo))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([m]) => ({ m, f: filmeDoMes(m) })).filter((x) => x.f);
+  const diretorTop = ranking(d.lista.flatMap((f) => nomesDiretores(f.diretor)), 1)[0];
+  const paisTop = ranking(d.lista.map(paisPrincipal), 1)[0];
+  const generoTop = ranking(d.lista.flatMap((f) => generos(f.info)), 1)[0];
+
+  const frase = d.lista.length
+    ? `${periodo === 'tudo' ? 'Até agora' : `Em ${periodo}`}, você viu <b>${numero(d.lista.length)} filme${d.lista.length === 1 ? '' : 's'}</b>${horas ? `, somando <b>${numero(horas)} hora${horas === 1 ? '' : 's'}</b> de cinema` : ''}.`
+      + (diretorTop ? ` Quem mais apareceu foi <b>${esc(diretorTop[0])}</b>` + (paisTop ? `, e o país que mais rendeu foi <b>${esc(paisTop[0])}</b>` : '') + '.' : '')
+      + (generoTop ? ` Gênero do período: <b>${esc(generoTop[0])}</b>.` : '')
+    : 'Nenhum filme visto neste período ainda.';
+
+  const tile = (rotulo, valor, extra = '') => `<div class="est-tile"><span>${rotulo}</span><b>${valor}</b>${extra ? `<small>${extra}</small>` : ''}</div>`;
+  caixa.innerHTML = `
+    <div class="tl-topo est-topo">
+      <h2>Estatísticas</h2>
+      <div class="chips-linha est-periodos" role="radiogroup" aria-label="Período">
+        ${['tudo', ...anos].map((p) => `<button class="chip${p === periodo ? ' ativo' : ''}" data-e="periodo" data-periodo="${p}" role="radio" aria-checked="${p === periodo}">${p === 'tudo' ? 'Tudo' : p}</button>`).join('')}
+      </div>
+      <button class="redondo tl-fechar" data-e="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
+    </div>
+    <section class="est-hero">
+      <span class="est-kicker">${icone('Sparkles')} ${periodo === 'tudo' ? 'Sua retrospectiva' : `Retrospectiva ${periodo}`}</span>
+      <p>${frase}</p>
+    </section>
+    <div class="est-tiles">
+      ${tile('Filmes vistos', numero(d.lista.length), d.sessoes.length > d.lista.length ? `${numero(d.sessoes.length)} sessões` : '')}
+      ${tile('Horas de filme', numero(horas), d.lista.length ? `${Math.round(d.minutos / Math.max(1, d.sessoes.length + d.lista.filter((f) => !(f.vistoEm || []).length).length))} min em média` : '')}
+      ${tile('Dias com filme', numero(d.dias.length), d.sequencia > 1 ? `${d.sequencia} dias seguidos no máximo` : '')}
+      ${tile('Sua nota média', d.media ? `${icone('Star', { preenchido: true })}${notaLegivel(Math.round(d.media * 10) / 10)}` : '—', d.comNota.length ? `${d.comNota.length} com nota` : 'dê notas nos detalhes')}
+      ${tile('Revistos', numero(d.revistos.length))}
+    </div>
+    <div class="est-grade">
+      <section class="est-cartao est-largo">
+        <h3>Filmes por mês</h3>
+        ${d.sessoes.length ? colunasHTML(porMes, (n) => `${n} filme${n === 1 ? '' : 's'}`) : '<p class="est-vazio">As datas começam a contar quando você marca um filme como visto (ou lança o dia nos detalhes).</p>'}
+      </section>
+      <section class="est-cartao"><h3>Diretores mais vistos</h3>${barrasHTML(ranking(d.lista.flatMap((f) => nomesDiretores(f.diretor))), { clicar: 'diretor' })}</section>
+      <section class="est-cartao"><h3>Países</h3>${barrasHTML(ranking(d.lista.map(paisPrincipal)), { clicar: 'pais' })}</section>
+      <section class="est-cartao"><h3>Gêneros</h3>${barrasHTML(ranking(d.lista.flatMap((f) => generos(f.info))))}</section>
+      <section class="est-cartao"><h3>Décadas</h3>${barrasHTML(ranking(d.lista.map(decadaDe).filter((x) => x !== null), 20)
+        .sort((a, b) => a[0] - b[0]).map(([x, n]) => [`Anos ${x < 2000 ? String(x).slice(2) : x}`, n]))}</section>
+      <section class="est-cartao est-largo">
+        <h3>Suas notas</h3>
+        ${d.comNota.length ? colunasHTML(notas, (n) => `${n} filme${n === 1 ? '' : 's'}`) : '<p class="est-vazio">Dê notas de ½ a 5 estrelas nos detalhes de cada filme.</p>'}
+      </section>
+      ${melhores.length ? `<section class="est-cartao est-largo"><h3>Suas maiores notas</h3>${capasEstHTML(melhores, (f) => `${icone('Star', { preenchido: true })}${notaLegivel(f.minhaNota)}`)}</section>` : ''}
+      ${doMes.length ? `<section class="est-cartao est-largo"><h3>${icone('Trophy')} Filmes do mês</h3>${capasEstHTML(doMes.map((x) => x.f), (f) => esc(mesLegivel(doMes.find((x) => x.f === f).m)))}</section>` : ''}
+      ${maisRevistos.length ? `<section class="est-cartao est-largo"><h3>Os que você mais reviu</h3>${capasEstHTML(maisRevistos, (f) => `${f.vistoEm.length}×`)}</section>` : ''}
+    </div>`;
+  Movimento.sequencia($$('#retrospectiva .est-tile, #retrospectiva .est-cartao'), { y: 10, duracao: 380, passo: 30, atrasoInicial: 60 });
+}
+
+estatisticas.addEventListener('click', (e) => {
+  if (e.target === estatisticas) { fecharEstatisticas(); return; }
+  const alvo = e.target.closest('[data-e]');
+  if (!alvo) return;
+  switch (alvo.dataset.e) {
+    case 'fechar': fecharEstatisticas(); break;
+    case 'periodo': periodoEst = alvo.dataset.periodo; renderEstatisticas(); break;
+    case 'filme': abrirPainel(alvo.dataset.id); break;
+    case 'diretor': fecharEstatisticas(); filtrarDiretor(alvo.dataset.valor); break;
+    case 'pais': fecharEstatisticas(); filtrarPais(alvo.dataset.valor); break;
+  }
+});
+estatisticas.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('li[data-e]')) { e.preventDefault(); e.target.click(); }
+});
+
+$('#btn-estatisticas').addEventListener('click', () => abrirEstatisticas());
+
 // ---------- Início ----------
 
 (async function iniciar() {
@@ -3282,11 +3930,13 @@ $('#btn-tierlist').addEventListener('click', () => abrirTierlist());
   const dados = await api.carregar();
   estado.filmes = dados.filmes;
   estado.config = dados.config;
+  atualizarBotaoFiltros();
+  estado.versao = dados.versao;
   estado.ordenacao = dados.config.ordenacao || 'ordem';
   $('#ordenacao').value = estado.ordenacao;
   aplicarVista(dados.config.visualizacao === 'lista' ? 'lista' : 'grade');
   // Já começa com um filme sorteado.
   sortear({ rolar: false, avisarSeVazio: false });
-  if (!estado.config.omdbKey) pedirChaveOmdb();
+  if (!estado.config.tmdbKey) pedirChaveTmdb();
   else if (estado.filmes.length) buscarCapas({ automatica: true });
 })();

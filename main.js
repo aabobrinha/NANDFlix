@@ -8,8 +8,9 @@ const armazem = require('./lib/armazem');
 const planilha = require('./lib/planilha');
 const omdb = require('./lib/omdb');
 const trailer = require('./lib/trailer');
-const wikidata = require('./lib/wikidata');
-const { novoFilme, juntar, resumo, acharRepetido } = require('./lib/filmes');
+const tmdb = require('./lib/tmdb');
+const { novoFilme, juntar, resumo, acharRepetido, mesmoFilme } = require('./lib/filmes');
+const letterboxd = require('./lib/letterboxd');
 
 app.setName(armazem.NOME_APP);
 // FILMES_LEGAIS_DADOS: outra pasta de dados (para testar sem mexer na lista de verdade).
@@ -23,7 +24,8 @@ const PASTA = app.getPath('userData');
 const C = armazem.caminhos(PASTA);
 
 const CONFIG_PADRAO = {
-  omdbKey: '', // cada pessoa usa a própria chave (o app pede ao abrir enquanto não houver)
+  tmdbKey: '', // cada pessoa usa a própria chave (o app pede ao abrir enquanto não houver)
+  omdbKey: '', // opcional: só para as notas do IMDb, Metascore e Rotten Tomatoes
   stremio: 'app', // 'app' | 'web'
   visualizacao: 'grade',
   ordenacao: 'ordem',
@@ -64,41 +66,173 @@ function atualizarFilme(id, mudancas) {
   return filme;
 }
 
-// ---------- Duração (Wikidata) ----------
+// ---------- TMDB: capas, logos, trailers e informações ----------
 
-// Busca em segundo plano a duração dos filmes que ainda não têm, sem gastar a
-// cota do OMDb. duracaoDe guarda para qual imdbID a busca foi feita: se a capa
-// for trocada por outro filme, a duração é procurada de novo.
-let buscandoDuracoes = false;
-async function buscarDuracoes() {
-  if (buscandoDuracoes) return;
-  const faltam = filmes.filter((f) => f.imdbID && f.duracaoDe !== f.imdbID);
-  if (!faltam.length) return;
-  buscandoDuracoes = true;
-  try {
-    const achadas = await wikidata.duracoes(faltam.map((f) => f.imdbID));
-    for (const f of faltam) {
-      atualizarFilme(f.id, { duracao: achadas.get(f.imdbID) || 0, duracaoDe: f.imdbID });
-      if (achadas.has(f.imdbID)) avisar('filme:mudou', f);
-    }
-  } catch { /* sem internet ou Wikidata fora do ar: tenta na próxima abertura */ }
-  buscandoDuracoes = false;
+// O TMDB é a fonte principal de cada filme: capa (sempre a do idioma original),
+// logo, trailer oficial, sinopse, gêneros, elenco, direção, duração, países e
+// classificação. `tmdbEm` marca que o filme já passou pelo TMDB (achado ou não);
+// os filmes sem ela, inclusive os que vieram do OMDb, são atualizados em
+// segundo plano ao abrir o app. Capas escolhidas pelo usuário (arquivo próprio)
+// e trailers colados à mão nunca são trocados.
+
+function nomeArquivoCapa(filme) {
+  const base = (filme.imdbID || filme.id).replace(/[^\w-]/g, '');
+  return `${base}.jpg`;
 }
 
-// ---------- Informações do OMDb (país, notas, gêneros, sinopse) ----------
+async function baixarImagem(url, nome) {
+  const resposta = await fetch(url, { signal: AbortSignal.timeout(20000) });
+  if (!resposta.ok) return false;
+  const dados = Buffer.from(await resposta.arrayBuffer());
+  fs.mkdirSync(C.capas, { recursive: true });
+  fs.writeFileSync(path.join(C.capas, nome), dados);
+  return true;
+}
 
-// Busca em segundo plano as informações dos filmes que ainda não têm, para
-// poder agrupar "Todos os filmes" por país. Usa a cota do OMDb devagar (2 por
-// vez) e para no limite do dia, sem chave ou sem internet; continua depois.
-// `forcar` (botão "Buscar informações que faltam"): tenta mesmo que o limite do
-// dia já tenha sido marcado como atingido.
+async function baixarCapa(filme) {
+  if (!filme.poster) return false;
+  const nome = nomeArquivoCapa(filme);
+  try {
+    if (!(await baixarImagem(filme.poster, nome))) return false;
+    // `v` muda a URL da imagem quando a capa é trocada, para não ficar a antiga no cache.
+    atualizarFilme(filme.id, { capaLocal: `${nome}?v=${Date.now()}` });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function baixarLogo(filme) {
+  if (!filme.logo) return false;
+  const nome = `${(filme.imdbID || filme.id).replace(/[^\w-]/g, '')}-logo.png`;
+  try {
+    if (!(await baixarImagem(filme.logo, nome))) return false;
+    atualizarFilme(filme.id, { logoLocal: `${nome}?v=${Date.now()}` });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function capaLocalExiste(filme) {
+  if (!filme.capaLocal) return false;
+  return fs.existsSync(path.join(C.capas, filme.capaLocal.split('?')[0]));
+}
+
+const NOTAS_OMDB = ['imdb', 'metascore', 'rotten'];
+
+// Guarda no filme o que veio do TMDB. `trocarFilme`: o usuário escolheu outro
+// filme em "Trocar capa", então as notas do OMDb (do filme antigo) saem.
+async function aplicarTmdb(f, d, { trocarFilme = false } = {}) {
+  const outroFilme = trocarFilme || Boolean(d.imdbID && f.imdbID && d.imdbID !== f.imdbID);
+  const info = { ...(outroFilme ? {} : f.info || {}), ...d.info, atualizadoEm: new Date().toISOString() };
+  if (outroFilme) for (const k of NOTAS_OMDB) delete info[k];
+  const mudancas = {
+    tmdbId: d.tmdbId,
+    tmdbEm: new Date().toISOString(),
+    idiomaOriginal: d.idiomaOriginal,
+    imdbID: d.imdbID || f.imdbID,
+    info,
+    duracao: d.duracao || (outroFilme ? 0 : f.duracao),
+    duracaoDe: d.imdbID || f.imdbID,
+    diretor: outroFilme || !f.diretor ? d.diretor || f.diretor : f.diretor,
+    logo: d.logo,
+  };
+  if (!d.logo) mudancas.logoLocal = '';
+  if (d.trailerId && !f.trailerManual) mudancas.trailerId = d.trailerId;
+  const trocarCapa = Boolean(d.poster) && !f.capaPersonalizada && (d.poster !== f.poster || !capaLocalExiste(f) || outroFilme);
+  if (trocarCapa) Object.assign(mudancas, { poster: d.poster, capaNaoEncontrada: false });
+  atualizarFilme(f.id, mudancas);
+  if (trocarCapa) await baixarCapa(f);
+  if (d.logo) await baixarLogo(f);
+  return true;
+}
+
+// Acha o filme no TMDB (pelo id, pelo código do IMDb, pela "Busca da capa" ou
+// pelo título e ano) e atualiza. Devolve true se achou.
+async function processarTmdb(f, { tmdbId = null, trocarFilme = false } = {}) {
+  let id = tmdbId || (!trocarFilme && f.tmdbId) || null;
+  const busca = (f.buscaCapa || '').trim();
+  const buscaImdb = /^tt\d+$/.test(busca);
+  if (!id && buscaImdb) id = await tmdb.idPorImdb(config.tmdbKey, busca);
+  if (!id && f.imdbID && !busca) id = await tmdb.idPorImdb(config.tmdbKey, f.imdbID);
+  if (!id) id = await tmdb.idPorTitulo(config.tmdbKey, ((busca && !buscaImdb) ? busca : f.titulo).replace(/[’‘]/g, "'"), f.ano);
+  const d = id ? await tmdb.detalhes(config.tmdbKey, id) : null;
+  if (!d) {
+    atualizarFilme(f.id, { tmdbEm: new Date().toISOString(), capaNaoEncontrada: !f.poster });
+    return false;
+  }
+  return aplicarTmdb(f, d, { trocarFilme });
+}
+
+let buscaEmAndamento = null;
+
+// Atualiza pelo TMDB os filmes que ainda não passaram por ele (4 ao mesmo tempo)
+// e baixa as capas que faltam no disco. `incluirNaoEncontradas`: tenta de novo
+// os que o TMDB não achou da última vez.
+async function buscarCapasQueFaltam({ incluirNaoEncontradas = false } = {}) {
+  if (buscaEmAndamento) return buscaEmAndamento;
+  if (!config.tmdbKey) return { pulada: 'chave' };
+
+  const consultar = filmes.filter((f) => !f.tmdbEm || (incluirNaoEncontradas && !f.tmdbId));
+  const semArquivo = filmes.filter((f) => f.tmdbEm && f.poster && !f.capaPersonalizada && !capaLocalExiste(f) && !consultar.includes(f));
+  const fila = [
+    ...consultar.map((f) => ({ f, consultar: true })),
+    ...semArquivo.map((f) => ({ f, consultar: false })),
+  ];
+  if (!fila.length) { buscarNotasQueFaltam(); return { total: 0, encontradas: 0 }; }
+
+  buscaEmAndamento = (async () => {
+    const total = fila.length;
+    let feitos = 0;
+    let encontradas = 0;
+    let erro = null;
+    avisar('capas:progresso', { feitos, total });
+
+    const trabalhar = async () => {
+      while (fila.length && !erro) {
+        const { f, consultar } = fila.shift();
+        try {
+          if (consultar) { if (await processarTmdb(f)) encontradas++; }
+          else await baixarCapa(f);
+          avisar('filme:mudou', f);
+        } catch (e) {
+          // Chave errada ou sem internet: para tudo (o resto fica para depois).
+          if (e instanceof tmdb.ErroTmdb) erro = e;
+        }
+        feitos++;
+        avisar('capas:progresso', { feitos, total });
+      }
+    };
+    await Promise.all([trabalhar(), trabalhar(), trabalhar(), trabalhar()]);
+    gravarAgora();
+    const resultado = { total: feitos, encontradas, erro: erro ? { tipo: erro.tipo, mensagem: erro.message } : null };
+    avisar('capas:fim', resultado);
+    buscarNotasQueFaltam();
+    return resultado;
+  })();
+
+  try {
+    return await buscaEmAndamento;
+  } finally {
+    buscaEmAndamento = null;
+  }
+}
+
+// ---------- OMDb: notas do IMDb, Metascore e Rotten Tomatoes (opcional) ----------
+
+// Só com a chave do OMDb. Busca as notas dos filmes que ainda não têm (2 por vez)
+// e para no limite do dia, sem chave ou sem internet; continua depois. Filmes que
+// o TMDB não achou ganham também o resto das informações do OMDb.
+// `forcar`: tenta mesmo que o limite do dia já tenha sido marcado como atingido.
+const temNotasOmdb = (f) => Boolean(f.info && 'imdb' in f.info);
 let buscandoInfos = false;
-function buscarInfosQueFaltam({ forcar = false } = {}) {
+function buscarNotasQueFaltam({ forcar = false } = {}) {
   if (buscandoInfos) return { emAndamento: true };
   if (!config.omdbKey) return { pulada: 'chave' };
   const hoje = new Date().toISOString().slice(0, 10);
   if (!forcar && config.limiteAtingidoEm === hoje) return { pulada: 'limite' };
-  const fila = filmes.filter((f) => f.imdbID && !f.info);
+  const fila = filmes.filter((f) => f.imdbID && !temNotasOmdb(f));
   if (!fila.length) return { total: 0 };
   buscandoInfos = true;
   const total = fila.length;
@@ -108,11 +242,15 @@ function buscarInfosQueFaltam({ forcar = false } = {}) {
   const trabalhar = async () => {
     while (fila.length && !erro) {
       const f = fila.shift();
-      if (!f.info && f.imdbID) {
+      if (f.imdbID && !temNotasOmdb(f)) {
         try {
           const d = await omdb.detalhes(config.omdbKey, f.imdbID);
-          // Sem resultado no OMDb: guarda um registro vazio para não perguntar de novo.
-          atualizarFilme(f.id, d ? { info: d.info, diretor: f.diretor || d.diretor } : { info: { atualizadoEm: new Date().toISOString() } });
+          const notas = Object.fromEntries(NOTAS_OMDB.map((k) => [k, (d && d.info[k]) || '']));
+          // Sem TMDB, o OMDb completa o que faltar (gêneros, sinopse, país…).
+          const base = f.tmdbId || !d ? {} : d.info;
+          const mudancas = { info: { ...base, ...(f.info || {}), ...notas, atualizadoEm: new Date().toISOString() } };
+          if (!f.diretor && d && d.diretor) mudancas.diretor = d.diretor;
+          atualizarFilme(f.id, mudancas);
           avisar('filme:mudou', f);
         } catch (e) {
           erro = e;
@@ -126,133 +264,16 @@ function buscarInfosQueFaltam({ forcar = false } = {}) {
       avisar('infos:progresso', { feitos, total });
     }
   };
-  Promise.all([trabalhar(), trabalhar(), trabalhar()]).then(() => {
+  Promise.all([trabalhar(), trabalhar()]).then(() => {
     gravarAgora();
     buscandoInfos = false;
-    const faltam = filmes.filter((f) => f.imdbID && !f.info).length;
+    const faltam = filmes.filter((f) => f.imdbID && !temNotasOmdb(f)).length;
     avisar('infos:fim', { total, faltam, erro: erro ? { tipo: erro.tipo || 'rede', mensagem: erro.message } : null });
   });
   return { iniciada: true, total };
 }
 
-ipcMain.handle('infos:buscar', () => buscarInfosQueFaltam({ forcar: true }));
-
-// ---------- Capas ----------
-
-function nomeArquivoCapa(filme) {
-  const base = (filme.imdbID || filme.id).replace(/[^\w-]/g, '');
-  return `${base}.jpg`;
-}
-
-async function baixarCapa(filme) {
-  if (!filme.poster) return false;
-  const nome = nomeArquivoCapa(filme);
-  const destino = path.join(C.capas, nome);
-  try {
-    const resposta = await fetch(filme.poster, { signal: AbortSignal.timeout(20000) });
-    if (!resposta.ok) return false;
-    const dados = Buffer.from(await resposta.arrayBuffer());
-    fs.mkdirSync(C.capas, { recursive: true });
-    fs.writeFileSync(destino, dados);
-    // `v` muda a URL da imagem quando a capa é trocada, para não ficar a antiga no cache.
-    atualizarFilme(filme.id, { capaLocal: `${nome}?v=${Date.now()}` });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function capaLocalExiste(filme) {
-  if (!filme.capaLocal) return false;
-  return fs.existsSync(path.join(C.capas, filme.capaLocal.split('?')[0]));
-}
-
-let buscaEmAndamento = null;
-
-// Busca no OMDb as capas que faltam (até 3 consultas ao mesmo tempo) e baixa as imagens.
-async function buscarCapasQueFaltam({ incluirNaoEncontradas = false, automatica = false } = {}) {
-  if (buscaEmAndamento) return buscaEmAndamento;
-  const hoje = new Date().toISOString().slice(0, 10);
-  if (automatica && config.limiteAtingidoEm === hoje) return { pulada: 'limite' };
-
-  const semCapa = filmes.filter((f) => !f.poster && !f.capaPersonalizada && (incluirNaoEncontradas || !f.capaNaoEncontrada));
-  // `revisarCapa`: capa encontrada por uma regra antiga de busca; é refeita com a
-  // regra atual, mantendo a capa atual até a revisão terminar.
-  const revisar = filmes.filter((f) => f.poster && f.revisarCapa && !f.capaPersonalizada);
-  const semArquivo = filmes.filter((f) => f.poster && !f.capaPersonalizada && !f.revisarCapa && !capaLocalExiste(f));
-  const fila = [
-    ...semCapa.map((f) => ({ f, consultar: true })),
-    ...revisar.map((f) => ({ f, consultar: true })),
-    ...semArquivo.map((f) => ({ f, consultar: false })),
-  ];
-  if (!fila.length) return { total: 0, encontradas: 0 };
-
-  buscaEmAndamento = (async () => {
-    const total = fila.length;
-    let feitos = 0;
-    let encontradas = 0;
-    let erro = null;
-    avisar('capas:progresso', { feitos, total });
-
-    const trabalhar = async () => {
-      while (fila.length && !erro) {
-        const { f, consultar } = fila.shift();
-        try {
-          let baixar = !consultar;
-          if (consultar && f.revisarCapa) {
-            const achado = await omdb.acharCapa(config.omdbKey, f);
-            if (achado && achado.poster) {
-              if (achado.imdbID !== f.imdbID) {
-                atualizarFilme(f.id, { imdbID: achado.imdbID, poster: achado.poster, capaLocal: '', info: null });
-                baixar = true;
-              }
-            } else {
-              // A regra atual não reconhece nem de longe a capa antiga: era de outro filme.
-              atualizarFilme(f.id, { imdbID: (achado && achado.imdbID) || '', poster: '', capaLocal: '', capaNaoEncontrada: true });
-            }
-            atualizarFilme(f.id, { revisarCapa: false });
-          } else if (consultar) {
-            const achado = await omdb.acharCapa(config.omdbKey, f);
-            if (achado && achado.poster) {
-              atualizarFilme(f.id, { imdbID: achado.imdbID, poster: achado.poster, capaNaoEncontrada: false });
-              encontradas++;
-              baixar = true;
-            } else {
-              atualizarFilme(f.id, { imdbID: (achado && achado.imdbID) || f.imdbID, capaNaoEncontrada: true });
-            }
-          }
-          if (baixar && f.poster) await baixarCapa(f);
-          avisar('filme:mudou', f);
-        } catch (e) {
-          if (e instanceof omdb.ErroOmdb && (e.tipo === 'limite' || e.tipo === 'chave')) {
-            erro = e;
-            if (e.tipo === 'limite') {
-              config.limiteAtingidoEm = hoje;
-              gravarConfig();
-            }
-          } else if (e instanceof omdb.ErroOmdb && e.tipo === 'rede') {
-            erro = e;
-          }
-        }
-        feitos++;
-        avisar('capas:progresso', { feitos, total });
-      }
-    };
-    await Promise.all([trabalhar(), trabalhar(), trabalhar()]);
-    gravarAgora();
-    const resultado = { total: feitos, encontradas, erro: erro ? { tipo: erro.tipo, mensagem: erro.message } : null };
-    avisar('capas:fim', resultado);
-    buscarDuracoes();
-    buscarInfosQueFaltam();
-    return resultado;
-  })();
-
-  try {
-    return await buscaEmAndamento;
-  } finally {
-    buscaEmAndamento = null;
-  }
-}
+ipcMain.handle('infos:buscar', () => buscarNotasQueFaltam({ forcar: true }));
 
 // ---------- Janela ----------
 
@@ -283,6 +304,17 @@ function criarJanela() {
   };
   if (salvo && boundsValidos(salvo.bounds)) Object.assign(opcoes, salvo.bounds);
   janela = new BrowserWindow(opcoes);
+  // Rodando direto da pasta (sem build): fixar na barra de tarefas guarda o
+  // comando que abre esta pasta no Electron, com o ícone do app. Assim o atalho
+  // fixado sempre abre o código mais novo, sem precisar gerar o .exe.
+  if (process.platform === 'win32' && !app.isPackaged) {
+    janela.setAppDetails({
+      appId: 'app.filmeslegais.pasta',
+      relaunchCommand: `"${process.execPath}" "${app.getAppPath()}"`,
+      relaunchDisplayName: 'NANDFlix',
+      appIconPath: path.join(__dirname, 'build', 'icon.ico'),
+    });
+  }
   if (salvo && salvo.maximizada) janela.maximize();
   janela.once('ready-to-show', () => janela.show());
 
@@ -339,6 +371,40 @@ function limparTrailer(frame) {
   } catch { /* o quadro pode ter sumido */ }
 }
 
+// ---------- Atualização automática (versão compilada) ----------
+
+// Procura versão nova nas releases do GitHub ao abrir e a cada 6 horas.
+// Instalado (pelo Setup): baixa sozinho em segundo plano e avisa quando estiver
+// pronto; reiniciar instala (fechar o app também instala). Portátil: não consegue
+// trocar o próprio .exe, então só avisa, com o link da página de download.
+const PORTATIL = Boolean(process.env.PORTABLE_EXECUTABLE_DIR);
+let atualizador = null;
+
+function iniciarAtualizacoes() {
+  if (!app.isPackaged) return;
+  try {
+    ({ autoUpdater: atualizador } = require('electron-updater'));
+  } catch {
+    return;
+  }
+  atualizador.autoDownload = !PORTATIL;
+  atualizador.autoInstallOnAppQuit = !PORTATIL;
+  atualizador.on('update-available', (info) => {
+    if (PORTATIL) avisar('atualizacao:disponivel', { versao: info.version, url: `https://github.com/aabobrinha/NANDFlix/releases/tag/v${info.version}` });
+  });
+  atualizador.on('update-downloaded', (info) => avisar('atualizacao:pronta', { versao: info.version }));
+  atualizador.on('error', () => {}); // sem internet ou GitHub fora do ar: tenta na próxima
+  const verificar = () => atualizador.checkForUpdates().catch(() => {});
+  setTimeout(verificar, 8000);
+  setInterval(verificar, 6 * 60 * 60 * 1000);
+}
+
+ipcMain.handle('atualizacao:instalar', () => {
+  if (!atualizador || PORTATIL) return;
+  if (timerGravar) gravarAgora();
+  atualizador.quitAndInstall();
+});
+
 // ---------- Links externos ----------
 
 function stremioInstalado() {
@@ -371,7 +437,7 @@ function linkLetterboxd(filme) {
 
 // ---------- IPC ----------
 
-ipcMain.handle('dados:carregar', () => ({ filmes, config: configPublica(), pastaDados: PASTA }));
+ipcMain.handle('dados:carregar', () => ({ filmes, config: configPublica(), pastaDados: PASTA, versao: app.getVersion() }));
 
 function configPublica() {
   const { janela: _j, ...resto } = config;
@@ -383,20 +449,21 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
   // (watchlistHoje é o formato antigo, de um dia só; o app o apaga ao salvar o novo).
   // filmesDoMes: { 'AAAA-MM': id }, o filme favorito de cada mês (só aparece no calendário).
   // tierlist: [{ id, nome, cor, filmes: [ids] }], as tiers de cima para baixo.
-  const permitidas = ['omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist'];
+  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'filtrosSorteio'];
   for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
   if ('omdbKey' in mudancas) config.limiteAtingidoEm = null;
   gravarConfig();
-  if ('omdbKey' in mudancas) buscarInfosQueFaltam();
+  if ('tmdbKey' in mudancas && config.tmdbKey) buscarCapasQueFaltam();
+  if ('omdbKey' in mudancas) buscarNotasQueFaltam();
   return configPublica();
 });
 
 ipcMain.handle('filme:atualizar', (_e, id, mudancas) => {
-  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'linkLetterboxd', 'buscaCapa'];
+  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa'];
   const limpo = {};
   for (const k of permitidas) if (k in mudancas) limpo[k] = mudancas[k];
-  // Mudar a busca da capa dá ao filme uma nova chance na busca automática.
-  if ('buscaCapa' in limpo) limpo.capaNaoEncontrada = false;
+  // Mudar a busca da capa faz o filme ser procurado de novo no TMDB por ela.
+  if ('buscaCapa' in limpo) Object.assign(limpo, { capaNaoEncontrada: false, tmdbEm: '', tmdbId: '' });
   return atualizarFilme(id, limpo);
 });
 
@@ -411,11 +478,15 @@ ipcMain.handle('filme:adicionar', async (_e, dados) => {
     diretor: String(dados.diretor || '').trim(),
     imdbID: dados.imdbID || '',
     poster: dados.poster || '',
-    capaNaoEncontrada: Boolean(dados.imdbID && !dados.poster),
   });
   filmes.push(filme);
   gravarDepois();
-  if (filme.poster) baixarCapa(filme).then(() => avisar('filme:mudou', filme));
+  // Capa, logo, trailer e informações chegam em seguida, pelo TMDB.
+  if (config.tmdbKey) {
+    processarTmdb(filme, { tmdbId: dados.tmdbId || null })
+      .catch(() => {})
+      .then(() => { gravarAgora(); avisar('filme:mudou', filme); buscarNotasQueFaltam(); });
+  }
   return filme;
 });
 
@@ -429,17 +500,29 @@ ipcMain.handle('filme:excluir', (_e, id) => {
   return true;
 });
 
+// Duas formas de trocar: outra capa do mesmo filme (`poster`), ou outro filme
+// do TMDB (`tmdbId` diferente), que traz junto logo, trailer e informações.
 ipcMain.handle('filme:trocarCapa', async (_e, id, escolha) => {
-  const filme = atualizarFilme(id, {
-    imdbID: escolha.imdbID, poster: escolha.poster || '', capaNaoEncontrada: !escolha.poster,
-    capaLocal: '', revisarCapa: false, capaPersonalizada: false, info: null,
-  });
-  if (filme && filme.poster) await baixarCapa(filme);
+  const filme = filmes.find((f) => f.id === id);
+  if (!filme) return null;
+  try {
+    if (escolha.poster && String(escolha.tmdbId) === String(filme.tmdbId)) {
+      atualizarFilme(id, { poster: escolha.poster, capaPersonalizada: false, capaNaoEncontrada: false });
+      await baixarCapa(filme);
+    } else {
+      atualizarFilme(id, { capaPersonalizada: false });
+      await processarTmdb(filme, { tmdbId: escolha.tmdbId, trocarFilme: true });
+    }
+  } catch (e) {
+    return { erro: e.message };
+  }
   gravarAgora();
+  avisar('filme:mudou', filme);
+  buscarNotasQueFaltam();
   return filme;
 });
 
-async function chamarOmdb(fn) {
+async function chamar(fn) {
   try {
     return { ok: true, dados: await fn() };
   } catch (e) {
@@ -447,11 +530,37 @@ async function chamarOmdb(fn) {
   }
 }
 
-ipcMain.handle('omdb:pesquisar', (_e, termo) => chamarOmdb(() => omdb.pesquisar(config.omdbKey, termo)));
-ipcMain.handle('omdb:detalhes', (_e, imdbID) => chamarOmdb(() => omdb.detalhes(config.omdbKey, imdbID)));
+// Busca do "Adicionar" e do "Trocar capa": por título, ou pelo código do IMDb (tt…).
+ipcMain.handle('tmdb:pesquisar', (_e, termo) => chamar(async () => {
+  const t = String(termo || '').trim();
+  if (/^tt\d+$/i.test(t)) {
+    const id = await tmdb.idPorImdb(config.tmdbKey, t.toLowerCase());
+    const d = id && await tmdb.detalhes(config.tmdbKey, id);
+    return d ? [{ tmdbId: d.tmdbId, imdbID: d.imdbID, titulo: d.titulo, ano: d.ano, poster: d.poster }] : [];
+  }
+  return tmdb.pesquisar(config.tmdbKey, t);
+}));
+ipcMain.handle('tmdb:detalhes', (_e, tmdbId) => chamar(() => tmdb.detalhes(config.tmdbKey, tmdbId)));
+ipcMain.handle('tmdb:capas', (_e, id) => chamar(() => {
+  const filme = filmes.find((f) => f.id === id);
+  return filme && filme.tmdbId ? tmdb.capas(config.tmdbKey, filme.tmdbId, filme.idiomaOriginal) : [];
+}));
+
+// Filmografia do diretor e "Mais como este", guardados enquanto o app está aberto.
+const relacionadosCache = new Map();
+ipcMain.handle('tmdb:relacionados', (_e, id) => chamar(async () => {
+  const filme = filmes.find((f) => f.id === id);
+  if (!filme || !filme.tmdbId || !config.tmdbKey) return null;
+  if (!relacionadosCache.has(filme.tmdbId)) {
+    relacionadosCache.set(filme.tmdbId, tmdb.relacionados(config.tmdbKey, filme.tmdbId)
+      .catch((e) => { relacionadosCache.delete(filme.tmdbId); throw e; }));
+  }
+  return relacionadosCache.get(filme.tmdbId);
+}));
 
 // Confere uma chave nova com uma consulta simples (Um Sonho de Liberdade) antes de salvar.
-ipcMain.handle('omdb:testarChave', (_e, chave) => chamarOmdb(() => omdb.detalhes(String(chave || '').trim(), 'tt0111161')));
+ipcMain.handle('tmdb:testarChave', (_e, chave) => chamar(() => tmdb.idPorImdb(String(chave || '').trim(), 'tt0111161')));
+ipcMain.handle('omdb:testarChave', (_e, chave) => chamar(() => omdb.detalhes(String(chave || '').trim(), 'tt0111161')));
 
 ipcMain.handle('capas:buscar', (_e, opcoes) => buscarCapasQueFaltam(opcoes || {}));
 
@@ -619,22 +728,22 @@ ipcMain.handle('trailer:obter', async (_e, id) => {
 
 ipcMain.handle('trailer:definir', (_e, id, texto) => {
   const t = String(texto || '').trim();
-  if (!t) return { filme: atualizarFilme(id, { trailerId: '' }) };
+  // Colado à mão: a atualização pelo TMDB não troca mais esse trailer.
+  if (!t) return { filme: atualizarFilme(id, { trailerId: '', trailerManual: false }) };
   const videoId = trailer.idDoLink(t);
   if (!videoId) return { erro: 'Não reconheci esse link do YouTube.' };
-  return { filme: atualizarFilme(id, { trailerId: videoId }) };
+  return { filme: atualizarFilme(id, { trailerId: videoId, trailerManual: true }) };
 });
 
 ipcMain.handle('filme:info', async (_e, id) => {
   const filme = filmes.find((f) => f.id === id);
   if (!filme) return { ok: false };
-  if (filme.info) return { ok: true, info: filme.info };
-  if (!filme.imdbID) return { ok: true, info: null };
+  if (filme.info || filme.tmdbEm || !config.tmdbKey) return { ok: true, info: filme.info || null };
   try {
-    const d = await omdb.detalhes(config.omdbKey, filme.imdbID);
-    if (!d) return { ok: true, info: null };
-    atualizarFilme(id, { info: d.info, diretor: filme.diretor || d.diretor });
-    return { ok: true, info: d.info };
+    await processarTmdb(filme);
+    gravarAgora();
+    avisar('filme:mudou', filme);
+    return { ok: true, info: filme.info || null };
   } catch (e) {
     return { ok: false, erro: { tipo: e.tipo || 'rede', mensagem: e.message } };
   }
@@ -652,6 +761,64 @@ ipcMain.handle('abrir:pastaDados', () => shell.openPath(PASTA));
 
 // Importação de planilha em duas etapas: escolher/ler o arquivo, depois aplicar
 // (substituir ou juntar), para o app perguntar o modo só depois de ler o arquivo.
+// ---------- Importar do Letterboxd ----------
+
+// Pasta do export do Letterboxd → lista. Filmes vistos são marcados como vistos,
+// com as datas do diário; só entram as datas de antes do primeiro dia já
+// registrado no NANDFlix (depois dele, o calendário daqui já tem o registro).
+// A watchlist entra como filmes novos na lista (os que ainda não estão nela).
+// As notas preenchem "Sua nota" só onde ela ainda está vazia. Filmes que não
+// estão na lista são procurados no TMDB antes, para não duplicar por diferença
+// de título; os novos ganham capa e informações na atualização pelo TMDB.
+ipcMain.handle('letterboxd:importar', async (_e, pastaDada) => {
+  const r = pastaDada ? { canceled: false, filePaths: [String(pastaDada)] } : await dialog.showOpenDialog(janela, {
+    title: 'Escolha a pasta do export do Letterboxd (descompactada)',
+    defaultPath: app.isPackaged ? app.getPath('downloads') : __dirname,
+    properties: ['openDirectory'],
+  });
+  if (r.canceled || !r.filePaths.length) return { cancelado: true };
+  let itens;
+  try {
+    itens = letterboxd.ler(r.filePaths[0]);
+  } catch (e) {
+    return { erro: e.message };
+  }
+  armazem.fazerBackup(PASTA);
+  const limite = filmes.flatMap((f) => f.vistoEm || []).sort()[0] || null;
+  let ordem = filmes.reduce((m, f) => Math.max(m, f.ordem || 0), 0);
+  const res = { novosWatchlist: 0, novosVistos: 0, marcadosVistos: 0, datas: 0, notas: 0, primeiroDia: null };
+  for (const item of itens) {
+    let f = filmes.find((x) => mesmoFilme(x, { titulo: item.titulo, ano: item.ano }));
+    let tmdbId = null;
+    if (!f && config.tmdbKey) {
+      tmdbId = await tmdb.idPorTitulo(config.tmdbKey, item.titulo, item.ano).catch(() => null);
+      if (tmdbId) f = filmes.find((x) => String(x.tmdbId) === String(tmdbId));
+    }
+    const novo = !f;
+    if (!f) {
+      if (!item.visto && !item.watchlist) continue;
+      f = novoFilme({ ordem: ++ordem, titulo: item.titulo, ano: item.ano, tmdbId: tmdbId || '' });
+      filmes.push(f);
+      if (item.visto) res.novosVistos++; else res.novosWatchlist++;
+    }
+    if (item.visto) {
+      if (!f.visto && !novo) res.marcadosVistos++;
+      f.visto = true;
+      const dias = [...(f.vistoEm || [])];
+      for (const d of item.datas) {
+        if (limite && d >= limite) continue;
+        if (!dias.includes(d)) { dias.push(d); res.datas++; }
+      }
+      f.vistoEm = dias.sort();
+    }
+    if (item.nota && !f.minhaNota) { f.minhaNota = item.nota; res.notas++; }
+  }
+  res.primeiroDia = filmes.flatMap((f) => f.vistoEm || []).sort()[0] || null;
+  gravarAgora();
+  buscarCapasQueFaltam();
+  return { ...res, filmes };
+});
+
 ipcMain.handle('planilha:ler', async () => {
   const r = await dialog.showOpenDialog(janela, {
     title: 'Importar planilha',
@@ -766,8 +933,7 @@ if (!travaUnica) {
     );
 
     criarJanela();
-    buscarDuracoes();
-    buscarInfosQueFaltam();
+    iniciarAtualizacoes();
   });
 
   app.on('before-quit', () => {
