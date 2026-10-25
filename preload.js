@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   acharRepetido: chamar('filme:repetido'),
   adicionarFilme: chamar('filme:adicionar'),
   excluirFilme: chamar('filme:excluir'),
+  restaurarFilme: chamar('filme:restaurar'),
   trocarCapa: chamar('filme:trocarCapa'),
   baixarCapa: chamar('capa:baixar'),
   baixarTodasCapas: chamar('capas:baixarTodas'),

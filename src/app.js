@@ -59,8 +59,12 @@ function normalizar(texto) {
   return String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’‘`´]/g, "'").toLowerCase();
 }
 
+// Filmes de fora da lista abertos nos detalhes (vindos de "Outros filmes do
+// diretor" ou "Mais como este"), com id "tmdb-<id>". Não são salvos.
+const filmesExternos = new Map();
+
 function porId(id) {
-  return estado.filmes.find((f) => f.id === id);
+  return estado.filmes.find((f) => f.id === id) || filmesExternos.get(id);
 }
 
 function anoNumero(ano) {
@@ -664,9 +668,12 @@ function abrirLetterboxd(id) {
 
 // ---------- Painel de detalhes ----------
 
-function abrirPainel(id) {
+// `voltarPara`: o filme de onde se veio (pelas fileiras de relacionados), para o
+// botão "Voltar" dos detalhes.
+function abrirPainel(id, { voltarPara = null } = {}) {
   fecharPrevia();
   const jaAberto = Boolean(estado.painelId);
+  estado.painelAnterior = voltarPara && voltarPara !== id && porId(voltarPara) ? voltarPara : null;
   estado.painelId = id;
   renderPainel();
   const painel = $('#painel');
@@ -710,6 +717,7 @@ function fecharPainel() {
 function renderPainel() {
   const f = porId(estado.painelId);
   if (!f) { fecharPainel(); return; }
+  if (f.externo) { renderPainelExterno(f); return; }
   // Ao marcar visto/favorito o painel é redesenhado; o foco volta ao mesmo botão.
   const ativo = document.activeElement;
   const focoAntes = ativo && ativo.closest && ativo.closest('#painel [data-p]') ? ativo.dataset.p : null;
@@ -725,6 +733,7 @@ function renderPainel() {
   } else {
     $('#painel-conteudo').innerHTML = `
       <button class="redondo painel-fechar" data-p="fechar" aria-label="Fechar" title="Fechar (Esc)">${icone('X')}</button>
+      ${botaoVoltarPainelHTML()}
       <div class="painel-capa" data-id="${f.id}">
         <div class="painel-fundo-video"><div class="destaque-fundo-capa"></div></div>
         <div class="painel-sombra"></div>
@@ -802,7 +811,7 @@ function renderPainel() {
     <div class="salvo" id="salvo"></div>
     <div class="painel-rodape">
       <button class="btn" data-p="trocar">${icone('Image')} Trocar capa</button>
-      <button class="btn btn-perigo" data-p="excluir">${icone('Trash2')} Excluir</button>
+      <button class="btn btn-perigo" data-p="excluir">${icone('Trash2')} Remover da lista</button>
     </div>`;
 
   carregarRelacionados(f);
@@ -890,7 +899,7 @@ function relacionadosHTML({ diretores, recomendacoes }) {
       : `<button class="rel-mais" data-p="rel-adicionar" data-tmdb="${r.tmdbId}" data-titulo="${esc(r.titulo)}" data-ano="${esc(r.ano)}" title="Adicionar à lista" aria-label="Adicionar ${esc(r.titulo)} à lista">${icone('Plus')}</button>`;
     return `
       <div class="rel-filme${meu ? ' na-lista' : ''}">
-        <button class="rel-capa" data-p="rel-abrir" data-tmdb="${r.tmdbId}"${meu ? ` data-meu="${meu.id}"` : ''} title="${esc(meu ? `${r.titulo}: abrir nos detalhes` : `${r.titulo}: ver no Letterboxd`)}">
+        <button class="rel-capa" data-p="rel-abrir" data-tmdb="${r.tmdbId}"${meu ? ` data-meu="${meu.id}"` : ''} title="${esc(meu ? `${r.titulo}: abrir nos detalhes` : `${r.titulo}: ver os detalhes`)}">
           <div class="capa">${r.poster ? `<img src="${esc(r.poster)}" alt="" loading="lazy" data-titulo="${esc(r.titulo)}" data-ano="${esc(r.ano)}">` : `<div class="capa-vazia"><strong>${esc(r.titulo)}</strong><span>${esc(r.ano)}</span></div>`}</div>
         </button>
         ${selo}
@@ -938,6 +947,94 @@ async function adicionarRelacionado(botao) {
   const dados = f && relacionadosPorFilme.get(f.tmdbId);
   if (dados && $('#painel-relacionados')) { $('#painel-relacionados').innerHTML = relacionadosHTML(dados); prepararSetasRelacionados(); }
   aviso(`“${titulo}” foi adicionado à lista.`, { tipo: 'ok', acao: { rotulo: 'Ver', fn: () => abrirPainel(novo.id) } });
+}
+
+// ---------- Detalhes de um filme que não está na lista ----------
+
+// Abre nos detalhes um filme das fileiras de relacionados, com o que vem do
+// TMDB (capa, logo, trailer, sinopse, elenco…), sem salvá-lo. Os detalhes
+// ficam só para ler, com "Adicionar à lista" no lugar de visto/favorito.
+async function abrirFilmeExterno(tmdbId, { voltarPara = null } = {}) {
+  const id = `tmdb-${tmdbId}`;
+  const daLista = estado.filmes.find((f) => String(f.tmdbId) === String(tmdbId));
+  if (daLista) { abrirPainel(daLista.id, { voltarPara }); return; }
+  if (!filmesExternos.has(id)) {
+    const r = await api.detalhesTmdb(tmdbId);
+    if (!r.ok || !r.dados) { aviso(r.ok ? 'O TMDB não tem esse filme.' : r.erro.mensagem, { tipo: 'erro' }); return; }
+    const d = r.dados;
+    filmesExternos.set(id, {
+      id, externo: true, tmdbId: d.tmdbId, imdbID: d.imdbID, titulo: d.titulo, ano: d.ano, diretor: d.diretor,
+      poster: d.poster, logo: d.logo, trailerId: d.trailerId || 'nenhum', info: d.info, duracao: d.duracao,
+      visto: false, favorito: false, vistoEm: [], minhaNota: 0, notas: '',
+    });
+  }
+  abrirPainel(id, { voltarPara });
+}
+
+function botaoVoltarPainelHTML() {
+  const anterior = estado.painelAnterior && porId(estado.painelAnterior);
+  return anterior ? `<button class="painel-voltar" data-p="voltar" title="Voltar para ${esc(anterior.titulo)}">${icone('ChevronLeft')}<span>${esc(anterior.titulo)}</span></button>` : '';
+}
+
+function renderPainelExterno(f) {
+  const topo = $('#painel .painel-capa');
+  if (!topo || topo.dataset.id !== f.id) {
+    $('#painel-conteudo').innerHTML = `
+      <button class="redondo painel-fechar" data-p="fechar" aria-label="Fechar" title="Fechar (Esc)">${icone('X')}</button>
+      ${botaoVoltarPainelHTML()}
+      <div class="painel-capa" data-id="${f.id}">
+        <div class="painel-fundo-video"><div class="destaque-fundo-capa"></div></div>
+        <div class="painel-sombra"></div>
+        <button class="btn-redondo painel-som" data-p="som" title="${tituloSom()}" aria-label="${tituloSom()}" hidden>${iconeSom()}</button>
+        <div class="painel-cabecalho">
+          <div class="destaque-identidade">
+            <div class="destaque-poster painel-poster-externo">${capaHTML(f, { tamanho: 'grande' })}</div>
+            <div class="destaque-titulo">${tituloHTML(f)}</div>
+          </div>
+          <div class="painel-botoes">
+            <button class="btn btn-assistir" data-p="externo-adicionar">${icone('Plus')} Adicionar à lista</button>
+            <button class="redondo" data-p="externo-letterboxd" title="Abrir no Letterboxd" aria-label="Abrir no Letterboxd">${LB_PONTOS}</button>
+            ${f.trailerId && f.trailerId !== 'nenhum' ? `<button class="redondo" data-p="trailer" title="Ver o trailer em tela cheia" aria-label="Ver o trailer em tela cheia">${icone('Maximize')}</button>` : ''}
+          </div>
+        </div>
+      </div>
+      <div id="painel-resto"></div>`;
+    fundoDesfocado($('.painel-capa'), f);
+    carregarTrailerPainel(f);
+  }
+  const info = f.info || {};
+  const elenco = info.elenco ? info.elenco.split(',').slice(0, 4).map((n) => n.trim()).join(', ') : '';
+  $('#painel-resto').innerHTML = `
+    <div class="painel-corpo">
+      <div>
+        <p class="painel-meta">${painelMetaHTML(f)}</p>
+        <p class="painel-externo-aviso">${icone('Info')} Este filme não está na sua lista.</p>
+        <div class="notas-linha">${notasHTML(info)}</div>
+        ${info.sinopse ? `<p class="painel-sinopse">${esc(info.sinopse)}</p>` : ''}
+      </div>
+      <div class="painel-fichas">
+        ${f.diretor ? `<p class="painel-ficha"><b>Direção:</b> <span>${esc(f.diretor)}</span></p>` : ''}
+        ${paisesDe(f).length ? `<p class="painel-ficha"><b>País:</b> <span>${paisesHTML(f)}</span></p>` : ''}
+        ${elenco ? `<p class="painel-ficha"><b>Elenco:</b> <span>${esc(elenco)}</span></p>` : ''}
+        ${generos(info).length ? `<p class="painel-ficha"><b>Gêneros:</b> <span>${esc(generos(info).join(', '))}</span></p>` : ''}
+      </div>
+    </div>
+    <div id="painel-relacionados"></div>`;
+  carregarRelacionados(f);
+}
+
+async function adicionarExterno(f, botao) {
+  if (!f || !f.externo) return;
+  botao.disabled = true;
+  const repetido = await api.acharRepetido({ tmdbId: f.tmdbId, imdbID: f.imdbID, titulo: f.titulo, ano: f.ano });
+  if (repetido) { abrirPainel(repetido.id, { voltarPara: estado.painelAnterior }); aviso(`“${repetido.titulo}” já estava na sua lista.`); return; }
+  const novo = await api.adicionarFilme({ titulo: f.titulo, ano: f.ano, diretor: f.diretor, imdbID: f.imdbID, tmdbId: f.tmdbId, poster: f.poster });
+  novo.tmdbId = f.tmdbId;
+  estado.filmes.push(novo);
+  filmesExternos.delete(f.id);
+  render();
+  abrirPainel(novo.id, { voltarPara: estado.painelAnterior });
+  aviso(`“${novo.titulo}” foi adicionado à lista.`, { tipo: 'ok' });
 }
 
 // ---------- Sua nota (estrelas) ----------
@@ -1119,9 +1216,12 @@ $('#painel').addEventListener('click', async (e) => {
       break;
     }
     case 'rel-abrir':
-      if (b.dataset.meu) abrirPainel(b.dataset.meu);
-      else window.open(`https://letterboxd.com/tmdb/${b.dataset.tmdb}/`);
+      if (b.dataset.meu) abrirPainel(b.dataset.meu, { voltarPara: id });
+      else abrirFilmeExterno(b.dataset.tmdb, { voltarPara: id });
       break;
+    case 'voltar': if (estado.painelAnterior) abrirPainel(estado.painelAnterior); break;
+    case 'externo-adicionar': adicionarExterno(porId(id), b); break;
+    case 'externo-letterboxd': window.open(`https://letterboxd.com/tmdb/${porId(id).tmdbId}/`); break;
     case 'mesmo-diretor': filtrarDiretor(porId(id).diretor); break;
     case 'pais': filtrarPais(b.dataset.pais); break;
     case 'diretor-letterboxd': {
@@ -1206,28 +1306,40 @@ document.addEventListener('drop', (e) => {
   usarArquivoCapa(alvo.id, api.caminhoDoArquivo(arquivo));
 });
 
+// Tira o filme da lista na hora, sem perguntar: o aviso tem "Desfazer", que o
+// devolve no mesmo lugar (o processo principal guarda o filme até o app fechar).
 async function excluir(id) {
   const f = porId(id);
-  const ok = await perguntar({
-    titulo: 'Excluir filme',
-    texto: `Excluir “${f.titulo}” da lista? Isso não pode ser desfeito (mas há backups automáticos).`,
-    botoes: [
-      { rotulo: 'Cancelar', valor: false, classe: 'btn-fantasma' },
-      { rotulo: 'Excluir', valor: true, classe: 'btn-perigo' },
-    ],
-  });
-  if (!ok) return;
+  if (!f) return;
+  const indice = estado.filmes.indexOf(f);
   await api.excluirFilme(id);
   estado.filmes = estado.filmes.filter((x) => x.id !== id);
   cacheCartoes.delete(id);
   cacheFileira.delete(id);
-  fecharPainel();
+  if (estado.painelId === id) fecharPainel();
+  if (previaId === id) fecharPrevia(false);
   const noDestaque = filmeNoDestaque() === id;
   estado.historico = estado.historico.filter((x) => x !== id);
   estado.indiceDestaque = Math.min(estado.indiceDestaque, estado.historico.length - 1);
-  if (noDestaque) mostrarDestaque();
+  if (noDestaque) { if (estado.historico.length) mostrarDestaque(); else sortear({ rolar: false, avisarSeVazio: false }); }
   render();
-  aviso(`“${f.titulo}” foi excluído.`);
+  if (!calendario.hidden) renderCalendario();
+  if (!tierlist.hidden) renderTierlist();
+  aviso(`“${f.titulo}” foi removido da lista.`, {
+    duracao: 8000,
+    acao: {
+      rotulo: 'Desfazer',
+      fn: async () => {
+        const volta = await api.restaurarFilme(id);
+        if (!volta || porId(id)) return;
+        estado.filmes.splice(Math.min(indice, estado.filmes.length), 0, volta);
+        render();
+        if (!calendario.hidden) renderCalendario();
+        if (!tierlist.hidden) renderTierlist();
+        aviso(`“${f.titulo}” voltou para a lista.`, { tipo: 'ok' });
+      },
+    },
+  });
 }
 
 // ---------- Modais ----------
@@ -1519,6 +1631,8 @@ window.addEventListener('message', (e) => {
 // quando o mouse chega na capa, antes de abrir.
 const buscasTrailer = new Map();
 function trailerDe(id) {
+  const ext = filmesExternos.get(id);
+  if (ext) return Promise.resolve(ext.trailerId && ext.trailerId !== 'nenhum' ? ext.trailerId : null);
   if (!buscasTrailer.has(id)) {
     buscasTrailer.set(id, api.obterTrailer(id).then((videoId) => {
       const f = porId(id);
@@ -1749,7 +1863,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
 
   abrirModal(`${cabecalhoModal('Filtros do sorteio')}
     <div class="modal-corpo filtros-sorteio">
-      ${paraHoje ? '' : secao('Sortear de', 'origem')}
+      ${secao('Sortear de', 'origem')}
       ${secao('Quanto tempo você tem?', 'duracao')}
       ${generosTodos.length ? secao('Gêneros', 'generos') : ''}
       ${decadasTodas.length ? secao('Década', 'decadas') : ''}
@@ -1763,14 +1877,14 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
 
   const desenhar = () => {
     const html = {
-      origem: chip('origem', 'tela', 'Não vistos da lista', !fs.soWatchlist) + chip('origem', 'watchlist', 'Só da watchlist de hoje', fs.soWatchlist, idsWatchlist(hoje()).length || ''),
+      origem: chip('origem', 'tela', paraHoje ? 'Filmes fora da watchlist' : 'Não vistos da lista', !fs.soWatchlist) + chip('origem', 'watchlist', paraHoje ? 'Um da watchlist de hoje' : 'Só da watchlist de hoje', fs.soWatchlist, idsWatchlist(hoje()).length || ''),
       duracao: DURACOES.map((m) => chip('duracao', m, m ? `Até ${duracaoLegivel(m)}` : 'Qualquer duração', fs.duracao === m)).join(''),
       generos: generosTodos.map(([g, n]) => chip('generos', g, g, fs.generos.includes(g), n)).join(''),
       decadas: decadasTodas.map(([d, n]) => chip('decadas', d, `Anos ${d < 2000 ? String(d).slice(2) : d}`, fs.decadas.includes(d), n)).join(''),
       paises: paisesTodos.map(([p, n]) => chip('paises', p, p, fs.paises.includes(p), n)).join(''),
     };
     for (const [nome, h] of Object.entries(html)) { const el = $(`[data-secao="${nome}"]`, modal); if (el) el.innerHTML = h; }
-    const n = candidatosSorteio(fs, { paraHoje }).length;
+    const n = candidatosSorteio(fs, { paraHoje: paraHoje && !fs.soWatchlist }).length;
     $('#filtros-contagem', modal).textContent = n === 1 ? '1 filme pode ser sorteado' : `${n} filmes podem ser sorteados`;
     $('#filtros-sortear', modal).disabled = !n;
     $('#filtros-limpar', modal).disabled = !filtrosSorteioAtivos(fs);
@@ -2052,6 +2166,7 @@ function previaHTML(f) {
         <button class="redondo${f.favorito ? ' fav-on' : ''}" data-v="favorito" title="${f.favorito ? 'Tirar dos favoritos' : 'Favoritar'}" aria-label="Favorito">${icone('Star')}</button>
         <button class="redondo${naWatchlist(f.id) ? ' hoje-on' : ''}" data-v="hoje" title="${tituloHoje(naWatchlist(f.id))}" aria-label="${tituloHoje(naWatchlist(f.id))}">${icone('CalendarClock')}</button>
         <button class="redondo" data-v="letterboxd" title="Letterboxd">${LB_PONTOS}</button>
+        <button class="redondo previa-remover" data-v="remover" title="Remover da lista" aria-label="Remover da lista">${icone('Trash2')}</button>
         <span class="espaco"></span>
         <button class="redondo" data-v="detalhes" title="Mais informações">${ICONE_MAIS_INFO}</button>
       </div>
@@ -2153,6 +2268,7 @@ previa.addEventListener('click', async (e) => {
     case 'stremio': abrirStremio(id); break;
     case 'letterboxd': abrirLetterboxd(id); break;
     case 'detalhes': fecharPrevia(false); abrirPainel(id); break;
+    case 'remover': excluir(id); break;
     case 'visto':
     case 'favorito': {
       const campo = b.dataset.v;
@@ -2708,6 +2824,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape' && !modal.open && !tierlist.hidden) {
     if ($('#tierlist .tl-paleta')) { fecharPaletaTier(); return; }
+    if ($('#tierlist .tl-menu')) { fecharMenuTl(); return; }
     fecharTierlist();
     return;
   }
@@ -3067,12 +3184,18 @@ function paginaDiaHTML(dia) {
 // sorteado, que entra na watchlist; com "reduzir movimento", vai direto.
 let sorteandoHoje = false;
 
-// `comFiltro`: só entre os que passam nos filtros do sorteio (duração, gênero, década, país).
+// `comFiltro`: só entre os que passam nos filtros do sorteio (duração, gênero,
+// década, país). Com "Um da watchlist de hoje", sorteia entre os que já estão
+// nela: o escolhido vai para o primeiro lugar da lista, em vez de entrar nela.
 async function sortearParaHoje(botao, { comFiltro = false } = {}) {
   if (sorteandoHoje) return;
-  const candidatos = candidatosSorteio(comFiltro ? filtrosSorteio() : FILTROS_SORTEIO_VAZIOS, { paraHoje: true });
+  const fs = comFiltro ? filtrosSorteio() : FILTROS_SORTEIO_VAZIOS;
+  const daWatchlist = Boolean(comFiltro && fs.soWatchlist);
+  const candidatos = candidatosSorteio(fs, { paraHoje: !daWatchlist });
   if (!candidatos.length) {
-    if (comFiltro) aviso('Nenhum filme não visto passa nos filtros do sorteio.', { acao: { rotulo: 'Ajustar filtros', fn: () => abrirFiltrosSorteio({ paraHoje: true, botao }) } });
+    const ajustar = { rotulo: 'Ajustar filtros', fn: () => abrirFiltrosSorteio({ paraHoje: true, botao }) };
+    if (daWatchlist) aviso('Nenhum filme da watchlist de hoje passa nos filtros.', { acao: ajustar });
+    else if (comFiltro) aviso('Nenhum filme não visto passa nos filtros do sorteio.', { acao: ajustar });
     else aviso('Não sobrou nenhum filme não visto para sortear.');
     return;
   }
@@ -3086,16 +3209,17 @@ async function sortearParaHoje(botao, { comFiltro = false } = {}) {
   } finally {
     sorteandoHoje = false;
   }
-  salvarWatchlist([...idsWatchlist(), escolhido.id]);
+  const antes = idsWatchlist();
+  salvarWatchlist(daWatchlist ? [escolhido.id, ...antes.filter((x) => x !== escolhido.id)] : [...antes, escolhido.id]);
   aposMudarDia(escolhido.id);
   const cartao = $(`#calendario [data-secao="watchlist"] .cal-filme[data-id="${escolhido.id}"]`);
   if (cartao) {
     cartao.scrollIntoView({ block: 'nearest' });
     Movimento.animar(cartao, [{ transform: 'scale(.94)', opacity: 0.6 }, { transform: 'scale(1.03)', opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 520 });
   }
-  aviso(`Sorteado para hoje: “${escolhido.titulo}”.`, {
+  aviso(daWatchlist ? `Da sua watchlist, hoje é: “${escolhido.titulo}”.` : `Sorteado para hoje: “${escolhido.titulo}”.`, {
     tipo: 'ok',
-    acao: { rotulo: 'Desfazer', fn: () => tirarDaWatchlist(escolhido.id, hoje()) },
+    acao: { rotulo: 'Desfazer', fn: () => { salvarWatchlist(antes); aposMudarDia(escolhido.id); } },
   });
 }
 
@@ -3198,6 +3322,65 @@ function terminarArrasto() {
 
 calendario.addEventListener('dragstart', (e) => e.preventDefault());
 
+// Na página de um dia, arrastar a capa de um filme da watchlist muda a ordem:
+// o cartão vai andando entre os outros (que escorregam para abrir espaço) e,
+// ao soltar, a ordem da tela vira a ordem da watchlist daquele dia.
+let reordenacao = null; // { cartao, grade, dia, x0, y0, ativo, fantasma }
+
+calendario.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || !diaCalendario) return;
+  const capa = e.target.closest('[data-secao="watchlist"] .cal-filme .cal-capa');
+  if (!capa || capa.closest('.cal-roleta')) return;
+  const cartao = capa.closest('.cal-filme');
+  reordenacao = { cartao, grade: cartao.parentElement, dia: diaCalendario, x0: e.clientX, y0: e.clientY, ativo: false };
+});
+
+document.addEventListener('pointermove', (e) => {
+  if (!reordenacao) return;
+  const r = reordenacao;
+  if (!r.ativo) {
+    if (Math.hypot(e.clientX - r.x0, e.clientY - r.y0) < 5) return;
+    r.ativo = true;
+    r.fantasma = document.createElement('div');
+    r.fantasma.className = 'cal-fantasma cal-fantasma-grande';
+    r.fantasma.innerHTML = capaHTML(porId(r.cartao.dataset.id));
+    document.body.append(r.fantasma);
+    r.cartao.classList.add('reordenando');
+    calendario.classList.add('arrastando');
+  }
+  e.preventDefault();
+  r.fantasma.style.transform = `translate(${e.clientX - 50}px, ${e.clientY - 75}px) rotate(-3deg)`;
+  // Antes ou depois do cartão mais perto do ponteiro (pelo layout, não pela animação).
+  const outros = $$('.cal-filme', r.grade).filter((c) => c !== r.cartao);
+  let perto = null;
+  let menor = Infinity;
+  for (const c of outros) {
+    const p = centroNoLayout(c, r.grade);
+    const d = Math.hypot(e.clientX - p.x, e.clientY - p.y);
+    if (d < menor) { menor = d; perto = c; }
+  }
+  if (!perto) return;
+  const antes = e.clientX < centroNoLayout(perto, r.grade).x;
+  if (antes && perto.previousElementSibling !== r.cartao) escorregar($$('.cal-filme', r.grade), () => perto.before(r.cartao));
+  else if (!antes && perto.nextElementSibling !== r.cartao) escorregar($$('.cal-filme', r.grade), () => perto.after(r.cartao));
+});
+
+function terminarReordenacao() {
+  const r = reordenacao;
+  reordenacao = null;
+  if (!r || !r.ativo) return;
+  r.fantasma.remove();
+  r.cartao.classList.remove('reordenando');
+  calendario.classList.remove('arrastando');
+  ignorarClique = true;
+  setTimeout(() => { ignorarClique = false; }, 0);
+  const ordem = $$('.cal-filme', r.grade).map((c) => c.dataset.id);
+  const atual = idsWatchlist(r.dia);
+  if (ordem.join() !== atual.join()) salvarWatchlist([...ordem, ...atual.filter((id) => !ordem.includes(id))], r.dia);
+}
+document.addEventListener('pointerup', terminarReordenacao);
+document.addEventListener('pointercancel', terminarReordenacao);
+
 calendario.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;
   const capa = e.target.closest('[data-arrastar]');
@@ -3298,21 +3481,50 @@ setInterval(() => {
 // ---------- Tierlist ----------
 
 // Os filmes vistos, arrastados para tiers (várias por filme não; vários filmes por
-// tier sim). Guardada nas configurações como [{ id, nome, cor, filmes: [ids] }],
-// na ordem de cima para baixo. O que não está em nenhuma tier fica na bandeja
-// "Sem tier", embaixo. Clicar no nome da tier renomeia.
+// tier sim). Pode haver várias tierlists, cada uma com nome ("Terror",
+// "Melhores de 2026"…) e os seus próprios filtros, guardadas nas configurações
+// como tierlists: [{ id, nome, filtros, tiers: [{ id, nome, cor, filmes: [ids] }] }]
+// (tiers de cima para baixo) e tierlistAtiva. O que não está em nenhuma tier
+// fica na bandeja "Sem tier", embaixo. Clicar no nome da tier renomeia.
 const CORES_TIER = ['#FF6B6B', '#FF9F5A', '#FFC857', '#F2E55C', '#A8E063', '#5BD69A', '#3DD6D0', '#5AB8FF', '#7B8CFF', '#9B7BDC', '#E57AD8', '#FF7AA8', '#D9DCE1', '#8A8F98'];
 const TIERS_PADRAO = ['S', 'A', 'B', 'C', 'D', 'F'];
 const tierlist = $('#tierlist');
 let buscaTl = '';
 
-function tiers() {
-  if (!Array.isArray(estado.config.tierlist)) {
-    estado.config.tierlist = TIERS_PADRAO.map((nome, i) => ({ id: `t${i}`, nome, cor: CORES_TIER[i], filmes: [] }));
+const tiersPadrao = () => TIERS_PADRAO.map((nome, i) => ({ id: `t${i}`, nome, cor: CORES_TIER[i], filmes: [] }));
+
+// A primeira vez, a tierlist antiga (config.tierlist) vira a primeira da lista.
+function listasTl() {
+  if (!Array.isArray(estado.config.tierlists) || !estado.config.tierlists.length) {
+    const antiga = Array.isArray(estado.config.tierlist) ? estado.config.tierlist : tiersPadrao();
+    estado.config.tierlists = [{ id: 'l1', nome: 'Tierlist', filtros: {}, tiers: antiga }];
   }
-  return estado.config.tierlist;
+  return estado.config.tierlists;
 }
-function salvarTiers() { api.salvarConfig({ tierlist: tiers() }); }
+function listaAtiva() {
+  const listas = listasTl();
+  return listas.find((l) => l.id === estado.config.tierlistAtiva) || listas[0];
+}
+function tiers() { return listaAtiva().tiers; }
+function salvarTiers() { api.salvarConfig({ tierlists: listasTl(), tierlistAtiva: listaAtiva().id }); }
+
+// ---- Filtros da tierlist (gênero, diretor, país, década, mês em que viu) ----
+const FILTROS_TL = [
+  { chave: 'generos', titulo: 'Gênero', valores: (f) => generos(f.info) },
+  { chave: 'diretores', titulo: 'Diretor', valores: (f) => nomesDiretores(f.diretor) },
+  { chave: 'paises', titulo: 'País', valores: (f) => paisesDe(f) },
+  { chave: 'decadas', titulo: 'Década', valores: (f) => { const d = decadaDe(f); return d === null ? [] : [String(d)]; } },
+  { chave: 'meses', titulo: 'Mês em que viu', valores: (f) => [...new Set((f.vistoEm || []).map((d) => d.slice(0, 7)))] },
+];
+const rotuloFiltroTl = (chave, v) => (chave === 'decadas' ? `Anos ${Number(v) < 2000 ? v.slice(2) : v}` : chave === 'meses' ? mesLegivel(v) : v);
+const filtrosTl = () => listaAtiva().filtros || {};
+const qtdFiltrosTl = () => Object.values(filtrosTl()).reduce((n, v) => n + (v || []).length, 0);
+function passaFiltroTl(f, filtros = filtrosTl()) {
+  return FILTROS_TL.every(({ chave, valores }) => {
+    const escolhidos = filtros[chave] || [];
+    return !escolhidos.length || valores(f).some((v) => escolhidos.includes(v));
+  });
+}
 const tierPorId = (id) => tiers().find((t) => t.id === id);
 
 function abrirTierlist() {
@@ -3341,9 +3553,11 @@ function renderTierlist() {
   const caixa = $('#tierlist-caixa');
   // Redesenhar não pode mandar as listas de volta para o topo.
   const rolagem = [...$$('.tl-tiers, .tl-sem', caixa)].map((el) => el.scrollTop);
-  const vistos = estado.filmes.filter((f) => f.visto);
+  const todosVistos = estado.filmes.filter((f) => f.visto);
+  const vistos = todosVistos.filter((f) => passaFiltroTl(f));
   const vistosIds = new Set(vistos.map((f) => f.id));
   const naTier = new Set();
+  const nFiltros = qtdFiltrosTl();
   const linhas = tiers().map((t) => {
     const filmes = t.filmes.filter((id) => vistosIds.has(id) && !naTier.has(id)).map(porId);
     filmes.forEach((f) => naTier.add(f.id));
@@ -3362,8 +3576,9 @@ function renderTierlist() {
   const soltos = vistos.filter((f) => !naTier.has(f.id));
   caixa.innerHTML = `
     <div class="tl-topo">
-      <h2>Tierlist</h2>
-      <span class="cal-stat">${icone('Check')} <b>${naTier.size}</b> de ${vistos.length} ${vistos.length === 1 ? 'filme visto' : 'filmes vistos'} classificados</span>
+      <button class="tl-titulo" data-t="listas" title="Trocar de tierlist, criar outra ou renomear" aria-haspopup="menu"><h2>${esc(listaAtiva().nome || 'Tierlist')}</h2>${icone('ChevronDown')}</button>
+      <span class="cal-stat">${icone('Check')} <b>${naTier.size}</b> de ${vistos.length} ${vistos.length === 1 ? 'filme visto' : 'filmes vistos'}${nFiltros ? ' (com filtro)' : ''} classificados</span>
+      <button class="btn btn-fantasma tl-filtros${nFiltros ? ' ativo' : ''}" data-t="filtros" aria-haspopup="dialog">${icone('SlidersHorizontal')} ${nFiltros ? `Filtros (${nFiltros})` : 'Filtros'}</button>
       <button class="btn btn-fantasma tl-nova" data-t="nova">${icone('Plus')} Nova tier</button>
       <button class="redondo tl-fechar" data-t="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
     </div>
@@ -3375,7 +3590,7 @@ function renderTierlist() {
       </div>
       <div class="tl-filmes tl-sem" data-soltar="">${soltos.map((f) => capaTlHTML(f).replace('class="tl-capa"',
         `class="tl-capa"${termo && !normalizar(`${f.titulo} ${f.ano} ${f.diretor || ''}`).includes(termo) ? ' hidden' : ''}`)).join('')}</div>
-      ${vistos.length ? '' : '<p class="tl-nenhuma">Os filmes que você marcar como vistos aparecem aqui.</p>'}
+      ${vistos.length ? '' : `<p class="tl-nenhuma">${nFiltros && todosVistos.length ? 'Nenhum filme visto passa nos filtros desta tierlist.' : 'Os filmes que você marcar como vistos aparecem aqui.'}</p>`}
     </div>`;
   ajustarTamanhoTl();
   [...$$('.tl-tiers, .tl-sem', caixa)].forEach((el, i) => { el.scrollTop = rolagem[i] || 0; });
@@ -3449,6 +3664,8 @@ tierlist.addEventListener('click', (e) => {
   const t = alvo.closest('.tl-tier') && tierPorId(alvo.closest('.tl-tier').dataset.tier);
   switch (alvo.dataset.t) {
     case 'fechar': fecharTierlist(); break;
+    case 'listas': abrirMenuListas(alvo); break;
+    case 'filtros': abrirFiltrosTl(alvo); break;
     case 'renomear': renomearTier(alvo); break;
     case 'cor': abrirPaletaTier(alvo, t); break;
     case 'apagar': {
@@ -3521,7 +3738,156 @@ function abrirPaletaTier(botao, t) {
 }
 tierlist.addEventListener('pointerdown', (e) => {
   if (!e.target.closest('.tl-paleta, [data-t="cor"]')) fecharPaletaTier();
+  if (!e.target.closest('.tl-menu, [data-t="listas"], [data-t="filtros"]')) fecharMenuTl();
 }, true);
+
+// Menus que abrem embaixo de um botão do topo da tierlist.
+function fecharMenuTl() { $('#tierlist .tl-menu')?.remove(); }
+function abrirMenuTl(botao, html, classe = '') {
+  const jaAberto = $('#tierlist .tl-menu')?.dataset.de === botao.dataset.t;
+  fecharMenuTl();
+  if (jaAberto) return null;
+  const menu = document.createElement('div');
+  menu.className = `tl-menu ${classe}`;
+  menu.dataset.de = botao.dataset.t;
+  menu.innerHTML = html;
+  const caixa = $('#tierlist-caixa');
+  caixa.append(menu);
+  const rc = caixa.getBoundingClientRect();
+  const rb = botao.getBoundingClientRect();
+  menu.style.top = `${rb.bottom - rc.top + caixa.scrollTop + 8}px`;
+  menu.style.left = `${Math.max(12, Math.min(rb.left - rc.left, rc.width - menu.offsetWidth - 12))}px`;
+  Movimento.animar(menu, [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 160 });
+  return menu;
+}
+
+// Trocar de tierlist, criar uma nova, renomear ou apagar a atual.
+function abrirMenuListas(botao) {
+  const listas = listasTl();
+  const ativa = listaAtiva();
+  const classificados = (l) => new Set(l.tiers.flatMap((x) => x.filmes).filter((id) => porId(id)?.visto)).size;
+  const menu = abrirMenuTl(botao, `
+    <div class="tl-menu-itens" role="menu">${listas.map((l) => `
+      <button class="tl-menu-item${l === ativa ? ' atual' : ''}" role="menuitemradio" aria-checked="${l === ativa}" data-lista="${l.id}">
+        <span class="tl-menu-check">${l === ativa ? icone('Check') : ''}</span><span class="tl-menu-nome">${esc(l.nome || 'Tierlist')}</span><span class="tl-menu-qtd">${classificados(l)}</span>
+      </button>`).join('')}</div>
+    <div class="tl-menu-sep"></div>
+    <button class="tl-menu-item" data-acao="nova">${icone('Plus')} Nova tierlist</button>
+    <button class="tl-menu-item" data-acao="renomear">${icone('Pencil')} Renomear “${esc(ativa.nome || 'Tierlist')}”</button>
+    ${listas.length > 1 ? `<button class="tl-menu-item perigo" data-acao="apagar">${icone('Trash2')} Apagar esta tierlist</button>` : ''}`, 'tl-menu-listas');
+  if (!menu) return;
+  menu.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    fecharMenuTl();
+    if (b.dataset.lista) { trocarTierlist(b.dataset.lista); return; }
+    if (b.dataset.acao === 'nova') {
+      const nova = { id: `l${Date.now().toString(36)}`, nome: 'Nova tierlist', filtros: {}, tiers: tiersPadrao() };
+      listas.push(nova);
+      trocarTierlist(nova.id);
+      renomearTierlist();
+    }
+    if (b.dataset.acao === 'renomear') renomearTierlist();
+    if (b.dataset.acao === 'apagar') {
+      const i = listas.indexOf(ativa);
+      listas.splice(i, 1);
+      trocarTierlist(listas[Math.max(0, i - 1)].id);
+      aviso(`Tierlist “${ativa.nome}” apagada.`, { duracao: 8000, acao: { rotulo: 'Desfazer', fn: () => { listasTl().splice(i, 0, ativa); trocarTierlist(ativa.id); } } });
+    }
+  });
+}
+
+function trocarTierlist(id) {
+  estado.config.tierlistAtiva = id;
+  salvarTiers();
+  if (tierlist.hidden) return;
+  renderTierlist();
+  Movimento.sequencia($$('#tierlist .tl-tier'), { x: -10, duracao: 300, passo: 30 });
+}
+
+// O nome da tierlist vira um campo no lugar do título; Enter salva, Esc cancela.
+function renomearTierlist() {
+  const titulo = $('#tierlist .tl-titulo');
+  if (!titulo) return;
+  const lista = listaAtiva();
+  const campo = document.createElement('input');
+  campo.className = 'tl-titulo-campo';
+  campo.value = lista.nome || '';
+  campo.maxLength = 60;
+  campo.placeholder = 'Nome da tierlist (ex.: Terror, Melhores de 2026)';
+  campo.setAttribute('aria-label', 'Nome da tierlist');
+  titulo.replaceWith(campo);
+  campo.focus();
+  campo.select();
+  let feito = false;
+  const terminar = (salvar) => {
+    if (feito) return;
+    feito = true;
+    if (salvar && campo.value.trim()) { lista.nome = campo.value.trim(); salvarTiers(); }
+    renderTierlist();
+  };
+  campo.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') terminar(true);
+    if (e.key === 'Escape') terminar(false);
+  });
+  campo.addEventListener('blur', () => terminar(true));
+}
+
+// Filtros desta tierlist: gênero, diretor, país, década e mês em que viu. Ficam
+// salvos com a tierlist (uma tierlist "Terror" pode guardar o filtro de terror).
+function abrirFiltrosTl(botao) {
+  const vistos = estado.filmes.filter((f) => f.visto);
+  const grupos = FILTROS_TL.map(({ chave, titulo, valores }) => {
+    const contagem = new Map();
+    for (const f of vistos) for (const v of valores(f)) contagem.set(v, (contagem.get(v) || 0) + 1);
+    let itens = [...contagem];
+    itens = chave === 'meses' || chave === 'decadas' ? itens.sort((a, b) => b[0].localeCompare(a[0])) : itens.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt'));
+    if (chave === 'decadas') itens.reverse();
+    return { chave, titulo, itens };
+  }).filter((g) => g.itens.length);
+  const desenhar = (menu) => {
+    const filtros = filtrosTl();
+    $('.tl-filtros-grupos', menu).innerHTML = grupos.map((g) => `
+      <div class="tl-filtros-grupo">
+        <h4>${g.titulo}</h4>
+        <div class="chips-linha${g.itens.length > 14 ? ' chips-rolam' : ''}">${g.itens.map(([v, n]) => {
+          const ativo = (filtros[g.chave] || []).includes(v);
+          return `<button class="chip${ativo ? ' ativo' : ''}" data-grupo="${g.chave}" data-valor="${esc(v)}" aria-pressed="${ativo}">${esc(rotuloFiltroTl(g.chave, v))}<span class="chip-qtd">${n}</span></button>`;
+        }).join('')}</div>
+      </div>`).join('');
+    const n = vistos.filter((f) => passaFiltroTl(f)).length;
+    $('.tl-filtros-contagem', menu).textContent = n === 1 ? '1 filme visto aparece' : `${n} filmes vistos aparecem`;
+    $('[data-acao="limpar"]', menu).disabled = !qtdFiltrosTl();
+  };
+  const menu = abrirMenuTl(botao, `
+    <div class="tl-filtros-grupos"></div>
+    <div class="tl-filtros-rodape">
+      <span class="tl-filtros-contagem"></span>
+      <button class="btn btn-fantasma" data-acao="limpar">Limpar filtros</button>
+    </div>`, 'tl-menu-filtros');
+  if (!menu) return;
+  desenhar(menu);
+  menu.addEventListener('click', (e) => {
+    const lista = listaAtiva();
+    const chip = e.target.closest('[data-grupo]');
+    if (e.target.closest('[data-acao="limpar"]')) lista.filtros = {};
+    else if (chip) {
+      const { grupo, valor } = chip.dataset;
+      const atuais = (lista.filtros && lista.filtros[grupo]) || [];
+      lista.filtros = { ...(lista.filtros || {}), [grupo]: atuais.includes(valor) ? atuais.filter((x) => x !== valor) : [...atuais, valor] };
+    } else return;
+    salvarTiers();
+    // Redesenha a tierlist por baixo e mantém o menu aberto, no mesmo lugar.
+    const { top, left } = menu.style;
+    const rolagemMenu = $('.tl-filtros-grupos', menu).scrollTop;
+    renderTierlist();
+    $('#tierlist-caixa').append(menu);
+    Object.assign(menu.style, { top, left });
+    desenhar(menu);
+    $('.tl-filtros-grupos', menu).scrollTop = rolagemMenu;
+  });
+}
 
 tierlist.addEventListener('input', (e) => {
   if (!e.target.matches('.tl-busca input')) return;
@@ -3662,10 +4028,17 @@ document.addEventListener('pointerup', () => {
   // A ordem da tela vira a ordem salva. Filmes que estão numa tier mas não
   // aparecem (desmarcados como vistos) continuam guardados no fim dela.
   const naTela = new Set($$('#tierlist .tl-capa').map((el) => el.dataset.id));
+  // Quem estava na tela deixa uma vaga, preenchida na ordem nova; os escondidos
+  // pelo filtro da tierlist ficam onde estavam.
   for (const t of tiers()) {
     const lista = $(`#tierlist [data-soltar="${t.id}"]`);
-    const ids = lista ? $$('.tl-capa', lista).map((el) => el.dataset.id) : [];
-    t.filmes = [...ids, ...t.filmes.filter((id) => !naTela.has(id) && !ids.includes(id))];
+    const fila = lista ? $$('.tl-capa', lista).map((el) => el.dataset.id) : [];
+    const novo = [];
+    for (const id of t.filmes) {
+      if (!naTela.has(id)) novo.push(id);
+      else if (fila.length) novo.push(fila.shift());
+    }
+    t.filmes = [...novo, ...fila];
   }
   salvarTiers();
   renderTierlist();

@@ -449,7 +449,7 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
   // (watchlistHoje é o formato antigo, de um dia só; o app o apaga ao salvar o novo).
   // filmesDoMes: { 'AAAA-MM': id }, o filme favorito de cada mês (só aparece no calendário).
   // tierlist: [{ id, nome, cor, filmes: [ids] }], as tiers de cima para baixo.
-  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'filtrosSorteio'];
+  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio'];
   for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
   if ('omdbKey' in mudancas) config.limiteAtingidoEm = null;
   gravarConfig();
@@ -490,14 +490,33 @@ ipcMain.handle('filme:adicionar', async (_e, dados) => {
   return filme;
 });
 
+// Excluir guarda o filme numa lixeira até o app fechar, para "Desfazer" poder
+// devolvê-lo no mesmo lugar; a capa só é apagada do disco ao fechar.
+const lixeira = new Map(); // id → { filme, indice }
+
+function apagarCapaSeSobrou(filme) {
+  const arquivo = filme.capaLocal && filme.capaLocal.split('?')[0];
+  if (arquivo && !filmes.some((f) => f.capaLocal && f.capaLocal.split('?')[0] === arquivo)) {
+    try { fs.rmSync(path.join(C.capas, arquivo), { force: true }); } catch { /* fica o arquivo */ }
+  }
+}
+
 ipcMain.handle('filme:excluir', (_e, id) => {
-  const filme = filmes.find((f) => f.id === id);
+  const indice = filmes.findIndex((f) => f.id === id);
+  if (indice < 0) return false;
+  lixeira.set(id, { filme: filmes[indice], indice });
   filmes = filmes.filter((f) => f.id !== id);
   gravarDepois();
-  if (filme && filme.capaLocal && !filmes.some((f) => f.capaLocal && f.capaLocal.split('?')[0] === filme.capaLocal.split('?')[0])) {
-    fs.rm(path.join(C.capas, filme.capaLocal.split('?')[0]), { force: true }, () => {});
-  }
   return true;
+});
+
+ipcMain.handle('filme:restaurar', (_e, id) => {
+  const guardado = lixeira.get(id);
+  if (!guardado) return null;
+  lixeira.delete(id);
+  filmes.splice(Math.min(guardado.indice, filmes.length), 0, guardado.filme);
+  gravarDepois();
+  return guardado.filme;
 });
 
 // Duas formas de trocar: outra capa do mesmo filme (`poster`), ou outro filme
@@ -549,13 +568,15 @@ ipcMain.handle('tmdb:capas', (_e, id) => chamar(() => {
 // Filmografia do diretor e "Mais como este", guardados enquanto o app está aberto.
 const relacionadosCache = new Map();
 ipcMain.handle('tmdb:relacionados', (_e, id) => chamar(async () => {
+  // id de um filme da lista, ou "tmdb-<id>" de um filme aberto de fora da lista.
   const filme = filmes.find((f) => f.id === id);
-  if (!filme || !filme.tmdbId || !config.tmdbKey) return null;
-  if (!relacionadosCache.has(filme.tmdbId)) {
-    relacionadosCache.set(filme.tmdbId, tmdb.relacionados(config.tmdbKey, filme.tmdbId)
-      .catch((e) => { relacionadosCache.delete(filme.tmdbId); throw e; }));
+  const tmdbId = filme ? filme.tmdbId : (String(id).match(/^tmdb-(\d+)$/) || [])[1];
+  if (!tmdbId || !config.tmdbKey) return null;
+  if (!relacionadosCache.has(tmdbId)) {
+    relacionadosCache.set(tmdbId, tmdb.relacionados(config.tmdbKey, tmdbId)
+      .catch((e) => { relacionadosCache.delete(tmdbId); throw e; }));
   }
-  return relacionadosCache.get(filme.tmdbId);
+  return relacionadosCache.get(tmdbId);
 }));
 
 // Confere uma chave nova com uma consulta simples (Um Sonho de Liberdade) antes de salvar.
@@ -938,6 +959,8 @@ if (!travaUnica) {
 
   app.on('before-quit', () => {
     if (timerGravar) gravarAgora();
+    for (const { filme } of lixeira.values()) apagarCapaSeSobrou(filme);
+    lixeira.clear();
   });
   app.on('window-all-closed', () => {
     if (timerGravar) gravarAgora();

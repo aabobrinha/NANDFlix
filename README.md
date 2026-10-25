@@ -18,8 +18,8 @@ O NANDFlix é um app de desktop para catalogar os filmes que você quer ver. Ele
 | Arquivo | O que é |
 |---|---|
 | [`NANDFlix.exe`](NANDFlix.exe) | Versão portátil para Windows: é só abrir, não precisa instalar. |
-| [`dist/NANDFlix-Setup-1.0.5.exe`](dist/NANDFlix-Setup-1.0.5.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
-| [`dist/NANDFlix-1.0.5-portable.exe`](dist/NANDFlix-1.0.5-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
+| [`dist/NANDFlix-Setup-1.0.6.exe`](dist/NANDFlix-Setup-1.0.6.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
+| [`dist/NANDFlix-1.0.6-portable.exe`](dist/NANDFlix-1.0.6-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
 
 Os mesmos arquivos estão na página de [Releases](../../releases).
 
@@ -40,12 +40,15 @@ Os mesmos arquivos estão na página de [Releases](../../releases).
 - Depois de 1 segundo sobre uma capa, ela cresce e vira o trailer, como na Netflix.
 - A prévia traz botões para assistir, marcar visto, favoritar, abrir no Letterboxd e ver detalhes, além de ano, duração, gêneros e notas.
 - Passar pelos botões redondos de cima da capa não dispara o trailer.
+- A lixeira da prévia tira o filme da lista na hora, com **Desfazer** no aviso.
 
 ### Página de detalhes
 - Janela centralizada, com o trailer tocando atrás da capa e do título.
 - Logo do filme, ano, duração, classificação indicativa, notas, sinopse, direção, elenco e gêneros.
 - **Sua nota**: de ½ a 5 estrelas, dada nos detalhes; aparece também na tierlist e na página do dia do calendário.
 - **Outros filmes do diretor** e **Mais como este**: fileiras de capas (com setas nos lados) mostrando o que já está na sua lista e o que você já viu, com **+** para adicionar o que falta.
+- Clicar num filme que não está na lista abre os detalhes dele mesmo assim (logo, trailer, sinopse, elenco e os relacionados dele), com **Adicionar à lista** e um botão para voltar ao filme de onde você veio.
+- **Remover da lista**, com **Desfazer** no aviso.
 - Campos editáveis: título, ano, diretor, notas pessoais, link do Letterboxd, busca da capa e link do trailer (para trocar o que foi achado automaticamente).
 - A partir do diretor: ver os filmes dele na sua lista ou abrir a página dele no Letterboxd.
 - **Trocar capa**: escolher outra capa do mesmo filme no TMDB, buscar o filme certo (se o achado foi outro) ou usar uma imagem sua (também dá para arrastar a imagem para cima da capa).
@@ -67,7 +70,8 @@ Um diário dos filmes que você vê e um planejador do que vai ver, aberto pelo 
 - **Página do dia**: clique num dia para ver as capas grandes, com os vistos centralizados e a watchlist com Assistir, marcar visto ou tirar da lista.
 - **Planeje arrastando**: arraste a capa de um filme da watchlist para outro dia. Hoje ou depois, ele vai para a watchlist daquele dia; antes de hoje, fica registrado como visto nele. Segure sobre as setas ‹ › para trocar de mês sem soltar. Sem arrastar: **Passar para amanhã** e **Trazer para hoje** na página do dia.
 - **Filme do mês**: escolha o seu favorito entre os filmes vistos em cada mês, pelo botão dourado no topo do mês ou por **Marcar como filme do mês** na página do dia. Ele aparece no topo com um troféu, e a capa dele vai para a frente no dia em que foi visto, com aro dourado.
-- **Sortear com filtro** na página de hoje: a roleta de capas só com os filmes que passam nos filtros do sorteio.
+- **Sortear com filtro** na página de hoje: a roleta de capas só com os filmes que passam nos filtros do sorteio, entre os que estão fora da watchlist (o escolhido entra nela) ou entre os que já estão nela (o escolhido vai para o primeiro lugar).
+- Na página de um dia, a watchlist mostra cinco filmes por linha, e **arrastar uma capa muda a ordem** deles.
 - Na página de um dia, os filmes vistos mostram a sua nota.
 - O calendário começa no mês do filme visto mais antigo (inclusive as datas importadas do Letterboxd).
 - O dia vira às 5h da manhã: um filme visto de madrugada conta para a noite anterior.
@@ -76,6 +80,8 @@ Um diário dos filmes que você vê e um planejador do que vai ver, aberto pelo 
 ### Tierlist
 Uma tierlist dos filmes que você já viu, aberta pelo botão de medalha ao lado do calendário.
 
+- **Várias tierlists**: o título abre o menu para trocar de tierlist, criar uma nova, renomear (ex.: "Terror", "Melhores de 2026") ou apagar.
+- **Filtros** por gênero, diretor, país, década e mês em que você viu, salvos em cada tierlist. Reorganizar os filmes visíveis não mexe na posição dos que o filtro esconde.
 - Começa com as tiers **S, A, B, C, D e F**; os filmes vistos que ainda não estão em nenhuma ficam na bandeja **Sem tier**, embaixo, com um campo para filtrar.
 - **Arraste as capas** para as tiers, entre elas ou de volta para a bandeja. As outras capas abrem espaço deslizando, e a ordem dentro de cada tier fica salva.
 - **Clique no nome** de uma tier para renomeá-la; a fonte diminui sozinha para nomes longos caberem.
