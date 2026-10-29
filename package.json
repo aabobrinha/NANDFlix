@@ -1,7 +1,7 @@
 {
   "name": "nandflix",
   "productName": "NANDFlix",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Catálogo de filmes com cara de streaming: capas, trailers, sorteio e atalhos para assistir no Stremio e registrar no Letterboxd.",
   "author": "aabobrinha",
   "main": "main.js",
@@ -58,6 +58,7 @@
   },
   "dependencies": {
     "@fontsource/montserrat": "^5.3.0",
+    "@supabase/supabase-js": "^2.118.0",
     "electron-updater": "^6.8.11",
     "lucide": "^1.60.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"

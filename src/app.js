@@ -2479,6 +2479,10 @@ function abrirConfiguracoes() {
         </div>
         <p>Tudo é salvo automaticamente. O backup exportado leva também watchlists, tierlists e listas.</p>
       </div>
+      <div class="secao" id="cfg-nuvem" hidden>
+        <h3>Nuvem (para usar no celular)</h3>
+        <div id="cfg-nuvem-corpo"></div>
+      </div>
       <div class="secao" id="cfg-backup-auto">
         <h3>Backup automático</h3>
         <p class="cfg-backup-status" id="cfg-backup-status">Carregando…</p>
@@ -2523,6 +2527,7 @@ function abrirConfiguracoes() {
   };
   $('#cfg-backup-imp', modal).onclick = importarBackup;
   mostrarStatusBackup();
+  mostrarNuvem();
   $('#cfg-backup-pasta', modal).onclick = async () => {
     const r = await api.escolherPastaBackup();
     if (r.cancelado) return;
@@ -2624,6 +2629,117 @@ async function importarLetterboxd() {
     <div class="modal-rodape">${r.datas ? '<button class="btn btn-fantasma" id="lb-calendario">Ver no calendário</button>' : ''}<button class="btn btn-laranja" data-fechar>OK</button></div>`);
   $('#lb-calendario', modal)?.addEventListener('click', () => { fecharModal(); abrirCalendario(`${r.primeiroDia}`); });
 }
+
+// ---------- Nuvem: conta e sincronia com o celular ----------
+
+function statusNuvemTexto(st) {
+  if (st.fase === 'sincronizando') return st.total ? `Sincronizando… ${st.enviados} de ${st.total}` : 'Sincronizando…';
+  if (st.fase === 'erro') return `Não deu para sincronizar: ${st.erro}`;
+  if (st.em) return `Em dia · sincronizado ${quandoLegivel(st.em)}`;
+  return 'Conectando…';
+}
+
+async function mostrarNuvem(st) {
+  const secao = $('#cfg-nuvem', modal);
+  if (!secao) return;
+  st = st || await api.statusNuvem();
+  if (!modal.open || !$('#cfg-nuvem', modal)) return;
+  if (st.indisponivel) return;
+  secao.hidden = false;
+  const corpo = $('#cfg-nuvem-corpo', modal);
+  if (st.conta) {
+    // Só atualiza o texto se já estiver mostrando a conta (não perde o foco dos botões).
+    const linha = $('#cfg-nuvem-status', modal);
+    if (linha && corpo.dataset.conta === st.conta) {
+      linha.textContent = statusNuvemTexto(st);
+      linha.classList.toggle('erro', st.fase === 'erro');
+      return;
+    }
+    corpo.dataset.conta = st.conta;
+    corpo.innerHTML = `
+      <p>${icone('CloudCheck')}<span>Conectado como <b>${esc(st.conta)}</b>. Filmes, notas, páginas, watchlists, tierlists, listas e as chaves das APIs ficam iguais em todos os aparelhos com esta conta.</span></p>
+      <p class="cfg-nuvem-status${st.fase === 'erro' ? ' erro' : ''}" id="cfg-nuvem-status" role="status">${esc(statusNuvemTexto(st))}</p>
+      <div class="linha-botoes">
+        <button class="btn" id="cfg-nuvem-agora">${icone('RefreshCw')} Sincronizar agora</button>
+        <button class="btn btn-fantasma" id="cfg-nuvem-sair">Sair da conta</button>
+      </div>`;
+    $('#cfg-nuvem-agora', modal).onclick = async (e) => {
+      e.currentTarget.disabled = true;
+      await api.sincronizarNuvem();
+      const b = $('#cfg-nuvem-agora', modal);
+      if (b) b.disabled = false;
+    };
+    $('#cfg-nuvem-sair', modal).onclick = async () => {
+      const ok = await perguntar({
+        titulo: 'Sair da conta?',
+        texto: 'Seus dados continuam neste computador e na nuvem, só param de sincronizar até você entrar de novo.',
+        botoes: [{ rotulo: 'Cancelar', valor: false, classe: 'btn-fantasma' }, { rotulo: 'Sair', valor: true, classe: 'btn-laranja' }],
+      });
+      if (!ok) return;
+      await api.sairNuvem();
+      abrirConfiguracoes();
+    };
+    return;
+  }
+  delete corpo.dataset.conta;
+  corpo.innerHTML = `
+    <p>Entre com uma conta para ter a mesma lista no celular. Na primeira vez, tudo o que está aqui sobe para a nuvem.</p>
+    <form class="cfg-nuvem-form" id="cfg-nuvem-form">
+      <input type="email" id="cfg-nuvem-email" placeholder="E-mail" autocomplete="username" required>
+      <input type="password" id="cfg-nuvem-senha" placeholder="Senha" title="Pelo menos 6 caracteres" autocomplete="current-password" minlength="6" required>
+      <button class="btn btn-laranja" type="submit" data-acao="entrar">Entrar</button>
+      <button class="btn" type="submit" data-acao="criar">Criar conta</button>
+    </form>
+    <p class="cfg-nuvem-status" id="cfg-nuvem-status" role="status"></p>`;
+  const form = $('#cfg-nuvem-form', modal);
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const criar = e.submitter && e.submitter.dataset.acao === 'criar';
+    const status = $('#cfg-nuvem-status', modal);
+    const botoes = $$('button', form);
+    botoes.forEach((b) => { b.disabled = true; });
+    status.className = 'cfg-nuvem-status carregando';
+    status.textContent = criar ? 'Criando a conta' : 'Entrando';
+    const email = $('#cfg-nuvem-email', modal).value;
+    const senha = $('#cfg-nuvem-senha', modal).value;
+    const r = criar ? await api.criarContaNuvem(email, senha) : await api.entrarNuvem(email, senha);
+    if (!modal.open || !$('#cfg-nuvem-form', modal)) return;
+    botoes.forEach((b) => { b.disabled = false; });
+    if (r.erro) { status.className = 'cfg-nuvem-status erro'; status.textContent = r.erro; return; }
+    if (r.confirmar) {
+      status.className = 'cfg-nuvem-status';
+      status.textContent = 'Conta criada. Abra o e-mail do Supabase e clique no link de confirmação (a página que abre pode dar erro, tudo bem). Depois clique em Entrar.';
+      return;
+    }
+    mostrarNuvem(r);
+  };
+}
+
+api.aoStatusNuvem((st) => {
+  if (modal.open) mostrarNuvem(st);
+});
+
+// Mudanças que chegaram de outro aparelho.
+api.aoMudarNuvem(({ filmes, removidos, config }) => {
+  for (const novo of filmes) {
+    const f = estado.filmes.find((x) => x.id === novo.id);
+    if (f) {
+      for (const k of Object.keys(f)) if (!(k in novo)) delete f[k];
+      Object.assign(f, novo);
+    } else {
+      estado.filmes.push(novo);
+    }
+    cacheCartoes.delete(novo.id);
+  }
+  if (removidos.length) {
+    estado.filmes = estado.filmes.filter((f) => !removidos.includes(f.id));
+    for (const id of removidos) cacheCartoes.delete(id);
+    if (removidos.includes(estado.painelId)) fecharPainel();
+  }
+  if (config) estado.config = config;
+  cacheFileira.clear();
+  agendarRender();
+});
 
 // ---------- Backup automático (um por dia, os 30 últimos) ----------
 
@@ -4575,6 +4691,12 @@ $('#btn-estatisticas').addEventListener('click', () => abrirEstatisticas());
   aplicarVista(dados.config.visualizacao === 'lista' ? 'lista' : 'grade');
   // Já começa com um filme sorteado.
   sortear({ rolar: false, avisarSeVazio: false });
+  // Sem conta conectada, a tela de entrada vem antes de tudo. Ao entrar, os
+  // dados da nuvem (e a chave do TMDB, se estiver lá) chegam em seguida.
+  if (await mostrarEntradaSePreciso(estado.filmes)) {
+    await esperarSincronia();
+    if (estado.filmes.length && filmeNoDestaque() == null) sortear({ rolar: false, avisarSeVazio: false });
+  }
   if (!estado.config.tmdbKey) pedirChaveTmdb();
   else if (estado.filmes.length) buscarCapas({ automatica: true });
 })();

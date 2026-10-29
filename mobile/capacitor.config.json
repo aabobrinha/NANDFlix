@@ -1,0 +1,19 @@
+{
+  "appId": "app.nandflix.celular",
+  "appName": "NANDFlix",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#050608"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    },
+    "CapacitorUpdater": {
+      "autoUpdate": false,
+      "statsUrl": "",
+      "appReadyTimeout": 15000,
+      "resetWhenUpdate": true
+    }
+  }
+}

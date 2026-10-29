@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NANDFlix</string>
+    <string name="title_activity_main">NANDFlix</string>
+    <string name="package_name">app.nandflix.celular</string>
+    <string name="custom_url_scheme">app.nandflix.celular</string>
+</resources>

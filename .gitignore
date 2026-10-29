@@ -11,3 +11,6 @@ dist/*.exe.blockmap
 Thumbs.db
 .vscode/
 *.log
+
+# Configuração da nuvem (URL e chave do seu projeto Supabase): cada um cria a sua
+lib/nuvem.config.json

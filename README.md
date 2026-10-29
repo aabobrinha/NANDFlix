@@ -11,19 +11,37 @@
 
 ---
 
-O NANDFlix é um app de desktop para catalogar os filmes que você quer ver. Ele troca a planilha por uma interface no estilo Netflix: o filme sorteado ocupa o topo com o trailer rodando, as capas viram trailers ao passar o mouse e cada filme tem uma página de detalhes com logo, notas, sinopse, elenco e duração. Na hora de assistir, ele abre o filme direto no Stremio. Ele também guarda o que você viu num calendário, deixa você dar notas, escrever uma página sobre cada filme, montar tierlists, criar stories para o Instagram e ver as suas estatísticas.
+O NANDFlix é um app de desktop para catalogar os filmes que você quer ver. Ele troca a planilha por uma interface no estilo Netflix: o filme sorteado ocupa o topo com o trailer rodando, as capas viram trailers ao passar o mouse e cada filme tem uma página de detalhes com logo, notas, sinopse, elenco e duração. Na hora de assistir, ele abre o filme direto no Stremio. Ele também guarda o que você viu num calendário, deixa você dar notas, escrever uma página sobre cada filme, montar tierlists, criar stories para o Instagram e ver as suas estatísticas. Tem também uma **versão para Android**, que pode ficar igual à do computador pela nuvem.
 
 ## Download
 
 | Arquivo | O que é |
 |---|---|
 | [`NANDFlix.exe`](NANDFlix.exe) | Versão portátil para Windows: é só abrir, não precisa instalar. |
-| [`dist/NANDFlix-Setup-1.0.7.exe`](dist/NANDFlix-Setup-1.0.7.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
-| [`dist/NANDFlix-1.0.7-portable.exe`](dist/NANDFlix-1.0.7-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
+| [`dist/NANDFlix-Setup-1.0.8.exe`](dist/NANDFlix-Setup-1.0.8.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
+| [`dist/NANDFlix-1.0.8-portable.exe`](dist/NANDFlix-1.0.8-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
+
+| [`NANDFlix-Android-1.0.8.apk`](../../releases/latest) | App para Android (na página de Releases). |
 
 Os mesmos arquivos estão na página de [Releases](../../releases).
 
 > O executável não é assinado digitalmente, então o Windows pode mostrar o aviso do SmartScreen na primeira vez. Clique em **Mais informações → Executar assim mesmo**.
+
+## NANDFlix no Android (versão 1.0.8)
+
+A mesma lista no celular, com uma interface feita para o toque, no jeito dos apps de streaming:
+
+- **Início**: a marca no topo, pílulas de filtro (não vistos, vistos, favoritos, gêneros, todos), um cartão de destaque com **Assistir** e **Ver hoje** embaixo da capa, e fileiras de capas para rolar de lado: favoritos, sua lista, suas maiores notas (em tamanho grande), um gênero por fileira, um diretor, para uma noite curta, vistos e adicionados recentemente.
+- **Barra de navegação** embaixo: Início, Calendário, Buscar, Tierlist e Mais (páginas, estatísticas, sortear, adicionar, todos os filmes, configurações).
+- **Detalhes** em tela cheia: trailer no alto, a logo, ano, classificação e duração, Assistir e Escrever sobre o filme, sinopse e elenco, ícones com nome (story, visto, favorito, hoje, Letterboxd, trailer), sua nota e as abas **Mais do diretor** e **Mais como este**.
+- **Calendário** com a grade do mês em capas, a watchlist de hoje, o diário do mês em lista e a página de cada dia; deslizar o dedo troca o mês.
+- **Tierlist** numa página só: segure uma capa por um instante e arraste para a tier; a bandeja "Sem tier" fica presa embaixo.
+- **Stories e retrospectiva**: **Compartilhar** abre o menu do Android (Instagram, WhatsApp, salvar no aparelho).
+- O botão **Voltar** do Android fecha o que estiver aberto.
+
+**Instalar**: baixe o `.apk` da página de Releases no celular e abra; o Android pede para permitir apps de fora da loja. O app do celular guarda os dados no próprio aparelho; para ter a mesma lista do computador, configure a nuvem (abaixo).
+
+> Planilha, backups em arquivo e importar do Letterboxd continuam só no computador.
 
 ## Funcionalidades
 
@@ -154,6 +172,17 @@ Em **Configurações → Importar do Letterboxd**, escolha a pasta do export de 
 - O trailer é o oficial do filme no YouTube; sem um, o app procura no YouTube pelo título e ano. Um trailer colado à mão nunca é trocado.
 - **Opcional**: com uma chave do [OMDb](https://www.omdbapi.com/), os filmes mostram também as notas do IMDb, Metascore e Rotten Tomatoes.
 
+### Nuvem: a mesma lista no computador e no celular
+Com uma conta, o NANDFlix sincroniza filmes, notas, datas vistas, páginas (com as imagens), stories, listas, watchlists, tierlists, filmes do mês e as chaves das APIs entre os aparelhos, pelo [Supabase](https://supabase.com) (gratuito).
+
+- **Tela de entrada**: com a nuvem configurada, o app abre pedindo para **entrar** ou **criar conta** (e-mail e senha); o login fica guardado. Dá para continuar sem conta.
+- Cada mudança sobe em alguns segundos e chega aos outros aparelhos na hora. Sem internet, tudo funciona e sincroniza depois.
+- Mudanças em campos diferentes do mesmo filme, feitas em aparelhos diferentes, ficam as duas; no mesmo campo, vence a mais nova. Um filme apagado não volta.
+- Se a mesma página for editada em dois aparelhos antes de sincronizar, fica a mais nova e a outra versão aparece num aviso para você escolher.
+- Em **Configurações → Nuvem**: a conta, quando foi a última sincronia, **Sincronizar agora** e **Sair da conta**.
+
+A versão do GitHub vem sem projeto de nuvem: cada pessoa cria o seu (veja [Configurar a nuvem](#configurar-a-nuvem-opcional)).
+
 ### Planilha e backups
 - Importa a lista de uma planilha `.xlsx`, substituindo a atual ou juntando as duas (filmes repetidos são reconhecidos).
 - Exporta a lista para `.xlsx`.
@@ -192,6 +221,19 @@ Essas três notas vêm do [OMDb](https://www.omdbapi.com/). Para vê-las, pegue 
 
 > Este app usa a API do TMDB, mas não é endossado nem certificado pelo TMDB.
 
+## Configurar a nuvem (opcional)
+
+1. Crie uma conta em [supabase.com](https://supabase.com) e um projeto.
+2. No **SQL Editor** do projeto, rode o conteúdo de [`supabase/esquema.sql`](supabase/esquema.sql) (a tabela da sincronia, só com acesso de cada um aos próprios dados, e a pasta das imagens).
+3. Em **Project Settings → API**, copie a **Project URL** e a chave **publishable** (nunca a `service_role`/secret) e crie o arquivo `lib/nuvem.config.json`:
+
+   ```json
+   { "url": "https://SEU-PROJETO.supabase.co", "chave": "sb_publishable_..." }
+   ```
+4. Gere o app (`npm run build`) e, para o celular, o APK (veja [Android](#android)). O arquivo de configuração vai junto e não entra no repositório (`.gitignore`).
+
+Opcional: rodando [`supabase/atualizacoes.sql`](supabase/atualizacoes.sql) (com o seu e-mail no lugar do exemplo), o app do celular passa a **se atualizar sozinho**: o `npm run montar` gera o pacote da interface, o app do computador, logado, publica, e o celular baixa e troca na próxima abertura, sem instalar outro APK.
+
 ## Atualização automática
 O app procura versão nova nas [Releases](../../releases) ao abrir e a cada 6 horas.
 - **Instalado pelo Setup**: baixa sozinho em segundo plano e avisa quando estiver pronto (**Reiniciar e atualizar**); fechar o app também instala.
@@ -204,6 +246,7 @@ Tudo fica no seu computador, em `%APPDATA%\Filmes legais` (Windows):
 - `filmes.json`: a lista, salva a cada mudança.
 - `capas/`: as imagens baixadas.
 - `backups/`: os 5 últimos backups e os backups diários dos últimos 30 dias.
+- `sincronia.json` e `nuvem.json`: quando cada dado mudou e o estado da sincronia com a nuvem (o login fica cifrado em `nuvem-sessao.bin`).
 - `imagens/`: as imagens coladas nas páginas e os shots favoritos.
 - `config.json`: as suas chaves do TMDB e do OMDb, preferências, watchlists, tierlist, filmes do mês, filtros do sorteio e posição da janela.
 
@@ -222,6 +265,19 @@ npm run import -- "minha-lista.xlsx"   # importa uma planilha pela linha de coma
 
 Para importar pela linha de comando com filmes já salvos, acrescente `--substituir` ou `--juntar` (com o app fechado).
 
+### Android
+
+Precisa de um JDK 21 e do Android SDK (plataforma 36), com `JAVA_HOME` e `ANDROID_HOME` apontando para eles.
+
+```bash
+cd mobile
+npm install
+npm run testar     # abre o app do celular numa janela do tamanho de um Android, no PC
+npm run apk        # monta a interface, sincroniza com o projeto Android e gera o APK de teste
+```
+
+O `npm run montar` junta a interface de `src/` com a ponte do celular (`mobile/api/`, que guarda os dados no aparelho e reaproveita `lib/`) e os ajustes de celular (`mobile/web/`), em `mobile/www`.
+
 O `build` foi testado no Windows. A configuração para Mac (`.dmg`) e Linux (`.AppImage`) existe, mas cada sistema precisa gerar o próprio executável.
 
 ### Estrutura
@@ -234,6 +290,8 @@ NANDFlix/
 ├── preload.js          ponte segura entre a interface e o processo principal
 ├── lib/
 │   ├── armazem.js      leitura e gravação dos dados e backups
+│   ├── marcas.js       quando cada dado mudou (para a sincronia)
+│   ├── nuvem.js        login e sincronia com o Supabase
 │   ├── filmes.js       modelo do filme, repetidos e junção de listas
 │   ├── letterboxd.js   leitura do export de dados do Letterboxd
 │   ├── omdb.js         notas do IMDb, Metascore e Rotten Tomatoes (opcional)
@@ -242,11 +300,18 @@ NANDFlix/
 │   └── trailer.js      busca do trailer no YouTube (quando o TMDB não tem)
 ├── src/                interface (HTML, CSS e JavaScript puros)
 │   ├── app.js          tela principal, detalhes, calendário, tierlist e estatísticas
+│   ├── entrada.js      tela de entrar ou criar conta
 │   ├── pagina.js       páginas, imagens, shots favoritos e visualizador
 │   ├── story.js        editor de story
 │   ├── retro.js        retrospectiva em stories
 │   ├── listas.js       listas suas
 │   └── busca.js        busca única (Ctrl + K)
+├── mobile/             app de Android (Capacitor)
+│   ├── api/            a ponte do celular: dados no aparelho, nuvem, TMDB
+│   ├── web/            a interface de celular por cima da do PC
+│   ├── android/        projeto Android
+│   └── montar.js       monta mobile/www
+├── supabase/           SQL do banco da nuvem e das atualizações do celular
 ├── scripts/import.js   importação pela linha de comando
 └── build/              ícone do app
 ```
@@ -257,4 +322,5 @@ NANDFlix/
 - [SheetJS](https://sheetjs.com/) para as planilhas e [Lucide](https://lucide.dev/) para os ícones.
 - APIs: TMDB (capas, logos, trailers e informações), OMDb (notas, opcional) e YouTube (trailers, pelo player sem cookies).
 - [electron-updater](https://www.electron.build/auto-update) para a atualização automática pelas releases do GitHub.
+- [Supabase](https://supabase.com) para a nuvem e [Capacitor](https://capacitorjs.com) para o app de Android (com o [Capgo Updater](https://github.com/Cap-go/capacitor-updater) para se atualizar sem reinstalar).
 - Fonte [Montserrat](https://fonts.google.com/specimen/Montserrat) (licença OFL), pelo pacote `@fontsource/montserrat`.

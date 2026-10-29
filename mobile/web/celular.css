@@ -1,0 +1,54 @@
+/* ---------- NANDFlix no celular ----------
+   Carregado depois do styles.css, só no app de Android. O styles.css já tem a
+   "janela estreita" (até 719px); aqui ficam os ajustes de toque e de tela de
+   celular por cima dela. */
+
+html.celular {
+  --margem: 16px;
+  --altura-topo: 56px;
+  --largura-capa: 116px;
+  --topo-seguro: env(safe-area-inset-top, 0px);
+  -webkit-tap-highlight-color: transparent;
+}
+html.celular body { overscroll-behavior: none; }
+/* Toque: sem seleção de texto ao segurar botões e capas */
+html.celular button, html.celular .cartao, html.celular .capa { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* Topo: sempre com fundo, por cima do que rola */
+html.celular .topo { padding-top: var(--topo-seguro); background: rgba(8, 9, 11, .94); backdrop-filter: blur(12px); }
+html.celular .marca { font-size: 21px; gap: 8px; }
+html.celular .marca-icone { width: 24px; height: 24px; }
+
+/* Destaque */
+html.celular .destaque { height: max(78vh, 540px); }
+html.celular .destaque-info { inset: calc(var(--altura-topo) + 52px) 0 56px; }
+html.celular .destaque-botoes {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px 12px; width: 100%;
+}
+html.celular .destaque-botoes .btn-assistir { flex: 1 1 100%; width: auto; min-height: 52px; }
+html.celular .destaque-botoes .btn-claro { flex: none; order: 2; }
+html.celular .seta { display: none; }
+
+/* Fileiras e grade */
+html.celular .titulo-secao { font-size: 26px; }
+html.celular .cabecalho-titulos .titulo-secao { font-size: 30px; }
+html.celular #secao-todos { margin: 0 calc(6px - var(--margem)); padding: 24px var(--margem); border-radius: 14px; }
+html.celular .lista.grade { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 10px; }
+html.celular .lista.grade .info h3 { font-size: 13px; }
+html.celular .fileira { gap: 10px; }
+
+/* Detalhes ocupando a tela */
+
+html.celular .painel-resumo h2 { font-size: 32px; }
+
+/* Janelas (configurações, adicionar…) quase na tela toda */
+html.celular .modal { width: calc(100vw - 16px); max-width: none; max-height: calc(100dvh - 32px); }
+
+/* Avisos acima da barra de gestos */
+html.celular .avisos { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+
+
+/* Arrastar com o dedo: na watchlist do calendário o toque arrasta a capa em
+   vez de rolar a tela. (Na tierlist, o arrasto começa num toque longo: veja
+   tierlist.js.) */
+html.celular .tl-alca, html.celular .tl-rotulo, [data-secao="watchlist"] .cal-capa, html.celular [data-arrastar] { touch-action: none; }

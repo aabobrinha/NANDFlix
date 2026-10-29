@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net, screen, session, webFrameMain, clipboard, ClipboardItem } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net, screen, session, webFrameMain, clipboard, ClipboardItem, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -12,6 +12,8 @@ const trailer = require('./lib/trailer');
 const tmdb = require('./lib/tmdb');
 const { novoFilme, juntar, resumo, acharRepetido, mesmoFilme } = require('./lib/filmes');
 const letterboxd = require('./lib/letterboxd');
+const { Marcas } = require('./lib/marcas');
+const { Nuvem } = require('./lib/nuvem');
 
 app.setName(armazem.NOME_APP);
 // FILMES_LEGAIS_DADOS: outra pasta de dados (para testar sem mexer na lista de verdade).
@@ -38,6 +40,10 @@ let config = { ...CONFIG_PADRAO, ...armazem.lerJSON(C.config, {}) };
 let filmes = [];
 let janela = null;
 let planilhaPendente = null;
+// Quando cada campo mudou, para a sincronia com a nuvem (começa ao abrir).
+let marcas = null;
+// A nuvem (Supabase), se lib/nuvem.config.json existir com a URL e a chave do projeto.
+let nuvem = null;
 
 // ---------- Gravação ----------
 
@@ -50,10 +56,12 @@ function gravarAgora() {
   clearTimeout(timerGravar);
   timerGravar = null;
   armazem.gravarFilmes(PASTA, filmes);
+  if (marcas && marcas.registrarFilmes(filmes) && nuvem) nuvem.agendar();
   mudouDesdeBackup = true;
 }
 function gravarConfig() {
   armazem.gravarJSON(C.config, config);
+  if (marcas && marcas.registrarConfig(config) && nuvem) nuvem.agendar();
   mudouDesdeBackup = true;
 }
 
@@ -506,6 +514,91 @@ function linkLetterboxd(filme) {
   return `https://letterboxd.com/search/films/${encodeURIComponent(filme.titulo)}/`;
 }
 
+// ---------- Nuvem ----------
+
+function iniciarNuvem() {
+  const cfg = armazem.lerJSON(path.join(__dirname, 'lib', 'nuvem.config.json'), null);
+  if (!cfg || !cfg.url || !cfg.chave) return;
+  const cifra = safeStorage.isEncryptionAvailable();
+  nuvem = new Nuvem({
+    url: cfg.url,
+    chave: cfg.chave,
+    pasta: PASTA,
+    marcas,
+    filmes: () => filmes,
+    definirFilmes: (lista) => { filmes = lista; },
+    config: () => config,
+    gravarFilmes: gravarAgora,
+    gravarConfig,
+    avisar,
+    configPublica,
+    aoReceberFilmes: baixarImagensRecebidas,
+    cofre: {
+      cifrar: (t) => (cifra ? safeStorage.encryptString(t) : Buffer.from(t, 'utf8')),
+      decifrar: (b) => (cifra ? safeStorage.decryptString(b) : b.toString('utf8')),
+    },
+    pastas: { capas: C.capas, imagens: C.imagens },
+  });
+  nuvem.pronto = nuvem.iniciar().catch((e) => console.error('nuvem', e));
+  nuvem.pronto.then(() => publicarPacoteCelular());
+  // Enquanto o app está aberto, um pacote novo montado (npm run montar) sobe sozinho.
+  const manifesto = path.join(__dirname, 'mobile', 'pacote', 'versao.json');
+  if (fs.existsSync(path.dirname(path.dirname(manifesto)))) fs.watchFile(manifesto, { interval: 5000 }, () => publicarPacoteCelular());
+}
+
+// O app do celular se atualiza sozinho baixando a interface de uma pasta pública
+// do Supabase ("app"). Quem publica é este app, logado na sua conta: o
+// `npm run montar` (em mobile/) deixa o pacote em mobile/pacote, e ele sobe daqui.
+let publicandoPacote = null;
+function publicarPacoteCelular() {
+  if (publicandoPacote) return publicandoPacote;
+  const pasta = path.join(__dirname, 'mobile', 'pacote');
+  const v = armazem.lerJSON(path.join(pasta, 'versao.json'), null);
+  if (!nuvem || !nuvem.usuario || !v || !v.versao || config.pacoteCelular === v.versao) return Promise.resolve();
+  const zip = path.join(pasta, v.arquivo);
+  if (!fs.existsSync(zip)) return Promise.resolve();
+  publicandoPacote = (async () => {
+    const app = nuvem.cliente.storage.from('app');
+    const r1 = await app.upload(v.arquivo, fs.readFileSync(zip), { contentType: 'application/zip', upsert: true });
+    if (r1.error) throw r1.error;
+    // O manifesto por último (e com cache curto): o celular só vê a versão quando o zip já está lá.
+    const r2 = await app.upload('versao.json', Buffer.from(JSON.stringify(v)), { contentType: 'application/json', upsert: true, cacheControl: '30' });
+    if (r2.error) throw r2.error;
+    config.pacoteCelular = v.versao;
+    gravarConfig();
+    console.log('pacote do celular publicado:', v.versao);
+  })().catch((e) => console.error('pacote do celular', e.message || e)).finally(() => { publicandoPacote = null; });
+  return publicandoPacote;
+}
+
+// Filmes que chegaram de outro aparelho: baixa a capa e a logo (vêm do TMDB pelo
+// mesmo link), e os que ainda não passaram pelo TMDB entram na fila de lá.
+async function baixarImagensRecebidas(lista) {
+  if (lista.some((f) => !f.tmdbEm)) buscarCapasQueFaltam();
+  for (const f of lista) {
+    if (!f.tmdbEm) continue;
+    let mudou = false;
+    if (f.poster && !f.capaPersonalizada && !capaLocalExiste(f)) mudou = (await baixarCapa(f)) || mudou;
+    if (f.logo && !f.logoLocal) mudou = (await baixarLogo(f)) || mudou;
+    if (mudou) avisar('filme:mudou', f);
+  }
+}
+
+ipcMain.handle('nuvem:status', async () => {
+  if (!nuvem) return { indisponivel: true };
+  await nuvem.pronto; // o login guardado já foi lido
+  return nuvem.infos();
+});
+ipcMain.handle('nuvem:reenviar', (_e, email) => nuvem.reenviar(String(email || '').trim()));
+ipcMain.handle('nuvem:entrar', async (_e, email, senha) => {
+  const r = await nuvem.entrar(String(email || '').trim(), String(senha || ''));
+  publicarPacoteCelular();
+  return r;
+});
+ipcMain.handle('nuvem:criarConta', (_e, email, senha) => nuvem.criarConta(String(email || '').trim(), String(senha || '')));
+ipcMain.handle('nuvem:sair', () => nuvem.sair());
+ipcMain.handle('nuvem:sincronizar', async () => { await nuvem.sincronizar(); return nuvem.infos(); });
+
 // ---------- IPC ----------
 
 ipcMain.handle('dados:carregar', () => ({ filmes, config: configPublica(), pastaDados: PASTA, versao: app.getVersion() }));
@@ -530,7 +623,7 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
 });
 
 ipcMain.handle('filme:atualizar', (_e, id, mudancas) => {
-  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa', 'pagina', 'paginaEm', 'story', 'listas', 'shots'];
+  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa', 'pagina', 'paginaEm', 'story', 'listas', 'shots', 'paginaOutra'];
   const limpo = {};
   for (const k of permitidas) if (k in mudancas) limpo[k] = mudancas[k];
   // Mudar a busca da capa faz o filme ser procurado de novo no TMDB por ela.
@@ -1156,6 +1249,9 @@ if (!travaUnica) {
     fs.mkdirSync(C.capas, { recursive: true });
     armazem.fazerBackup(PASTA);
     filmes = armazem.lerFilmes(PASTA);
+    marcas = new Marcas(C.sincronia);
+    marcas.iniciar(filmes, config);
+    iniciarNuvem();
 
     // capa://img/<arquivo> → arquivo da pasta de capas (sem sair dela);
     // capa://foto/<arquivo> → imagem colada numa página ou shot favorito.

@@ -1,0 +1,74 @@
+/* ---------- Telas por cima no celular ----------
+   Calendário, tierlist, estatísticas, suas páginas e a página do filme: no PC
+   são caixas no meio da janela; no celular ocupam a tela, em fundo preto, com
+   a seta de voltar no canto (o ✕ vira ←, pelo celular.js). */
+
+html.celular .calendario { place-items: stretch; background: var(--canvas); backdrop-filter: none; }
+html.celular .calendario-caixa {
+  width: 100vw; height: 100dvh; max-height: none; border-radius: 0; box-shadow: none; background: var(--canvas);
+  padding: calc(60px + env(safe-area-inset-top, 0px)) 16px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+html.celular .calendario-caixa::-webkit-scrollbar { display: none; }
+
+/* A seta de voltar, sempre no mesmo lugar */
+html.celular .cel-voltar {
+  position: fixed; z-index: 5; top: calc(8px + env(safe-area-inset-top, 0px)); left: 6px; margin: 0;
+  width: 44px; height: 44px; border: 0; border-radius: 50%; background: none; box-shadow: none; color: var(--texto);
+}
+html.celular .cel-voltar .ico { width: 26px; height: 26px; }
+html.celular .cel-voltar:focus { outline: none; box-shadow: none; }
+
+/* Calendário: título e setas numa linha, os números do mês rolando de lado embaixo */
+html.celular .cal-topo { flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+html.celular .cal-navegacao { width: 100%; gap: 8px; }
+html.celular .cal-navegacao h2 { font-size: 26px; margin-right: auto; }
+html.celular .cal-topo .cal-stats { width: calc(100% + 32px); margin: 0 -16px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
+html.celular .cal-topo .cal-stats::-webkit-scrollbar { display: none; }
+
+/* Tierlist e estatísticas: título no alto, botões embaixo */
+html.celular .tl-topo:not(.est-topo) .tl-titulo { max-width: 100%; }
+html.celular .tl-topo .cal-stat { order: 2; }
+html.celular .est-topo { gap: 10px; }
+html.celular .est-topo h2 { font-size: 28px; }
+html.celular .est-periodos { margin-left: 0; }
+
+/* Suas páginas: uma coluna */
+html.celular .pgs-topo { flex-wrap: wrap; gap: 12px; }
+html.celular .pgs-titulo h2 { font-size: 28px; }
+html.celular .pgs-busca { max-width: none; min-width: 0; flex-basis: 100%; margin-left: 0; }
+html.celular .pgs-grade { grid-template-columns: 1fr; gap: 10px; }
+html.celular .pgs-cartao { gap: 14px; padding: 12px; }
+
+/* Página do filme: a folha usa a largura toda */
+html.celular .pagina-caixa { padding: 0 0 calc(20px + env(safe-area-inset-bottom, 0px)); }
+html.celular .pg-topo { padding: calc(60px + env(safe-area-inset-top, 0px)) 16px 20px; border-radius: 0; }
+html.celular .pg-identidade { flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+html.celular .pg-capa { width: 96px; }
+html.celular .pg-dados { flex: 1 1 0; min-width: 0; }
+html.celular .pg-dados h2 { font-size: 26px; }
+html.celular .pg-meta, html.celular .pg-vistos { font-size: 13px; }
+html.celular .pg-shots { flex-basis: 100%; width: 100%; margin-left: 0; }
+html.celular .pg-barra { padding-left: 8px; padding-right: 8px; overflow-x: auto; scrollbar-width: none; }
+html.celular .pg-barra::-webkit-scrollbar { display: none; }
+html.celular .pg-botoes { flex-wrap: nowrap; }
+html.celular .pg-folha { padding: 20px 16px 24px; }
+html.celular .pg-dica { display: none; }
+
+/* Editor de story: a imagem em cima, os controles numa folha embaixo */
+html.celular .story-tela { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 44dvh; background: var(--canvas); backdrop-filter: none; }
+html.celular .story-area { padding-top: env(safe-area-inset-top, 0px); }
+html.celular .story-lado { border-radius: 18px 18px 0 0; box-shadow: 0 -12px 40px rgba(0, 0, 0, .55); }
+html.celular .story-topo { padding: 12px 12px 4px 18px; }
+html.celular .story-topo .story-rotulo { display: none; }
+html.celular .story-topo h2 { margin: 8px 0 0; font-size: 17px; }
+html.celular .story-controles { overflow-y: auto; }
+html.celular .story-rodape { padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); }
+html.celular .story-rodape [data-s="salvar"] { flex: 1; justify-content: center; }
+html.celular [data-s="copiar"], html.celular [data-r="copiar"] { display: none !important; }
+
+/* Suas páginas e estatísticas: uma faixa escura atrás do ←, para o conteúdo
+   não passar por baixo dele ao rolar */
+html.celular #paginas::before, html.celular #retrospectiva::before {
+  content: ''; position: fixed; z-index: 4; top: 0; left: 0; right: 0; height: calc(60px + env(safe-area-inset-top, 0px));
+  background: linear-gradient(180deg, var(--canvas) 70%, rgba(5, 6, 8, 0)); pointer-events: none;
+}

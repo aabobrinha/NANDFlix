@@ -1,0 +1,106 @@
+/* ---------- Detalhes do filme no celular ----------
+   O mesmo painel do PC (abrirPainel), rearrumado em uma coluna: trailer 16:9
+   no alto, a logo embaixo dele, Assistir largo e branco, e os ícones numa
+   fileira. */
+
+html.celular .painel {
+  top: 0; left: 0; translate: none; width: 100vw; height: 100dvh; max-height: none;
+  border-radius: 0; box-shadow: none; transform: translateY(28px);
+}
+html.celular .painel.aberto { transform: none; }
+html.celular .painel::-webkit-scrollbar { display: none; }
+html.celular .painel-conteudo { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+html.celular [data-p="baixar"] { display: none; }
+
+
+/* Logo e botões embaixo do trailer */
+html.celular .painel-cabecalho { position: static; padding: 6px 16px 0; gap: 16px; align-items: stretch; }
+html.celular .painel-cabecalho .destaque-poster { display: none; }
+html.celular .painel-cabecalho .destaque-identidade { justify-content: flex-start; }
+html.celular .painel-cabecalho .destaque-titulo h2 { font-size: 28px; line-height: 1.1; }
+html.celular .painel-cabecalho .titulo-logo img { max-width: 72vw; max-height: 76px; }
+
+html.celular .painel-botoes .btn-assistir,
+html.celular .painel-botoes .painel-escrever-btn {
+  grid-column: 1 / -1; width: 100%; min-height: 44px; border-radius: 6px; justify-content: center; font-size: 16px;
+}
+html.celular .painel-botoes .btn-assistir { background: #fff; color: #0B0C0E; }
+html.celular .painel-botoes .btn-assistir .ico { color: #0B0C0E; }
+html.celular .painel-botoes .painel-escrever-btn { background: rgba(120, 122, 130, .32); color: #fff; }
+
+/* Corpo em uma coluna */
+html.celular .painel-corpo { grid-template-columns: 1fr; gap: 18px; padding: 18px 16px 0; }
+html.celular .painel-corpo .painel-meta { font-size: 14px; margin-bottom: 14px; }
+html.celular .painel-sinopse { font-size: 15px; line-height: 1.55; }
+html.celular .painel-ficha { font-size: 13.5px; }
+html.celular .relacionados { margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
+html.celular .relacionados h3 { padding: 0 16px; font-size: 18px; }
+html.celular .painel-campos, html.celular .capa-acoes, html.celular .painel-rodape, html.celular .salvo { padding-left: 16px; padding-right: 16px; }
+html.celular .relacionados { margin: 26px 0 0; }
+html.celular .rel-fileira { padding: 4px 16px 6px; gap: 8px; scroll-padding: 16px; }
+html.celular .rel-filme { width: calc((100vw - 32px - 16px) / 3.15); }
+html.celular .rel-seta { display: none; }
+
+/* ---- Ordem de app de streaming (detalhes.js) ---- */
+html.celular .painel { background: var(--canvas); }
+/* Barra com ← em cima, o trailer embaixo dela */
+html.celular .painel-capa {
+  aspect-ratio: auto; border-radius: 0; overflow: visible; background: var(--canvas);
+  padding-top: calc(56px + env(safe-area-inset-top, 0px) + 56.25vw);
+}
+html.celular .painel-fundo-video,
+html.celular .painel-sombra { top: calc(56px + env(safe-area-inset-top, 0px)); bottom: auto; height: 56.25vw; }
+html.celular .painel-sombra { background: none; }
+html.celular .painel-fechar {
+  top: calc(8px + env(safe-area-inset-top, 0px)); left: 6px; right: auto; width: 44px; height: 44px;
+  background: none; border: 0; box-shadow: none; color: var(--texto);
+}
+html.celular .painel-fechar .ico { width: 26px; height: 26px; }
+html.celular .painel-som {
+  right: 10px; bottom: auto; top: calc(56px + env(safe-area-inset-top, 0px) + 56.25vw - 48px);
+  width: 36px; height: 36px; background: rgba(5, 6, 8, .6);
+}
+
+html.celular .painel-cabecalho { position: static; padding: 12px 16px 0; gap: 12px; align-items: stretch; }
+html.celular .cel-det-meta { display: flex; flex-wrap: wrap; align-items: center; margin: -2px 0 2px !important; font: 400 15px/1.4 var(--ui) !important; color: var(--texto-2); gap: 10px !important; }
+html.celular .painel-botoes { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+html.celular .painel-botoes .btn-assistir,
+html.celular .painel-botoes .painel-escrever-btn { width: 100%; min-height: 46px; border-radius: 6px; font-size: 17px; }
+html.celular .painel-botoes .painel-escrever-btn { background: rgba(255, 255, 255, .14); }
+
+/* Sinopse e fichas */
+html.celular .cel-det-texto { display: flex; flex-direction: column; gap: 10px; }
+html.celular .cel-det-texto .painel-sinopse { margin: 0; font-size: 15.5px; line-height: 1.45; color: var(--texto); }
+html.celular .cel-det-texto .painel-fichas { display: flex; flex-direction: column; gap: 2px; }
+html.celular .cel-det-texto .painel-ficha { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--texto-2); }
+html.celular .cel-det-texto .painel-ficha b { color: var(--texto-2); font-weight: 500; }
+
+/* Ícones com o nome embaixo */
+html.celular .cel-det-acoes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 8px -8px 0; }
+html.celular .cel-det-acoes .redondo {
+  width: auto; height: auto; padding: 8px 0; border: 0; border-radius: 10px; background: none; box-shadow: none;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--texto);
+}
+html.celular .cel-det-acoes .redondo .ico { width: 26px; height: 26px; }
+html.celular .cel-det-acoes .redondo[data-rotulo]::after { content: attr(data-rotulo); font: 400 12px var(--ui); color: var(--texto-2); }
+html.celular .cel-det-acoes .redondo.visto-on, html.celular .cel-det-acoes .redondo.visto-on::after { color: var(--acento-texto); }
+html.celular .cel-det-acoes .redondo.fav-on, html.celular .cel-det-acoes .redondo.fav-on::after { color: var(--dourado); }
+html.celular .cel-det-acoes .redondo:active { background: rgba(255, 255, 255, .08); }
+
+/* O que é seu (nota, listas, vistos, página) num bloco depois dos ícones */
+html.celular .painel-corpo { padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, .08); margin: 16px 0 0; }
+
+/* Abas "Mais de …" e "Mais como este", com a grade de capas */
+html.celular #painel-relacionados { margin-top: 24px; border-top: 1px solid rgba(255, 255, 255, .12); }
+html.celular .cel-abas { display: flex; gap: 22px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
+html.celular .cel-aba {
+  flex: none; position: relative; padding: 16px 2px 12px; border: 0; background: none;
+  font: 700 16px var(--ui); color: var(--texto-2);
+}
+html.celular .cel-aba.ativa { color: var(--texto); }
+html.celular .cel-aba.ativa::before { content: ''; position: absolute; left: 0; right: 0; top: -1px; height: 4px; border-radius: 0 0 2px 2px; background: var(--acento); }
+html.celular #painel-relacionados .relacionados { margin: 4px 0 0; }
+html.celular #painel-relacionados .relacionados h3 { display: none; }
+html.celular #painel-relacionados .rel-fileira { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 8px; overflow: visible; padding: 8px 16px 0; }
+html.celular #painel-relacionados .rel-filme { width: auto; }
+html.celular .painel-fechar:focus:not(:focus-visible) { outline: none; box-shadow: none; }

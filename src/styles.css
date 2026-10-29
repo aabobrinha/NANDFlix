@@ -2016,6 +2016,18 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
 .pg-sep { width: 1px; height: 22px; margin: 0 6px; background: var(--divisor); }
 .pg-status { flex: none; font-size: 12.5px; color: var(--texto-2); white-space: nowrap; }
 
+/* Página mudada em dois aparelhos ao mesmo tempo */
+.pg-conflito {
+  max-width: 660px; margin: 24px auto 0; padding: 14px 16px; border-radius: 10px;
+  background: rgba(109, 74, 168, .16); box-shadow: inset 0 0 0 1px rgba(160, 120, 230, .35);
+  display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: var(--texto);
+}
+.pg-conflito p { display: flex; gap: 10px; margin: 0; line-height: 1.5; }
+.pg-conflito p .ico { flex: none; width: 18px; height: 18px; margin-top: 2px; color: #C9B2F5; }
+.pg-conflito summary { cursor: pointer; color: var(--texto-2); font-size: 13px; }
+.pg-conflito .pg-outra { min-height: 0; margin-top: 10px; padding: 12px 14px; border-radius: 8px; background: var(--superficie-2); max-height: 280px; overflow: auto; }
+.pg-conflito-botoes { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
 /* A folha: coluna de leitura no meio, como uma página de diário */
 .pg-folha { flex: 1; padding: 36px 48px 28px; }
 .pg-editor {
@@ -2391,6 +2403,17 @@ img.st-el { display: block; }
 
 /* ---------- Backup automático ---------- */
 .cfg-backup-status { margin: 0 0 12px !important; line-height: 1.55; }
+#cfg-nuvem-corpo > p:first-child { display: flex; gap: 8px; align-items: flex-start; }
+#cfg-nuvem-corpo > p:first-child .ico { flex: none; width: 17px; height: 17px; margin-top: 2px; color: var(--acento-texto); }
+#cfg-nuvem-corpo > p b { color: var(--texto); font-weight: 500; }
+.cfg-nuvem-form { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 8px; margin: 4px 0 8px; }
+.cfg-nuvem-form input {
+  min-width: 0; min-height: 44px; padding: 0 18px; color: var(--texto); font: inherit;
+  background: var(--canvas); border: 1px solid var(--divisor); border-radius: 999px; outline: none;
+}
+.cfg-nuvem-form input:focus { border-color: var(--acento); }
+.cfg-nuvem-status { margin: 4px 0 12px !important; min-height: 1.4em; }
+.cfg-nuvem-status.erro { color: var(--perigo); }
 .cfg-backup-extra, .cfg-backup-erro { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .cfg-backup-extra .ico { width: 15px; height: 15px; }
 .cfg-backup-extra b { color: var(--texto); font-weight: 500; word-break: break-all; }
@@ -2620,3 +2643,102 @@ img.st-el { display: block; }
 .visor-acao.feito { cursor: default; color: var(--texto-2); background: transparent; border-color: transparent; }
 .visor-acao.feito .ico { color: var(--acento-texto); }
 .visor.ampliado .visor-acao { opacity: 0; pointer-events: none; }
+
+/* ---------- Entrada: criar conta ou entrar ---------- */
+.entrada {
+  position: fixed; inset: 0; z-index: 1000; overflow: hidden;
+  display: grid; place-items: center; padding: 24px 16px;
+  background: radial-gradient(120% 90% at 85% 0%, #2A1A47 0%, var(--canvas) 55%);
+}
+body.com-entrada { overflow: hidden; }
+/* Mosaico das capas, inclinado, com as colunas deslizando devagar */
+.entrada-mosaico {
+  position: absolute; inset: -30% -20%; display: flex; gap: 14px; justify-content: center;
+  transform: rotate(-9deg); opacity: .5; pointer-events: none;
+}
+.entrada-coluna {
+  flex: none; width: 150px; display: flex; flex-direction: column; gap: 14px;
+  animation: entrada-desliza var(--dur) linear infinite var(--dir);
+}
+.entrada-coluna .capa { width: 150px; aspect-ratio: 2 / 3; border-radius: var(--raio-capa); overflow: hidden; background: var(--superficie); }
+.entrada-coluna .capa img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes entrada-desliza { to { transform: translateY(-50%); } }
+.entrada-veu {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(60% 55% at 50% 50%, rgba(5, 6, 8, .55) 0%, rgba(5, 6, 8, .92) 100%),
+    linear-gradient(180deg, rgba(76, 46, 122, .25), rgba(5, 6, 8, .4));
+}
+.entrada-cartao {
+  position: relative; width: min(420px, 100%); padding: 34px 32px 22px; border-radius: 20px;
+  background: rgba(14, 16, 18, .82); backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .07);
+  display: flex; flex-direction: column;
+}
+.entrada-marca { justify-content: center; margin-bottom: 26px; font-size: 30px; }
+.entrada-passo { display: flex; flex-direction: column; }
+.entrada-passo h2 { margin: 0 0 8px; text-align: center; font: 700 22px/1.2 var(--display); }
+.entrada-sub { margin: 0 0 22px; text-align: center; font-size: 14px; line-height: 1.5; color: var(--texto-2); }
+.entrada-sub b { color: var(--texto); font-weight: 500; word-break: break-all; }
+
+/* Abas Entrar | Criar conta, com a marca deslizando por baixo */
+.entrada-abas {
+  position: relative; display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 20px; padding: 4px;
+  border-radius: 999px; background: var(--canvas); box-shadow: inset 0 0 0 1px var(--divisor);
+}
+.entrada-aba {
+  position: relative; z-index: 1; height: 38px; border: 0; border-radius: 999px; background: none; cursor: pointer;
+  font: 500 14px var(--ui); color: var(--texto-2); transition: color .2s ease-out;
+}
+.entrada-aba.on { color: var(--sobre-acento); }
+.entrada-aba-marca {
+  position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 999px;
+  background: var(--gradiente-acento); transition: transform .32s var(--saida);
+}
+.entrada.modo-criar .entrada-aba-marca { transform: translateX(100%); }
+
+.entrada-form { display: flex; flex-direction: column; gap: 14px; }
+.entrada-campo { display: flex; flex-direction: column; gap: 6px; }
+.entrada-campo > span:first-child { font-size: 13px; font-weight: 500; color: var(--texto-2); }
+.entrada-campo input {
+  width: 100%; height: 48px; padding: 0 16px; border-radius: 12px; outline: none;
+  background: var(--canvas); border: 1px solid var(--divisor); color: var(--texto); font: 15px var(--ui);
+  transition: border-color .15s ease-out, box-shadow .15s ease-out;
+}
+.entrada-campo input:focus { border-color: var(--acento); box-shadow: 0 0 0 3px rgba(109, 74, 168, .28); }
+.entrada-senha { position: relative; display: block; }
+.entrada-senha input { padding-right: 48px; }
+.entrada-olho {
+  position: absolute; top: 4px; right: 4px; width: 40px; height: 40px; border: 0; border-radius: 9px;
+  display: grid; place-items: center; background: none; color: var(--texto-2); cursor: pointer;
+}
+.entrada-olho:hover { color: var(--texto); background: var(--superficie-2); }
+.entrada-olho .ico { width: 18px; height: 18px; }
+.entrada-erro { margin: 0; min-height: 1.3em; font-size: 13.5px; color: var(--perigo); text-align: center; }
+.entrada-erro:empty { min-height: 0; }
+.entrada-enviar { width: 100%; min-height: 48px; justify-content: center; font-size: 15px; }
+.entrada-enviar[data-carregando]:not([data-carregando=""]) { font-size: 0; }
+.entrada-enviar[data-carregando]:not([data-carregando=""])::after { content: attr(data-carregando) '…'; font-size: 15px; }
+.entrada.ocupada .entrada-cartao { cursor: progress; }
+
+.entrada-envelope {
+  width: 64px; height: 64px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(109, 74, 168, .2); color: var(--acento-texto);
+}
+.entrada-envelope .ico { width: 30px; height: 30px; }
+.entrada-passo[data-passo="confirmar"] .entrada-erro { margin-bottom: 12px; }
+.entrada-links { display: flex; justify-content: center; gap: 20px; margin-top: 16px; font-size: 13.5px; }
+.entrada-pular {
+  align-self: center; margin-top: 22px; padding: 6px 10px; border: 0; background: none; cursor: pointer;
+  font: 13px var(--ui); color: var(--texto-2);
+}
+.entrada-pular:hover { color: var(--texto); text-decoration: underline; text-underline-offset: 3px; }
+
+@media (max-width: 480px) {
+  .entrada-cartao { padding: 28px 20px 18px; }
+  .entrada-coluna, .entrada-coluna .capa { width: 110px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entrada-coluna { animation: none; }
+  .entrada-aba-marca { transition: none; }
+}

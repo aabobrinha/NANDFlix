@@ -1,0 +1,179 @@
+/* ---------- Tela inicial do celular (inicio.js) ---------- */
+
+html.celular { --nav-alt: 64px; --nav-baixo: calc(12px + env(safe-area-inset-bottom, 0px)); }
+html.celular body { background: var(--canvas); }
+
+/* A tela do PC some: topo, destaque com trailer e fileira de favoritos. */
+html.celular .topo, html.celular #secao-sorteado, html.celular #secao-favoritos { display: none !important; }
+html.celular:not(.cel-modo-todos) #secao-todos { display: none !important; }
+html.celular #principal { padding: 0; }
+html.celular.cel-modo-todos #secao-todos { margin: 0; padding: 8px 16px calc(var(--nav-alt) + 40px); border-radius: 0; background: none; }
+html.celular.cel-modo-todos #secao-todos .cabecalho-secao { display: none; }
+
+/* Topo */
+.cel-topo {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+  display: flex; align-items: center; gap: 4px;
+  height: calc(60px + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) 8px 0 16px;
+  transition: background-color .2s ease-out;
+}
+.cel-topo.rolado { background: rgba(5, 6, 8, .97); }
+.cel-marca { flex: none; width: 34px; height: 34px; padding: 0; border: 0; background: none; }
+.cel-marca img { width: 100%; height: 100%; display: block; }
+.cel-titulo { flex: 1; min-width: 0; margin: 0 0 0 10px; font: 700 26px/1 var(--display); letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cel-icone { flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; display: grid; place-items: center; background: none; color: var(--texto); }
+.cel-icone .ico { width: 24px; height: 24px; }
+.cel-icone:active { background: rgba(255, 255, 255, .1); }
+
+/* Fundo: a capa do destaque, bem desfocada, tinge o alto da tela */
+.cel-inicio { position: relative; isolation: isolate; padding-top: calc(60px + env(safe-area-inset-top, 0px)); overflow: hidden; }
+.cel-brilho {
+  position: absolute; left: -20%; right: -20%; top: -60px; height: 760px; z-index: -1;
+  background-size: cover; background-position: center; filter: blur(60px) saturate(1.5); opacity: .5;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 100%);
+}
+
+/* Pílulas */
+.cel-pilulas { display: flex; gap: 8px; padding: 6px 16px 14px; overflow-x: auto; scrollbar-width: none; }
+.cel-pilulas::-webkit-scrollbar { display: none; }
+.cel-pilula {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .3); background: rgba(255, 255, 255, .06); color: var(--texto);
+  font: 500 14.5px var(--ui); white-space: nowrap;
+}
+.cel-pilula .ico { width: 16px; height: 16px; }
+.cel-pilula.ativa { background: var(--texto); border-color: var(--texto); color: #0B0C0E; }
+.cel-pilula-x { width: 38px; padding: 0; justify-content: center; }
+
+/* Destaque: um cartão com a capa grande e as ações por cima */
+.cel-destaque {
+  position: relative; margin: 2px 16px 8px; aspect-ratio: 5 / 7; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .16);
+  background: var(--superficie);
+}
+.cel-destaque-capa { position: absolute; inset: 0; padding: 0; border: 0; background: none; }
+.cel-destaque-capa > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cel-destaque-capa::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(5, 6, 8, 0) 45%, rgba(5, 6, 8, .55) 70%, rgba(5, 6, 8, .92) 100%);
+}
+.cel-destaque-titulo { position: absolute; z-index: 1; left: 24px; right: 24px; bottom: 116px; display: flex; justify-content: center; }
+.cel-destaque-titulo img { max-width: 100%; max-height: 88px; object-fit: contain; filter: drop-shadow(0 2px 12px rgba(0, 0, 0, .6)); }
+.cel-destaque-titulo b { font: 800 32px/1.05 var(--display); text-align: center; text-shadow: 0 2px 16px rgba(0, 0, 0, .7); }
+.cel-destaque-meta {
+  position: absolute; z-index: 1; left: 12px; right: 12px; bottom: 72px; margin: 0;
+  display: flex; justify-content: center; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-size: 13.5px; color: rgba(255, 255, 255, .88); pointer-events: none;
+}
+.cel-destaque-meta i { font-style: normal; color: rgba(255, 255, 255, .5); font-size: 10px; }
+.cel-destaque-botoes { position: absolute; z-index: 1; left: 16px; right: 16px; bottom: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cel-btn {
+  height: 46px; border: 0; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  font: 700 16px var(--ui);
+}
+.cel-btn .ico { width: 22px; height: 22px; }
+.cel-btn-branco { background: #fff; color: #0B0C0E; }
+.cel-btn-cinza { background: rgba(120, 122, 130, .42); color: #fff; backdrop-filter: blur(10px); }
+.cel-btn:active { filter: brightness(.85); }
+
+/* Fileiras */
+.cel-fileira { margin-top: 18px; }
+.cel-fileira h2 { margin: 0 16px 10px; font: 700 19px/1.2 var(--display); }
+.cel-fileira h2 button { padding: 0; border: 0; background: none; color: inherit; font: inherit; display: inline-flex; align-items: center; gap: 2px; }
+.cel-fileira h2 .ico { width: 20px; height: 20px; color: var(--texto-2); }
+.cel-trilho {
+  display: flex; gap: 8px; padding: 0 16px; overflow-x: auto; scroll-snap-type: x proximity; scroll-padding: 16px;
+  scrollbar-width: none; overscroll-behavior-x: contain;
+}
+.cel-trilho::-webkit-scrollbar { display: none; }
+.cel-capa {
+  position: relative; flex: none; width: calc((100vw - 32px - 16px) / 3.15); aspect-ratio: 2 / 3; padding: 0; border: 0;
+  border-radius: 6px; overflow: hidden; background: var(--superficie-2); scroll-snap-align: start;
+}
+.cel-fileira.grande .cel-capa { width: calc((100vw - 32px - 8px) / 2.15); }
+.cel-capa img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cel-capa:active { transform: scale(.97); }
+.cel-capa-vazia { position: absolute; inset: 0; display: grid; place-items: center; padding: 8px; font: 700 13px/1.2 var(--display); text-align: center; color: var(--texto-2); }
+.cel-selo {
+  position: absolute; left: 50%; bottom: 8px; translate: -50% 0; padding: 3px 9px; border-radius: 4px; white-space: nowrap;
+  background: var(--gradiente-acento); color: #fff; font: 700 11.5px var(--ui); box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+}
+.cel-selo-nota { display: inline-flex; align-items: center; gap: 3px; background: rgba(5, 6, 8, .82); }
+.cel-selo-nota .ico { width: 11px; height: 11px; color: var(--dourado); }
+.cel-visto {
+  position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--acento); color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
+}
+.cel-visto .ico { width: 13px; height: 13px; }
+.cel-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 18px 16px 0; }
+.cel-grade .cel-capa { width: auto; }
+.cel-fim { height: calc(var(--nav-alt) + var(--nav-baixo) + 32px); }
+
+/* Barra de navegação flutuante */
+.cel-nav {
+  position: fixed; z-index: 34; left: 14px; right: 14px; bottom: var(--nav-baixo); height: var(--nav-alt);
+  display: flex; align-items: stretch; padding: 6px; border-radius: 999px;
+  background: rgba(32, 33, 38, .86); backdrop-filter: blur(20px) saturate(1.3);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .09);
+  transition: opacity .2s ease-out;
+}
+.cel-nav-item {
+  flex: 1; min-width: 0; border: 0; border-radius: 999px; background: none; color: var(--texto-2);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font: 500 11px var(--ui);
+}
+.cel-nav-item .ico { width: 23px; height: 23px; }
+.cel-nav-item.ativo { background: rgba(255, 255, 255, .1); color: var(--texto); }
+/* Com uma tela por cima (detalhes, calendário…), a barra sai do caminho. */
+html.cel-coberto .cel-nav, html.cel-coberto .cel-topo { opacity: 0; pointer-events: none; }
+
+/* Folhas: gêneros (lista em tela cheia) e "Mais" (de baixo para cima) */
+.cel-folha {
+  position: fixed; inset: 0; z-index: 60; background: rgba(5, 6, 8, .78); backdrop-filter: blur(14px);
+  opacity: 0; transition: opacity .2s ease-out;
+}
+.cel-folha.aberta { opacity: 1; }
+.cel-folha-fechar {
+  position: absolute; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); translate: -50% 0;
+  width: 56px; height: 56px; border: 0; border-radius: 50%; display: grid; place-items: center; background: #fff; color: #0B0C0E;
+}
+.cel-folha-fechar .ico { width: 26px; height: 26px; }
+.cel-folha-generos .cel-folha-caixa { position: absolute; inset: calc(24px + env(safe-area-inset-top, 0px)) 0 110px; overflow-y: auto; }
+.cel-generos { display: flex; flex-direction: column; align-items: center; padding: 24px 0; }
+.cel-generos button { padding: 13px 24px; border: 0; background: none; color: var(--texto-2); font: 500 19px var(--ui); }
+.cel-generos button small { font-size: 12px; color: rgba(156, 159, 163, .7); margin-left: 4px; }
+.cel-generos button.ativo { color: var(--texto); font-weight: 700; font-size: 22px; }
+.cel-folha-mais .cel-folha-caixa {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 20px 16px 110px; border-radius: 22px 22px 0 0;
+  background: var(--superficie); transform: translateY(24px); transition: transform .25s var(--saida);
+}
+.cel-folha-mais.aberta .cel-folha-caixa { transform: none; }
+.cel-mais { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cel-mais button {
+  display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 16px; border: 0; border-radius: 14px;
+  background: var(--superficie-2); color: var(--texto); font: 500 15px var(--ui); text-align: left;
+}
+.cel-mais button .ico { flex: none; width: 22px; height: 22px; color: var(--acento-texto); }
+/* A marca no topo da tela inicial */
+.cel-titulo.marca-nandflix {
+  font: 800 28px/1 var(--display); letter-spacing: .005em; text-transform: lowercase;
+  background: linear-gradient(90deg, #F6F1FF 0%, #CDB6FF 60%, #A982F0 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* Destaque: a capa inteira em cima; gêneros e botões embaixo dela, no cartão.
+   O pé da capa se dissolve na cor do cartão (sem linha entre os dois), e os
+   gêneros sobem para dentro dessa sombra, como no cartão da Netflix. */
+.cel-destaque {
+  --cor-cartao: #121317;
+  aspect-ratio: auto; background: var(--cor-cartao);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.cel-destaque-capa { position: relative; inset: auto; display: block; width: 100%; aspect-ratio: 2 / 3; }
+.cel-destaque-capa::after {
+  display: block; top: auto; height: 22%;
+  background: linear-gradient(180deg, rgba(18, 19, 23, 0) 0%, rgba(18, 19, 23, .35) 40%, rgba(18, 19, 23, .8) 75%, var(--cor-cartao) 100%);
+}
+.cel-destaque-meta { position: relative; z-index: 1; left: auto; right: auto; bottom: auto; margin-top: -14px; padding: 0 12px; }
+.cel-destaque-botoes { position: static; padding: 14px 14px 14px; }
+/* O contorno claro fica por cima de tudo, para não ser cortado pela capa */
+.cel-destaque::after { content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); pointer-events: none; }

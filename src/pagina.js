@@ -163,6 +163,7 @@ function paginaFilmeHTML(f) {
       <div class="pg-botoes">${botoes}</div>
       <span class="pg-status" id="pg-status" aria-live="polite"></span>
     </div>
+    ${conflitoPaginaHTML(f)}
     <div class="pg-folha">
       <div class="pg-editor" id="pagina-editor" contenteditable="true" spellcheck="true"
            role="textbox" aria-multiline="true" aria-label="Sua página sobre ${esc(f.titulo)}"
@@ -174,6 +175,39 @@ function paginaFilmeHTML(f) {
       <button class="btn btn-fantasma" data-pg="story" title="Montar uma imagem para os stories do Instagram">${icone('ImagePlus')} Criar story</button>
       <button class="btn btn-fantasma pg-apagar" data-pg="apagar">${icone('Trash2')} Apagar página</button>
     </footer>`;
+}
+
+// A página foi mudada aqui e em outro aparelho antes de sincronizar: ficou a
+// mais nova, e a outra está em `paginaOutra` até você escolher.
+function conflitoPaginaHTML(f) {
+  const o = f.paginaOutra;
+  if (!o || !o.html) return '';
+  const quando = o.em ? new Date(o.em).toLocaleString('pt-BR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
+  return `
+    <div class="pg-conflito" role="status">
+      <p>${icone('GitCompare')} <span>Esta página foi mudada aqui e em outro aparelho ao mesmo tempo. Ficou a versão mais nova; a que estava neste computador${quando ? ` (de ${esc(quando)})` : ''} está guardada.</span></p>
+      <details>
+        <summary>Ver a versão deste computador</summary>
+        <div class="pg-editor pg-outra">${limparPagina(o.html)}</div>
+      </details>
+      <div class="pg-conflito-botoes">
+        <button class="btn btn-fantasma" data-pg="conflito-minha">Usar a deste computador</button>
+        <button class="btn btn-laranja" data-pg="conflito-esta">Ficar com esta</button>
+      </div>
+    </div>`;
+}
+
+function resolverConflitoPagina(usarMinha) {
+  const f = porId(paginaId);
+  if (!f || !f.paginaOutra) return;
+  if (usarMinha) {
+    $('#pagina-editor').innerHTML = limparPagina(f.paginaOutra.html) || '<p><br></p>';
+    salvarPagina(true);
+    atualizarRodapePagina();
+  }
+  f.paginaOutra = null;
+  api.atualizarFilme(f.id, { paginaOutra: null });
+  $('.pg-conflito')?.remove();
 }
 
 function abrirPagina(id) {
@@ -590,6 +624,8 @@ paginaFilme.addEventListener('click', (e) => {
     case 'colar-shot': colarShot(); break;
     case 'fechar': fecharPagina(); break;
     case 'apagar': apagarPagina(); break;
+    case 'conflito-minha': resolverConflitoPagina(true); break;
+    case 'conflito-esta': resolverConflitoPagina(false); break;
     case 'story': salvarPagina(true); abrirStory(paginaId); break;
     case 'detalhes': {
       const id = paginaId;

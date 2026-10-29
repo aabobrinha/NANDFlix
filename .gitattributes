@@ -5,3 +5,6 @@
 *.exe filter=lfs diff=lfs merge=lfs -text
 *.otf binary
 *.png binary
+
+# O gradlew do Android roda em sh: quebras de linha do Unix
+mobile/android/gradlew text eol=lf

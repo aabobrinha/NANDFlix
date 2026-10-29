@@ -57,4 +57,12 @@ contextBridge.exposeInMainWorld('api', {
   aoAtualizacaoDisponivel: ouvir('atualizacao:disponivel'),
   aoAtualizacaoPronta: ouvir('atualizacao:pronta'),
   instalarAtualizacao: chamar('atualizacao:instalar'),
+  statusNuvem: chamar('nuvem:status'),
+  entrarNuvem: chamar('nuvem:entrar'),
+  criarContaNuvem: chamar('nuvem:criarConta'),
+  sairNuvem: chamar('nuvem:sair'),
+  reenviarConfirmacao: chamar('nuvem:reenviar'),
+  sincronizarNuvem: chamar('nuvem:sincronizar'),
+  aoStatusNuvem: ouvir('nuvem:status'),
+  aoMudarNuvem: ouvir('nuvem:mudou'),
 });

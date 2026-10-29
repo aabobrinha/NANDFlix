@@ -1,0 +1,87 @@
+/* ---------- Tierlist no celular (tierlist.js) ----------
+   Uma página só, que rola inteira: cada tier é um bloco com o nome numa
+   etiqueta da cor dela e as capas embaixo, 4 por linha. A bandeja "Sem tier"
+   fica presa no pé da tela, numa fileira que rola de lado. */
+
+html.celular #tierlist-caixa { display: block; padding: 0 16px; }
+
+/* Topo preso: título (troca de tierlist), filtros e nova tier; o ← fica por cima, à esquerda */
+html.celular #tierlist .tl-topo {
+  position: sticky; top: 0; z-index: 4; margin: 0 -16px; padding: calc(8px + env(safe-area-inset-top, 0px)) 8px 10px 52px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 2px 6px;
+  background: var(--canvas);
+}
+html.celular #tierlist .tl-titulo { grid-column: 1; grid-row: 1; max-width: 100%; min-height: 44px; padding: 0 6px; margin: 0; }
+html.celular #tierlist .tl-titulo h2 { font: 700 21px/1.1 var(--display); }
+html.celular #tierlist .tl-titulo > .ico { width: 18px; height: 18px; }
+html.celular #tierlist .tl-topo .cal-stat {
+  grid-column: 1 / -1; grid-row: 2; justify-self: start; min-height: 0; padding: 0 6px; margin: 0;
+  background: none; box-shadow: none; color: var(--texto-2); font-size: 13px;
+}
+html.celular #tierlist .tl-topo .cal-stat .ico { display: none; }
+/* Filtros e nova tier viram ícones redondos */
+html.celular #tierlist .tl-filtros, html.celular #tierlist .tl-nova {
+  grid-row: 1; width: 42px; height: 42px; min-height: 0; padding: 0; margin: 0; border-radius: 50%;
+  display: grid; place-items: center; font-size: 0; box-shadow: none; background: none;
+}
+html.celular #tierlist .tl-filtros { grid-column: 2; }
+html.celular #tierlist .tl-nova { grid-column: 3; }
+html.celular #tierlist .tl-filtros .ico, html.celular #tierlist .tl-nova .ico { width: 22px; height: 22px; }
+html.celular #tierlist .tl-filtros.ativo { background: linear-gradient(135deg, #9B6CF0, #6D4AA8); color: #fff; }
+
+/* As tiers, uma embaixo da outra, sem rolagem própria */
+html.celular #tierlist .tl-tiers { flex: none; min-height: 0; overflow: visible; padding: 6px 0 20px; gap: 12px; }
+html.celular #tierlist .tl-tier {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "rotulo . acoes" "filmes filmes filmes";
+  align-items: center; min-height: 0; padding: 12px 12px 16px; border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cor) 13%, transparent), transparent 120px), rgba(255, 255, 255, .03);
+}
+html.celular #tierlist .tl-alca { display: none; }
+html.celular #tierlist button.tl-rotulo {
+  grid-area: rotulo; width: auto; min-width: 44px; max-width: 240px; height: 36px; padding: 0 14px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+html.celular #tierlist .tl-nome {
+  font-size: 18px !important; line-height: 1 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html.celular #tierlist .tl-rotulo-campo { grid-area: rotulo; width: 160px; height: 36px; border-radius: 8px; font-size: 16px; }
+html.celular #tierlist .tl-acoes { grid-area: acoes; flex-direction: row; gap: 2px; padding: 0; opacity: 1; }
+html.celular #tierlist .tl-acao { width: 36px; height: 36px; background: none; color: rgba(156, 159, 163, .8); }
+html.celular #tierlist .tl-acao .ico { width: 18px; height: 18px; }
+html.celular #tierlist .tl-tier .tl-filmes {
+  grid-area: filmes; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 8px; padding: 12px 0 0; min-height: 60px;
+}
+html.celular #tierlist .tl-tier .tl-filmes:not(:has(.tl-capa))::before {
+  content: 'Segure uma capa e arraste para cá'; grid-column: 1 / -1; margin: 0; font-size: 13px;
+}
+html.celular #tierlist .tl-capa {
+  width: auto; touch-action: pan-y; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none;
+  transition: transform .18s var(--saida), opacity .15s ease-out;
+}
+html.celular #tierlist .tl-capa:hover { transform: none; }
+html.celular #tierlist .tl-capa .capa { border-radius: 6px; }
+html.celular #tierlist .tl-capa .capa-vazia strong { font-size: 9px; }
+html.celular #tierlist .tl-capa.tl-levantada { transform: scale(1.08); z-index: 2; }
+html.celular #tierlist .tl-capa.tl-levantada .capa { box-shadow: 0 12px 28px rgba(0, 0, 0, .7), 0 0 0 2px var(--acento-texto); }
+html.celular .tl-fantasma { width: 84px; }
+
+/* Bandeja "Sem tier": presa no pé, as capas numa fileira de lado */
+html.celular #tierlist .tl-bandeja {
+  position: sticky; bottom: 0; z-index: 3; margin: 0 -16px; min-height: 0; max-height: none;
+  padding-bottom: env(safe-area-inset-bottom, 0px); border-radius: 18px 18px 0 0;
+  background: rgba(20, 21, 25, .97); box-shadow: 0 -12px 32px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+html.celular #tierlist .tl-bandeja-topo { padding: 12px 16px 0; }
+html.celular #tierlist .tl-bandeja-topo h3 { font: 700 16px/1 var(--display); }
+html.celular #tierlist .tl-busca { height: 34px; }
+html.celular #tierlist .tl-busca input { width: 110px; font-size: 14px; }
+html.celular #tierlist .tl-sem {
+  display: flex; flex-wrap: nowrap; gap: 8px; padding: 12px 16px 16px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+html.celular #tierlist .tl-sem::-webkit-scrollbar { display: none; }
+html.celular #tierlist .tl-sem .tl-capa { flex: none; width: 76px; touch-action: pan-x; }
+/* Tudo classificado: a bandeja vira uma faixa fina (e cresce de novo ao arrastar uma capa para lá) */
+html.celular #tierlist .tl-sem:not(:has(.tl-capa)) { min-height: 0; padding: 0 16px 12px; }
+html.celular #tierlist .tl-bandeja:has(.tl-sem:not(:has(.tl-capa))) .tl-busca { display: none; }
+html.celular #tierlist.arrastando .tl-sem { min-height: 132px; }
+html.celular #tierlist .tl-nenhuma { margin: 4px 16px 14px; }
