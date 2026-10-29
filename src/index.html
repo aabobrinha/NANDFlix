@@ -24,13 +24,21 @@
           <input id="pesquisa" type="search" placeholder="Título, ano, diretor ou notas" autocomplete="off" spellcheck="false" tabindex="-1" aria-label="Pesquisar filmes">
           <button class="icone-btn" id="btn-lupa" data-dica="Pesquisar" aria-label="Pesquisar"><span data-icone="Search"></span></button>
         </div>
-        <button class="icone-btn" id="btn-calendario" data-dica="Calendário" aria-label="Calendário"><span data-icone="CalendarDays"></span></button>
-        <button class="icone-btn" id="btn-tierlist" data-dica="Tierlist" aria-label="Tierlist"><span data-icone="Medal"></span></button>
-        <button class="icone-btn" id="btn-estatisticas" data-dica="Estatísticas" aria-label="Estatísticas"><span data-icone="ChartColumn"></span></button>
-        <div class="sortear-topo" id="sortear-topo">
-          <button class="icone-btn" id="btn-sortear" title="Sortear (R)" aria-label="Sortear"><span data-icone="Dices"></span></button>
-          <div class="sortear-menu">
-            <button class="sortear-filtros" id="btn-sortear-filtro"><span data-icone="SlidersHorizontal"></span><span class="sortear-filtros-texto">Sortear com filtro</span></button>
+        <!-- Menus: a seta abre (ao passar o mouse ou clicar) a lista com ícone e nome. -->
+        <div class="menu-topo" id="menu-topo">
+          <button class="icone-btn menu-topo-seta" id="btn-menu-topo" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-topo-lista" aria-label="Menus"><span data-icone="ChevronDown"></span></button>
+          <div class="menu-topo-lista" id="menu-topo-lista" role="menu" aria-label="Menus">
+            <button class="menu-topo-item" role="menuitem" id="btn-paleta"><span data-icone="Search"></span><span>Buscar em tudo</span><kbd>Ctrl K</kbd></button>
+            <span class="menu-topo-sep" aria-hidden="true"></span>
+            <button class="menu-topo-item" role="menuitem" id="btn-calendario"><span data-icone="CalendarDays"></span><span>Calendário</span></button>
+            <button class="menu-topo-item" role="menuitem" id="btn-paginas"><span data-icone="NotebookPen"></span><span>Suas páginas</span></button>
+            <button class="menu-topo-item" role="menuitem" id="btn-tierlist"><span data-icone="Medal"></span><span>Tierlist</span></button>
+            <button class="menu-topo-item" role="menuitem" id="btn-estatisticas"><span data-icone="ChartColumn"></span><span>Estatísticas</span></button>
+            <div class="sortear-topo" id="sortear-topo" role="none">
+              <span class="menu-topo-sep" aria-hidden="true"></span>
+              <button class="menu-topo-item" role="menuitem" id="btn-sortear"><span data-icone="Dices"></span><span>Sortear</span><kbd>R</kbd></button>
+              <button class="menu-topo-item sortear-filtros" role="menuitem" id="btn-sortear-filtro"><span data-icone="SlidersHorizontal"></span><span class="sortear-filtros-texto">Sortear com filtro</span></button>
+            </div>
           </div>
         </div>
         <button class="icone-btn btn-mais" id="btn-adicionar" data-dica="Adicionar filme" aria-label="Adicionar filme"><span data-icone="Plus"></span></button>
@@ -84,6 +92,8 @@
         </div>
         <button class="chip chip-diretor" id="chip-diretor" title="Tirar o filtro de diretor" hidden></button>
         <button class="chip chip-diretor" id="chip-pais" title="Tirar o filtro de país" hidden></button>
+        <button class="chip chip-diretor" id="chip-lista" title="Tirar o filtro de lista" hidden></button>
+        <button class="chip chip-listas" id="btn-listas" aria-haspopup="menu"><span data-icone="Tags"></span>Listas<span data-icone="ChevronDown"></span></button>
         <span class="contagem" id="contagem"></span>
         <div class="espaco"></div>
         <label class="ordenar">
@@ -121,6 +131,7 @@
 
       <section class="sem-resultados" id="sem-resultados" hidden>
         <h3 class="sem-titulo">Nenhum filme encontrado.</h3>
+        <button class="btn btn-primario sem-adicionar" id="btn-sem-adicionar" hidden></button>
         <div class="sem-rodape">
           <span>Busque por título, ano, diretor ou notas.</span>
           <span id="sem-contagem"></span>
@@ -150,6 +161,14 @@
     <div class="calendario-caixa retrospectiva-caixa" id="retrospectiva-caixa" role="dialog" aria-modal="true" aria-label="Estatísticas"></div>
   </div>
 
+  <div class="calendario paginas" id="paginas" hidden>
+    <div class="calendario-caixa paginas-caixa" id="paginas-caixa" role="dialog" aria-modal="true" aria-label="Suas páginas"></div>
+  </div>
+
+  <div class="calendario pagina-filme" id="pagina-filme" hidden>
+    <div class="calendario-caixa pagina-caixa" id="pagina-caixa" role="dialog" aria-modal="true" aria-label="Sua página do filme"></div>
+  </div>
+
   <div class="foco" id="foco" hidden>
     <div class="foco-caixa" id="foco-caixa"></div>
   </div>
@@ -162,5 +181,10 @@
   <script src="icones.js"></script>
   <script src="movimento.js"></script>
   <script src="app.js"></script>
+  <script src="pagina.js"></script>
+  <script src="story.js"></script>
+  <script src="listas.js"></script>
+  <script src="retro.js"></script>
+  <script src="busca.js"></script>
 </body>
 </html>

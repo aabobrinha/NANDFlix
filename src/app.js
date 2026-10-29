@@ -12,6 +12,7 @@ const estado = {
   busca: '',
   diretor: '', // "filmes do mesmo diretor", escolhido no painel
   pais: '', // filtro de país, escolhido no cabeçalho do grupo ou no painel
+  lista: '', // filtro por uma das listas da pessoa (listas.js)
   ordenacao: 'ordem',
   vista: 'grade',
   painelId: null,
@@ -201,6 +202,7 @@ function filtrados() {
     if (estado.filtro === 'favoritos' && !f.favorito) return false;
     if (diretores.length && !diretoresDe(f.diretor).some((d) => diretores.includes(d))) return false;
     if (estado.pais && !paisesDe(f).includes(estado.pais)) return false;
+    if (estado.lista && !listasDe(f).includes(estado.lista)) return false;
     if (!palavras.length) return true;
     const alvo = normalizar([f.titulo, f.ano, f.diretor, f.notas, f.buscaCapa, ...paisesDe(f)].join(' '));
     return palavras.every((p) => alvo.includes(p));
@@ -473,6 +475,9 @@ function render() {
   $('#chip-diretor').innerHTML = `${icone('Film')}<span>${esc(estado.diretor)}</span>${icone('X')}`;
   $('#chip-pais').hidden = !estado.pais;
   $('#chip-pais').innerHTML = `${icone('Globe')}<span>${esc(estado.pais)}</span>${icone('X')}`;
+  $('#chip-lista').hidden = !estado.lista;
+  $('#chip-lista').innerHTML = `${icone('Tag')}<span>${esc(estado.lista || '')}</span>${icone('X')}`;
+  $('#btn-listas').classList.toggle('ativo-leve', Boolean(estado.lista));
   if (vazio) $('#secao-sorteado').hidden = true;
   atualizarTopo();
   renderFileira();
@@ -484,6 +489,11 @@ function render() {
   const total = estado.filmes.length;
   $('#contagem').textContent = vazio ? '' : (visiveis.length === total ? `${total} filmes` : `${visiveis.length} de ${total} filmes`);
   $('#sem-contagem').textContent = $('#contagem').textContent;
+  // Buscou e nada da lista bate: oferece adicionar o filme, já com o texto buscado.
+  const termoBusca = estado.busca.trim();
+  const botaoAdicionar = $('#btn-sem-adicionar');
+  botaoAdicionar.hidden = !termoBusca || visiveis.length > 0;
+  if (!botaoAdicionar.hidden) botaoAdicionar.innerHTML = `${icone('Plus')} Adicionar “${esc(termoBusca)}”`;
   atualizarEstatisticas();
 
   // Estados que acabaram de aparecer entram em sequência; as capas se revelam ao rolar.
@@ -600,6 +610,7 @@ function aposMudarDia(id) {
   if (previaId === id) atualizarBotaoHojePrevia();
   if (!calendario.hidden) renderCalendario();
   if (!tierlist.hidden && !arrastoTl) renderTierlist();
+  if (typeof paginasTela !== 'undefined' && !paginasTela.hidden) renderListaPaginas();
 }
 
 // Grava as datas de um filme (cada vez que foi visto conta).
@@ -745,6 +756,8 @@ function renderPainel() {
           </div>
           <div class="painel-botoes">
             <button class="btn btn-assistir" data-p="stremio">${ICONE_PLAY} Assistir</button>
+            <button class="btn painel-escrever-btn" data-p="pagina"></button>
+            <button class="redondo" data-p="story" title="Criar story para o Instagram" aria-label="Criar story para o Instagram">${icone('ImagePlus')}</button>
             <button class="redondo" data-p="visto">${icone('Check')}</button>
             <button class="redondo" data-p="favorito"></button>
             <button class="redondo" data-p="hoje">${icone('CalendarClock')}</button>
@@ -768,7 +781,9 @@ function renderPainel() {
       <div>
         <p class="painel-meta" data-info="meta-painel">${painelMetaHTML(f)}</p>
         <div class="minha-nota-linha"><b>Sua nota</b>${estrelasHTML(f)}</div>
+        <div class="painel-listas">${listasDoFilmeHTML(f)}</div>
         <div class="painel-vistos">${vistosEmHTML(f)}</div>
+        ${paginaNoPainelHTML(f)}
         <div class="notas-linha">${notasHTML(f.info)}</div>
         <p class="painel-sinopse" data-info="sinopse-painel"${sinopse ? '' : ' hidden'}>${esc(sinopse)}</p>
       </div>
@@ -865,6 +880,14 @@ function atualizarBotoesPainel(f) {
   botaoHoje.title = tituloHoje(hojeNaLista);
   botaoHoje.setAttribute('aria-label', tituloHoje(hojeNaLista));
   botaoHoje.setAttribute('aria-pressed', String(hojeNaLista));
+  const escrever = $('#painel .painel-botoes [data-p="pagina"]');
+  if (escrever) {
+    // Só aparece depois de marcar como visto (ou se o filme já tem página).
+    escrever.hidden = !f.visto && !temPagina(f);
+    escrever.innerHTML = temPagina(f) ? `${icone('BookOpen')} Abrir sua página` : `${icone('NotebookPen')} Escrever sobre o filme`;
+  }
+  const botaoStory = $('#painel .painel-botoes [data-p="story"]');
+  if (botaoStory) botaoStory.hidden = !f.visto;
 }
 
 // ---------- Outros filmes do diretor e "Mais como este" (TMDB) ----------
@@ -1195,6 +1218,10 @@ $('#painel').addEventListener('click', async (e) => {
     case 'favorito': alternar(id, 'favorito'); break;
     case 'hoje': alternarWatchlist(id); break;
     case 'vi-hoje': viHoje(id); break;
+    case 'pagina': abrirPagina(id); break;
+    case 'story': abrirStory(id); break;
+    case 'listas': abrirListasDoFilme(b, id); break;
+    case 'ver-lista': filtrarLista(b.dataset.lista); break;
     case 'remover-dia': {
       const f = porId(id);
       const dias = [...(f.vistoEm || [])];
@@ -1505,7 +1532,7 @@ async function abrirTrocarCapa(id) {
   });
 }
 
-async function abrirAdicionar() {
+async function abrirAdicionar(termo = '') {
   abrirModal(`${cabecalhoModal('Adicionar filme')}
     <div class="modal-corpo">
       <div class="busca-linha"><input id="busca-tmdb" placeholder="Digite o título e tecle Enter" spellcheck="false"><button class="btn btn-laranja" id="btn-busca-tmdb">Buscar</button></div>
@@ -1542,7 +1569,7 @@ async function abrirAdicionar() {
   };
 
   montarBuscaTmdb({
-    termoInicial: '',
+    termoInicial: termo,
     aoEscolher: async (escolha, botao) => {
       botao.classList.add('carregando');
       const r = await api.detalhesTmdb(escolha.tmdbId);
@@ -1810,13 +1837,13 @@ let proximoSorteio = null;
 
 // Guardados nas configurações. Valem só para o sorteio (a lista da tela não muda):
 // duração máxima ("tenho 1h40"), gêneros, décadas, países e "só da watchlist de hoje".
-const FILTROS_SORTEIO_VAZIOS = { duracao: 0, generos: [], decadas: [], paises: [], soWatchlist: false };
+const FILTROS_SORTEIO_VAZIOS = { duracao: 0, generos: [], decadas: [], paises: [], listas: [], soWatchlist: false };
 const filtrosSorteio = () => ({ ...FILTROS_SORTEIO_VAZIOS, ...(estado.config.filtrosSorteio || {}) });
 const minutosDe = (f) => f.duracao || parseInt(f.info && f.info.duracao, 10) || 0;
 const decadaDe = (f) => { const a = anoNumero(f.ano); return Number.isFinite(a) ? Math.floor(a / 10) * 10 : null; };
 
 function filtrosSorteioAtivos(fs = filtrosSorteio()) {
-  return Boolean(fs.duracao || fs.generos.length || fs.decadas.length || fs.paises.length || fs.soWatchlist);
+  return Boolean(fs.duracao || fs.generos.length || fs.decadas.length || fs.paises.length || fs.listas.length || fs.soWatchlist);
 }
 
 function passaNoSorteio(f, fs) {
@@ -1824,6 +1851,7 @@ function passaNoSorteio(f, fs) {
   if (fs.generos.length && !generos(f.info).some((g) => fs.generos.includes(g))) return false;
   if (fs.decadas.length && !fs.decadas.includes(decadaDe(f))) return false;
   if (fs.paises.length && !paisesDe(f).some((p) => fs.paises.includes(p))) return false;
+  if (fs.listas.length && !listasDe(f).some((l) => fs.listas.includes(l))) return false;
   return true;
 }
 
@@ -1845,6 +1873,7 @@ function resumoFiltrosSorteio(fs = filtrosSorteio()) {
   if (fs.generos.length) partes.push(fs.generos.join(', '));
   if (fs.decadas.length) partes.push(fs.decadas.map((d) => `anos ${String(d).slice(2)}`).join(', '));
   if (fs.paises.length) partes.push(fs.paises.join(', '));
+  if (fs.listas.length) partes.push(fs.listas.join(', '));
   return partes;
 }
 
@@ -1857,6 +1886,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
   const generosTodos = contar(naoVistos.flatMap((f) => generos(f.info)));
   const decadasTodas = contar(naoVistos.map(decadaDe).filter((d) => d !== null)).sort((a, b) => a[0] - b[0]);
   const paisesTodos = contar(naoVistos.flatMap((f) => paisesDe(f)));
+  const listasTodas = contar(naoVistos.flatMap(listasDe));
   const DURACOES = [0, 90, 100, 120, 150];
   const chip = (grupo, valor, rotulo, ativo, qtd) => `<button class="chip${ativo ? ' ativo' : ''}" data-grupo="${grupo}" data-valor="${esc(valor)}" aria-pressed="${ativo}">${esc(rotulo)}${qtd ? `<span class="chip-qtd">${qtd}</span>` : ''}</button>`;
   const secao = (titulo, nome, classe = '') => `<div class="secao"><h3>${titulo}</h3><div class="chips-linha ${classe}" data-secao="${nome}"></div></div>`;
@@ -1864,6 +1894,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
   abrirModal(`${cabecalhoModal('Filtros do sorteio')}
     <div class="modal-corpo filtros-sorteio">
       ${secao('Sortear de', 'origem')}
+      ${listasTodas.length ? secao('Das suas listas', 'listas') : ''}
       ${secao('Quanto tempo você tem?', 'duracao')}
       ${generosTodos.length ? secao('Gêneros', 'generos') : ''}
       ${decadasTodas.length ? secao('Década', 'decadas') : ''}
@@ -1882,6 +1913,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
       generos: generosTodos.map(([g, n]) => chip('generos', g, g, fs.generos.includes(g), n)).join(''),
       decadas: decadasTodas.map(([d, n]) => chip('decadas', d, `Anos ${d < 2000 ? String(d).slice(2) : d}`, fs.decadas.includes(d), n)).join(''),
       paises: paisesTodos.map(([p, n]) => chip('paises', p, p, fs.paises.includes(p), n)).join(''),
+      listas: listasTodas.map(([l, n]) => chip('listas', l, l, fs.listas.includes(l), n)).join(''),
     };
     for (const [nome, h] of Object.entries(html)) { const el = $(`[data-secao="${nome}"]`, modal); if (el) el.innerHTML = h; }
     const n = candidatosSorteio(fs, { paraHoje: paraHoje && !fs.soWatchlist }).length;
@@ -1905,6 +1937,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
     if (grupo === 'generos') fs = { ...fs, generos: alternarEm(fs.generos, valor) };
     if (grupo === 'decadas') fs = { ...fs, decadas: alternarEm(fs.decadas, Number(valor)) };
     if (grupo === 'paises') fs = { ...fs, paises: alternarEm(fs.paises, valor) };
+    if (grupo === 'listas') fs = { ...fs, listas: alternarEm(fs.listas, valor) };
     salvar();
   });
   $('#filtros-limpar', modal).onclick = () => { fs = { ...FILTROS_SORTEIO_VAZIOS }; salvar(); };
@@ -2165,8 +2198,6 @@ function previaHTML(f) {
         <button class="redondo${f.visto ? ' visto-on' : ''}" data-v="visto" title="${f.visto ? 'Desmarcar visto' : 'Marcar como visto'}" aria-label="Visto">${icone('Check')}</button>
         <button class="redondo${f.favorito ? ' fav-on' : ''}" data-v="favorito" title="${f.favorito ? 'Tirar dos favoritos' : 'Favoritar'}" aria-label="Favorito">${icone('Star')}</button>
         <button class="redondo${naWatchlist(f.id) ? ' hoje-on' : ''}" data-v="hoje" title="${tituloHoje(naWatchlist(f.id))}" aria-label="${tituloHoje(naWatchlist(f.id))}">${icone('CalendarClock')}</button>
-        <button class="redondo" data-v="letterboxd" title="Letterboxd">${LB_PONTOS}</button>
-        <button class="redondo previa-remover" data-v="remover" title="Remover da lista" aria-label="Remover da lista">${icone('Trash2')}</button>
         <span class="espaco"></span>
         <button class="redondo" data-v="detalhes" title="Mais informações">${ICONE_MAIS_INFO}</button>
       </div>
@@ -2446,12 +2477,21 @@ function abrirConfiguracoes() {
           <button class="btn" id="cfg-capas-todas">${icone('Download')} Baixar todas as capas</button>
           <button class="btn btn-fantasma" id="cfg-pasta">Abrir pasta de dados</button>
         </div>
-        <p>Tudo é salvo automaticamente. Um backup é guardado cada vez que o app abre (os 5 últimos).</p>
+        <p>Tudo é salvo automaticamente. O backup exportado leva também watchlists, tierlists e listas.</p>
+      </div>
+      <div class="secao" id="cfg-backup-auto">
+        <h3>Backup automático</h3>
+        <p class="cfg-backup-status" id="cfg-backup-status">Carregando…</p>
+        <div class="linha-botoes">
+          <button class="btn" id="cfg-backup-pasta">${icone('FolderSync')} Copiar também para uma pasta…</button>
+          <button class="btn" id="cfg-backup-restaurar">${icone('History')} Restaurar um dia…</button>
+        </div>
       </div>
       <div class="secao">
         <h3>Atalhos</h3>
         <div class="atalhos">
           <kbd>${mod} F</kbd><span>Pesquisar</span>
+          <kbd>${mod} K</kbd><span>Buscar em tudo (filmes, páginas, TMDB e ações)</span>
           <kbd>${mod} N</kbd><span>Adicionar filme</span>
           <kbd>R</kbd><span>Sortear</span>
           <kbd>Esc</kbd><span>Fechar painel ou janela</span>
@@ -2482,6 +2522,15 @@ function abrirConfiguracoes() {
     if (r.arquivo) aviso(`Backup salvo em ${r.arquivo}`, { tipo: 'ok', duracao: 6000 });
   };
   $('#cfg-backup-imp', modal).onclick = importarBackup;
+  mostrarStatusBackup();
+  $('#cfg-backup-pasta', modal).onclick = async () => {
+    const r = await api.escolherPastaBackup();
+    if (r.cancelado) return;
+    if (r.erro) aviso(`Não deu para gravar nessa pasta: ${r.erro}`, { tipo: 'erro', duracao: 7000 });
+    else aviso('Pronto: os backups diários vão também para essa pasta.', { tipo: 'ok' });
+    mostrarStatusBackup();
+  };
+  $('#cfg-backup-restaurar', modal).onclick = abrirRestaurarBackup;
   $('#cfg-letterboxd', modal).onclick = () => { fecharModal(); importarLetterboxd(); };
   $('#cfg-pasta', modal).onclick = () => api.abrirPastaDados();
   $('#cfg-capas-todas', modal).onclick = async () => {
@@ -2576,6 +2625,63 @@ async function importarLetterboxd() {
   $('#lb-calendario', modal)?.addEventListener('click', () => { fecharModal(); abrirCalendario(`${r.primeiroDia}`); });
 }
 
+// ---------- Backup automático (um por dia, os 30 últimos) ----------
+
+const horaLegivel = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+function quandoLegivel(iso) {
+  const dia = diaDe(new Date(iso));
+  const ontem = diaDe(new Date(Date.now() - 864e5));
+  const nome = dia === hoje() ? 'hoje' : dia === ontem ? 'ontem' : diaLegivel(dia, { comAno: dia.slice(0, 4) !== hoje().slice(0, 4) });
+  return `${nome} às ${horaLegivel(iso)}`;
+}
+
+async function mostrarStatusBackup() {
+  const el = $('#cfg-backup-status', modal);
+  if (!el) return;
+  const st = await api.statusBackup();
+  if (!modal.open || !$('#cfg-backup-status', modal)) return;
+  const ultimo = st.ultimo.em || (st.diarios[0] && st.diarios[0].salvoEm);
+  const partes = [
+    ultimo ? `Último backup: ${quandoLegivel(ultimo)}.` : 'Ainda não há backup.',
+    `${st.diarios.length} ${st.diarios.length === 1 ? 'dia guardado' : 'dias guardados'} (ficam os 30 últimos; a cópia do dia é refeita a cada hora e ao fechar o app).`,
+  ];
+  el.innerHTML = esc(partes.join(' '))
+    + (st.pastaExtra ? `<span class="cfg-backup-extra">${icone('FolderSync')} Também em <b>${esc(st.pastaExtra)}</b> <button class="link-chave" id="cfg-backup-tirar">não copiar mais</button></span>` : '')
+    + (st.ultimo.erroExtra ? `<span class="cfg-backup-erro">Não deu para copiar para a pasta extra: ${esc(st.ultimo.erroExtra)}</span>` : '');
+  $('#cfg-backup-pasta', modal).innerHTML = `${icone('FolderSync')} ${st.pastaExtra ? 'Trocar a pasta extra…' : 'Copiar também para uma pasta…'}`;
+  $('#cfg-backup-restaurar', modal).disabled = !st.diarios.length;
+  $('#cfg-backup-tirar', modal)?.addEventListener('click', async () => { await api.tirarPastaBackup(); mostrarStatusBackup(); });
+}
+
+async function abrirRestaurarBackup() {
+  const st = await api.statusBackup();
+  abrirModal(`${cabecalhoModal('Restaurar um dia')}
+    <div class="modal-corpo">
+      <p class="modal-texto">Volta a lista, as notas, as páginas, as watchlists, as tierlists e as listas para como estavam no fim daquele dia. O estado de agora é guardado antes, então dá para desfazer restaurando o backup de hoje.</p>
+      <div class="backups-lista">${st.diarios.map((d) => `
+        <button class="backup-item" data-arquivo="${esc(d.arquivo)}">
+          ${icone('History')}
+          <span><b>${esc(d.dia === hoje() ? 'Hoje' : diaLegivel(d.dia, { comAno: true }))}</b><small>salvo às ${horaLegivel(d.salvoEm)} · ${Math.max(1, Math.round(d.tamanho / 1024))} KB</small></span>
+        </button>`).join('')}</div>
+    </div>`, 'modal-pequeno');
+  $('.backups-lista', modal).addEventListener('click', async (e) => {
+    const b = e.target.closest('.backup-item');
+    if (!b) return;
+    const ok = await perguntar({
+      titulo: 'Restaurar este backup?',
+      texto: `A lista inteira volta para como estava em ${b.querySelector('b').textContent.toLowerCase() === 'hoje' ? 'hoje' : b.querySelector('b').textContent}. O app recarrega em seguida.`,
+      botoes: [
+        { rotulo: 'Cancelar', valor: false, classe: 'btn-fantasma' },
+        { rotulo: 'Restaurar', valor: true, classe: 'btn-laranja' },
+      ],
+    });
+    if (!ok) return;
+    const r = await api.restaurarBackup(b.dataset.arquivo);
+    if (r.erro) { aviso(r.erro, { tipo: 'erro' }); return; }
+    location.reload();
+  });
+}
+
 async function importarBackup() {
   const ok = await perguntar({
     titulo: 'Importar backup',
@@ -2589,6 +2695,7 @@ async function importarBackup() {
   const r = await api.importarBackup();
   if (r.cancelado) return;
   if (r.erro) { aviso(r.erro, { tipo: 'erro', duracao: 6000 }); return; }
+  if (r.comConfig) { location.reload(); return; } // watchlists e tierlists vieram junto
   substituirLista(r.filmes);
   mostrarResumo('Backup importado', r);
   buscarCapas({ automatica: true });
@@ -2726,6 +2833,7 @@ $$('.chip[data-filtro]').forEach((chip) => {
 
 $('#chip-diretor').addEventListener('click', () => filtrarDiretor(''));
 $('#chip-pais').addEventListener('click', () => filtrarPais(''));
+$('#btn-sem-adicionar').addEventListener('click', () => abrirAdicionar(estado.busca.trim()));
 
 $('#ordenacao').addEventListener('change', async (e) => {
   estado.ordenacao = e.target.value;
@@ -2751,7 +2859,43 @@ $$('.alternar-vista .btn').forEach((b) => {
 });
 
 $('#btn-sortear').addEventListener('click', (e) => { girarDado(e.currentTarget); sortear(); });
-$('#btn-sortear-filtro').addEventListener('click', (e) => { e.currentTarget.blur(); abrirFiltrosSorteio(); });
+$('#btn-sortear-filtro').addEventListener('click', () => abrirFiltrosSorteio());
+
+// Menus do topo: abrem ao passar o mouse na seta (ou ao clicar, pelo teclado).
+// Escolher um item fecha a lista, mesmo com o mouse ainda em cima dela.
+(() => {
+  const menu = $('#menu-topo');
+  const seta = $('#btn-menu-topo');
+  const abrir = (sim) => {
+    menu.classList.toggle('aberto', sim);
+    seta.setAttribute('aria-expanded', String(sim));
+  };
+  seta.addEventListener('click', () => abrir(!menu.classList.contains('aberto')));
+  menu.addEventListener('mouseenter', () => seta.setAttribute('aria-expanded', 'true'));
+  menu.addEventListener('mouseleave', () => {
+    menu.classList.remove('fechado');
+    if (!menu.classList.contains('aberto')) seta.setAttribute('aria-expanded', 'false');
+  });
+  $('#menu-topo-lista').addEventListener('click', (e) => {
+    if (!e.target.closest('.menu-topo-item')) return;
+    abrir(false);
+    menu.classList.add('fechado');
+    document.activeElement?.blur?.();
+  });
+  document.addEventListener('pointerdown', (e) => { if (!menu.contains(e.target)) abrir(false); });
+  menu.addEventListener('keydown', (e) => {
+    const itens = $$('.menu-topo-item', menu);
+    const i = itens.indexOf(document.activeElement);
+    if (e.key === 'Escape' && (menu.classList.contains('aberto') || i >= 0)) {
+      e.stopPropagation(); abrir(false); seta.focus();
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      abrir(true);
+      const n = itens.length;
+      itens[e.key === 'ArrowDown' ? (i + 1 + n) % n : (i - 1 + n) % n].focus();
+    }
+  });
+})();
 
 // Retorno do botão de sortear: o dado dá meia-volta.
 function girarDado(botao) {
@@ -2777,8 +2921,8 @@ function fecharPesquisa() {
 $('#pesquisa').addEventListener('blur', () => {
   if (!$('#pesquisa').value) fecharPesquisa();
 });
-$('#btn-adicionar').addEventListener('click', abrirAdicionar);
-$('#btn-adicionar-vazio').addEventListener('click', abrirAdicionar);
+$('#btn-adicionar').addEventListener('click', () => abrirAdicionar());
+$('#btn-adicionar-vazio').addEventListener('click', () => abrirAdicionar());
 $('#btn-config').addEventListener('click', abrirConfiguracoes);
 $('#btn-importar-vazio').addEventListener('click', importarPlanilha);
 $('#btn-capas-faltam').addEventListener('click', () => buscarCapas({ incluirNaoEncontradas: true }));
@@ -2788,6 +2932,10 @@ function digitandoEm(el) {
 }
 
 document.addEventListener('keydown', (e) => {
+  if (typeof paginaFilme !== 'undefined' && !paginaFilme.hidden) {
+    if (e.key === 'Escape' && !modal.open) { e.preventDefault(); fecharPagina(); }
+    return;
+  }
   const mod = MAC ? e.metaKey : e.ctrlKey;
   if (mod && !e.altKey && e.key.toLowerCase() === 'f') {
     e.preventDefault();
@@ -2810,6 +2958,10 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape' && !modal.open && estado.painelId) {
     fecharPainel();
+    return;
+  }
+  if (e.key === 'Escape' && !modal.open && !paginasTela.hidden) {
+    fecharPaginas();
     return;
   }
   if (e.key === 'Escape' && !modal.open && !calendario.hidden) {
@@ -2836,7 +2988,7 @@ document.addEventListener('keydown', (e) => {
     fecharPesquisa();
     return;
   }
-  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && !modal.open && foco.hidden && calendario.hidden && tierlist.hidden && estatisticas.hidden && !digitandoEm(document.activeElement)) {
+  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && !modal.open && foco.hidden && calendario.hidden && tierlist.hidden && estatisticas.hidden && paginasTela.hidden && !digitandoEm(document.activeElement)) {
     e.preventDefault();
     sortear();
   }
@@ -3117,6 +3269,8 @@ function filmeDoDiaHTML(f, { pensandoEm = null, vistoNoMes = null } = {}) {
       : '';
     acoes = `<div class="cal-filme-botoes">${principais}${tirar}</div>${mover}`;
   }
+  if (vistoNoMes && temPagina(f)) return resenhaDoDiaHTML(f, { vistoNoMes, trofeu: acoes });
+  if (vistoNoMes) acoes += `<button class="cal-escrever" data-c="pagina" data-id="${f.id}">${icone('PenLine')} Escrever sobre o filme</button>`;
   return `
     <article class="cal-filme${pensandoEm ? ' pensando' : ''}${ehDoMes ? ' do-mes' : ''}" data-id="${f.id}">
       ${capinhaHTML(f, 'grande')}
@@ -3127,6 +3281,14 @@ function filmeDoDiaHTML(f, { pensandoEm = null, vistoNoMes = null } = {}) {
       </div>
       ${acoes}
     </article>`;
+}
+
+function vistosDoDiaHTML(vistos, dia) {
+  const comPagina = vistos.filter(temPagina);
+  const semPagina = vistos.filter((f) => !temPagina(f));
+  const mes = dia.slice(0, 7);
+  return (comPagina.length ? `<div class="cal-resenhas">${comPagina.map((f) => filmeDoDiaHTML(f, { vistoNoMes: mes })).join('')}</div>` : '')
+    + (semPagina.length ? `<div class="cal-filmes">${semPagina.map((f) => filmeDoDiaHTML(f, { vistoNoMes: mes })).join('')}</div>` : '');
 }
 
 function diaSeguinte(dia) {
@@ -3172,109 +3334,192 @@ function paginaDiaHTML(dia) {
     <section class="cal-secao cal-secao-vistos">
       <h3>${icone('Check')} ${ehHoje ? 'Vistos hoje' : 'Vistos neste dia'} ${contagem(vistos.length)}</h3>
       ${vistos.length
-        ? `<div class="cal-filmes">${vistos.map((f) => filmeDoDiaHTML(f, { vistoNoMes: dia.slice(0, 7) })).join('')}</div>`
+        ? vistosDoDiaHTML(vistos, dia)
         : `<p class="cal-vazio">${ehHoje ? 'Nenhum filme visto hoje ainda.' : 'Nenhum filme visto neste dia.'}</p>`}
     </section>`}`;
 }
 
 // ---------- Sortear um filme para a watchlist de hoje ----------
 
-// Entre os não vistos que ainda não estão na lista de hoje (de preferência com
-// capa). As capas passam rápido num cartão, desacelerando até parar no
-// sorteado, que entra na watchlist; com "reduzir movimento", vai direto.
-let sorteandoHoje = false;
+// Em tela cheia: o fundo escurece e, no centro, as capas passam rápido,
+// desacelerando até parar no sorteado. Aí aparecem os dados dele e a escolha:
+// colocar na watchlist, deixar para lá, ou sortear de novo (com um menu para
+// sortear com os mesmos filtros, sem filtro ou escolher os filtros). A roleta
+// anima mesmo com as animações do Windows desligadas: ela é o próprio sorteio.
+let roleta = null; // { el, comFiltro, daWatchlist, escolhido, girando, geracao }
 
 // `comFiltro`: só entre os que passam nos filtros do sorteio (duração, gênero,
 // década, país). Com "Um da watchlist de hoje", sorteia entre os que já estão
-// nela: o escolhido vai para o primeiro lugar da lista, em vez de entrar nela.
-async function sortearParaHoje(botao, { comFiltro = false } = {}) {
-  if (sorteandoHoje) return;
+// nela: aceitar leva o escolhido para o primeiro lugar, em vez de pôr na lista.
+function candidatosRoleta(comFiltro) {
   const fs = comFiltro ? filtrosSorteio() : FILTROS_SORTEIO_VAZIOS;
   const daWatchlist = Boolean(comFiltro && fs.soWatchlist);
-  const candidatos = candidatosSorteio(fs, { paraHoje: !daWatchlist });
+  return { fs, daWatchlist, candidatos: candidatosSorteio(fs, { paraHoje: !daWatchlist }) };
+}
+
+function sortearParaHoje(_botao, { comFiltro = false } = {}) {
+  if (roleta && roleta.girando) return;
+  const { daWatchlist, candidatos } = candidatosRoleta(comFiltro);
   if (!candidatos.length) {
-    const ajustar = { rotulo: 'Ajustar filtros', fn: () => abrirFiltrosSorteio({ paraHoje: true, botao }) };
+    const ajustar = { rotulo: 'Ajustar filtros', fn: () => abrirFiltrosSorteio({ paraHoje: true }) };
     if (daWatchlist) aviso('Nenhum filme da watchlist de hoje passa nos filtros.', { acao: ajustar });
     else if (comFiltro) aviso('Nenhum filme não visto passa nos filtros do sorteio.', { acao: ajustar });
     else aviso('Não sobrou nenhum filme não visto para sortear.');
     return;
   }
-  const comCapa = candidatos.filter((f) => srcCapa(f));
-  const sorteaveis = comCapa.length ? comCapa : candidatos;
-  const escolhido = sorteaveis[Math.floor(Math.random() * sorteaveis.length)];
-  sorteandoHoje = true;
-  if (botao) botao.disabled = true;
-  try {
-    if (!Movimento.desligado() && srcCapa(escolhido)) await roletaDeCapas(escolhido, comCapa);
-  } finally {
-    sorteandoHoje = false;
-  }
-  const antes = idsWatchlist();
-  salvarWatchlist(daWatchlist ? [escolhido.id, ...antes.filter((x) => x !== escolhido.id)] : [...antes, escolhido.id]);
-  aposMudarDia(escolhido.id);
-  const cartao = $(`#calendario [data-secao="watchlist"] .cal-filme[data-id="${escolhido.id}"]`);
-  if (cartao) {
-    cartao.scrollIntoView({ block: 'nearest' });
-    Movimento.animar(cartao, [{ transform: 'scale(.94)', opacity: 0.6 }, { transform: 'scale(1.03)', opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 520 });
-  }
-  aviso(daWatchlist ? `Da sua watchlist, hoje é: “${escolhido.titulo}”.` : `Sorteado para hoje: “${escolhido.titulo}”.`, {
-    tipo: 'ok',
-    acao: { rotulo: 'Desfazer', fn: () => { salvarWatchlist(antes); aposMudarDia(escolhido.id); } },
-  });
+  if (!roleta) abrirTelaRoleta();
+  girarRoleta({ comFiltro, daWatchlist, candidatos });
 }
 
 function preCarregarImagem(src) {
   return new Promise((r) => { const img = new Image(); img.onload = img.onerror = () => r(); img.src = src; });
 }
 
-async function roletaDeCapas(escolhido, capas) {
-  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
-  const secao = $('#calendario [data-secao="watchlist"]');
-  if (!secao) return;
-  let grade = $('.cal-filmes', secao);
-  if (!grade) {
-    $('.cal-vazio', secao)?.remove();
-    grade = document.createElement('div');
-    grade.className = 'cal-filmes';
-    secao.append(grade);
-  }
-  const cartao = document.createElement('article');
-  cartao.className = 'cal-filme pensando cal-roleta';
-  cartao.innerHTML = `
-    <div class="cal-capa grande"><div class="capa"><img alt=""></div></div>
-    <div class="cal-filme-info">
-      <h4><span class="cal-filme-titulo"></span></h4>
-      <p class="cal-roleta-status" role="status">Sorteando…</p>
+function abrirTelaRoleta() {
+  const el = document.createElement('div');
+  el.className = 'roleta-tela';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  el.setAttribute('aria-label', 'Sorteio para hoje');
+  el.innerHTML = `
+    <div class="roleta-fundo" aria-hidden="true"></div>
+    <button class="redondo roleta-fechar" data-r="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
+    <div class="roleta-palco">
+      <span class="roleta-kicker"></span>
+      <div class="roleta-capa"><div class="capa"><img alt=""></div></div>
+      <div class="roleta-info">
+        <div class="roleta-titulo"><h2></h2></div>
+        <p class="roleta-meta"></p>
+        <p class="roleta-sinopse"></p>
+      </div>
+      <div class="roleta-acoes" hidden>
+        <button class="btn btn-assistir" data-r="aceitar"></button>
+        <div class="roleta-de-novo">
+          <button class="btn btn-claro" data-r="de-novo">${icone('Dices')} Sortear de novo</button>
+          <button class="btn btn-claro roleta-seta" data-r="menu" aria-haspopup="menu" aria-label="Mais opções de sorteio" title="Sortear com filtro">${icone('ChevronDown')}</button>
+          <div class="roleta-menu" role="menu" hidden>
+            <button role="menuitem" data-r="de-novo">${icone('Dices')} <span class="roleta-menu-mesmos"></span></button>
+            <button role="menuitem" data-r="sem-filtro">${icone('Shuffle')} Sortear sem filtro</button>
+            <button role="menuitem" data-r="filtros">${icone('SlidersHorizontal')} Escolher filtros…</button>
+          </div>
+        </div>
+        <button class="btn btn-fantasma" data-r="recusar">Agora não</button>
+      </div>
     </div>`;
-  grade.append(cartao);
-  cartao.scrollIntoView({ block: 'nearest' });
-  const img = $('img', cartao);
-  const titulo = $('.cal-filme-titulo', cartao);
-  const capa = $('.capa', cartao);
+  document.body.append(el);
+  roleta = { el, geracao: 0 };
+  el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+  el.addEventListener('click', aoClicarRoleta);
+}
 
-  // Umas 14 capas ao acaso e o sorteado por último, já carregadas para não piscar.
-  const outros = capas.filter((f) => f.id !== escolhido.id).sort(() => Math.random() - 0.5).slice(0, 14);
+function fecharTelaRoleta() {
+  if (!roleta) return;
+  const { el } = roleta;
+  roleta = null;
+  el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: 'ease-in' }).onfinish = () => el.remove();
+}
+
+async function girarRoleta({ comFiltro, daWatchlist, candidatos }) {
+  const r = roleta;
+  const geracao = ++r.geracao;
+  Object.assign(r, { comFiltro, daWatchlist, girando: true });
+  const { el } = r;
+  const comCapa = candidatos.filter((f) => srcCapa(f));
+  const sorteaveis = (comCapa.length ? comCapa : candidatos).filter((f) => f.id !== r.escolhido?.id);
+  const lista = sorteaveis.length ? sorteaveis : candidatos;
+  const escolhido = lista[Math.floor(Math.random() * lista.length)];
+  r.escolhido = escolhido;
+
+  const resumo = comFiltro ? resumoFiltrosSorteio() : [];
+  $('.roleta-kicker', el).innerHTML = `${icone('Dices')} ${daWatchlist ? 'Sorteando da sua watchlist de hoje' : 'Sorteando para hoje'}${resumo.filter((x) => x !== 'watchlist de hoje').length ? ` · ${esc(resumo.filter((x) => x !== 'watchlist de hoje').join(' · '))}` : ''}`;
+  $('.roleta-acoes', el).hidden = true;
+  $('.roleta-menu', el).hidden = true;
+  el.classList.remove('parou');
+  const img = $('.roleta-capa img', el);
+  const capa = $('.roleta-capa .capa', el);
+  const titulo = $('.roleta-titulo', el);
+  $('.roleta-meta', el).textContent = '';
+  $('.roleta-sinopse', el).textContent = '';
+
+  // Umas 16 capas ao acaso e o sorteado por último, já carregadas para não piscar.
+  const outros = comCapa.filter((f) => f.id !== escolhido.id).sort(() => Math.random() - 0.5).slice(0, 16);
   const fila = [...outros, escolhido];
-  await Promise.race([Promise.all(fila.map((f) => preCarregarImagem(srcCapa(f)))), espera(900)]);
+  await Promise.race([Promise.all(fila.map((f) => preCarregarImagem(srcCapa(f)))), new Promise((ok) => setTimeout(ok, 900))]);
 
-  let atraso = 50;
+  let atraso = 55;
   for (const [i, f] of fila.entries()) {
-    if (!cartao.isConnected) return; // a pessoa saiu da página do dia
-    img.src = srcCapa(f);
-    titulo.textContent = f.titulo;
-    capa.animate([{ transform: 'translateY(-5%) scale(.97)', opacity: 0.65 }, { transform: 'none', opacity: 1 }],
-      { duration: Math.min(atraso, 160), easing: 'ease-out' });
+    if (roleta !== r || r.geracao !== geracao) return; // fechou ou sorteou de novo
+    img.src = srcCapa(f) || '';
+    titulo.innerHTML = `<h2>${esc(f.titulo)}</h2>`;
+    capa.animate([{ transform: 'translateY(-6%) scale(.96)', opacity: 0.55 }, { transform: 'none', opacity: 1 }],
+      { duration: Math.min(atraso, 170), easing: 'ease-out' });
     if (i < fila.length - 1) {
-      await espera(atraso);
-      atraso = Math.min(atraso * 1.2, 340);
+      await new Promise((ok) => setTimeout(ok, atraso));
+      atraso = Math.min(atraso * 1.18, 360);
     }
   }
-  cartao.classList.add('escolhido');
-  $('.cal-roleta-status', cartao).textContent = 'Sorteado!';
-  capa.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.07)' }, { transform: 'scale(1)' }],
-    { duration: 520, easing: 'cubic-bezier(.2, .8, .2, 1)' });
-  await espera(900);
+  if (roleta !== r || r.geracao !== geracao) return;
+
+  // Parou: o sorteado cresce, o fundo ganha a capa dele, e aparecem os dados e a escolha.
+  r.girando = false;
+  el.classList.add('parou');
+  $('.roleta-fundo', el).style.backgroundImage = srcCapa(escolhido) ? `url("${srcCapa(escolhido).replace(/"/g, '%22')}")` : '';
+  capa.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'scale(1)' }], { duration: 560, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+  titulo.innerHTML = tituloHTML(escolhido);
+  $('.roleta-meta', el).textContent = [escolhido.ano, duracaoDe(escolhido), generos(escolhido.info).slice(0, 2).join(', '), escolhido.diretor].filter(Boolean).join(' · ');
+  $('.roleta-sinopse', el).textContent = (escolhido.info && escolhido.info.sinopse) || '';
+  const aceitar = $('[data-r="aceitar"]', el);
+  aceitar.innerHTML = daWatchlist ? `${icone('ArrowUp')} Ver este hoje` : `${icone('Plus')} Colocar na watchlist`;
+  $('.roleta-menu-mesmos', el).textContent = comFiltro && resumo.length ? 'Sortear com os mesmos filtros' : 'Sortear de novo';
+  const acoes = $('.roleta-acoes', el);
+  acoes.hidden = false;
+  [$('.roleta-info', el), acoes].forEach((x, i) => x.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }],
+    { duration: 380, delay: 120 + i * 90, easing: 'cubic-bezier(.16, 1, .3, 1)', fill: 'backwards' }));
+  aceitar.focus({ preventScroll: true });
 }
+
+function aceitarSorteado() {
+  const { escolhido, daWatchlist } = roleta;
+  const antes = idsWatchlist();
+  salvarWatchlist(daWatchlist ? [escolhido.id, ...antes.filter((x) => x !== escolhido.id)] : [...antes, escolhido.id]);
+  fecharTelaRoleta();
+  aposMudarDia(escolhido.id);
+  const cartao = $(`#calendario [data-secao="watchlist"] .cal-filme[data-id="${escolhido.id}"]`);
+  if (cartao) {
+    cartao.scrollIntoView({ block: 'nearest' });
+    cartao.animate([{ transform: 'scale(.94)', opacity: 0.6 }, { transform: 'scale(1.03)', opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 520 });
+  }
+  aviso(daWatchlist ? `Hoje é: “${escolhido.titulo}”.` : `“${escolhido.titulo}” entrou na watchlist de hoje.`, {
+    tipo: 'ok',
+    acao: { rotulo: 'Desfazer', fn: () => { salvarWatchlist(antes); aposMudarDia(escolhido.id); } },
+  });
+}
+
+function aoClicarRoleta(e) {
+  if (!roleta) return;
+  const b = e.target.closest('[data-r]');
+  const menu = $('.roleta-menu', roleta.el);
+  if (!b) { menu.hidden = true; return; }
+  if (b.dataset.r !== 'menu') menu.hidden = true;
+  switch (b.dataset.r) {
+    case 'fechar':
+    case 'recusar': fecharTelaRoleta(); break;
+    case 'aceitar': if (!roleta.girando) aceitarSorteado(); break;
+    case 'menu': menu.hidden = !menu.hidden; break;
+    case 'de-novo': sortearParaHoje(null, { comFiltro: roleta.comFiltro }); break;
+    case 'sem-filtro': sortearParaHoje(null, { comFiltro: false }); break;
+    case 'filtros': abrirFiltrosSorteio({ paraHoje: true }); break;
+  }
+}
+
+// Esc: fecha o menu, ou a tela do sorteio (antes de fechar o calendário).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !roleta || modal.open) return;
+  e.stopImmediatePropagation();
+  const menu = $('.roleta-menu', roleta.el);
+  if (!menu.hidden) menu.hidden = true;
+  else fecharTelaRoleta();
+}, true);
 
 calendario.addEventListener('click', (e) => {
   if (e.target === calendario) { fecharCalendario(); return; }
@@ -3295,6 +3540,7 @@ calendario.addEventListener('click', (e) => {
     case 'mover': moverWatchlist(id, alvo.dataset.de, alvo.dataset.para); break;
     case 'filme-do-mes': escolherFilmeDoMes(alvo.dataset.mes); break;
     case 'alternar-filme-do-mes': alternarFilmeDoMes(id, alvo.dataset.mes); break;
+    case 'pagina': abrirPagina(id); break;
   }
 });
 
@@ -3330,7 +3576,7 @@ let reordenacao = null; // { cartao, grade, dia, x0, y0, ativo, fantasma }
 calendario.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || !diaCalendario) return;
   const capa = e.target.closest('[data-secao="watchlist"] .cal-filme .cal-capa');
-  if (!capa || capa.closest('.cal-roleta')) return;
+  if (!capa) return;
   const cartao = capa.closest('.cal-filme');
   reordenacao = { cartao, grade: cartao.parentElement, dia: diaCalendario, x0: e.clientX, y0: e.clientY, ativo: false };
 });
@@ -3510,6 +3756,7 @@ function salvarTiers() { api.salvarConfig({ tierlists: listasTl(), tierlistAtiva
 
 // ---- Filtros da tierlist (gênero, diretor, país, década, mês em que viu) ----
 const FILTROS_TL = [
+  { chave: 'listas', titulo: 'Lista', valores: (f) => listasDe(f) },
   { chave: 'generos', titulo: 'Gênero', valores: (f) => generos(f.info) },
   { chave: 'diretores', titulo: 'Diretor', valores: (f) => nomesDiretores(f.diretor) },
   { chave: 'paises', titulo: 'País', valores: (f) => paisesDe(f) },
@@ -4114,7 +4361,10 @@ api.aoAtualizacaoDisponivel(({ versao, url }) => {
 const estatisticas = $('#retrospectiva');
 // Os diretores de um filme como estão escritos (para mostrar; diretoresDe normaliza para comparar).
 const nomesDiretores = (texto) => String(texto || '').split(/\s*(?:,|;|\/|&)\s*/).map((d) => d.trim()).filter(Boolean);
-let periodoEst = 'tudo'; // 'tudo' | 'AAAA'
+let periodoEst = 'tudo'; // 'tudo' | 'AAAA' | 'AAAA-MM'
+// "outubro de 2026", "2026" ou "tudo".
+const nomePeriodo = (p) => (p === 'tudo' ? 'tudo' : p.length === 7 ? mesLegivel(p) : p);
+const mesesComFilmes = (ano) => [...new Set(estado.filmes.flatMap((f) => (f.vistoEm || []).filter((d) => d.startsWith(ano)).map((d) => d.slice(0, 7))))].sort();
 
 function abrirEstatisticas() {
   fecharPrevia(false);
@@ -4204,8 +4454,13 @@ function renderEstatisticas() {
   const nomeMes = (m) => MESES[m].slice(0, 3);
 
   // Filmes por mês: os 12 meses do ano escolhido; em "Tudo", do primeiro mês com data até hoje.
+  // Num mês só, filmes por dia.
+  const doMesSo = periodo.length === 7;
+  const anoSel = periodo === 'tudo' ? '' : periodo.slice(0, 4);
   let meses;
-  if (periodo === 'tudo') {
+  if (doMesSo) {
+    meses = [];
+  } else if (periodo === 'tudo') {
     const primeiro = d.dias[0] ? d.dias[0].slice(0, 7) : hoje().slice(0, 7);
     meses = [];
     for (let m = primeiro; m <= hoje().slice(0, 7); m = mesVizinho(m, 1)) meses.push(m);
@@ -4216,6 +4471,10 @@ function renderEstatisticas() {
     const n = d.sessoes.filter((s) => s.dia.startsWith(m)).length;
     const [a, mm] = m.split('-').map(Number);
     return { rotulo: periodo === 'tudo' && meses.length > 12 ? `${nomeMes(mm - 1)}/${String(a).slice(2)}` : nomeMes(mm - 1), rotuloLongo: mesLegivel(m), valor: n };
+  });
+  const porDia = !doMesSo ? [] : Array.from({ length: new Date(Number(periodo.slice(0, 4)), Number(periodo.slice(5, 7)), 0).getDate() }, (_, i) => {
+    const dia = `${periodo}-${String(i + 1).padStart(2, '0')}`;
+    return { rotulo: String(i + 1), rotuloLongo: diaLegivel(dia), valor: d.sessoes.filter((x) => x.dia === dia).length };
   });
 
   const notas = Array.from({ length: 10 }, (_, i) => (i + 1) / 2).map((n) => ({
@@ -4232,7 +4491,7 @@ function renderEstatisticas() {
   const generoTop = ranking(d.lista.flatMap((f) => generos(f.info)), 1)[0];
 
   const frase = d.lista.length
-    ? `${periodo === 'tudo' ? 'Até agora' : `Em ${periodo}`}, você viu <b>${numero(d.lista.length)} filme${d.lista.length === 1 ? '' : 's'}</b>${horas ? `, somando <b>${numero(horas)} hora${horas === 1 ? '' : 's'}</b> de cinema` : ''}.`
+    ? `${periodo === 'tudo' ? 'Até agora' : `Em ${nomePeriodo(periodo)}`}, você viu <b>${numero(d.lista.length)} filme${d.lista.length === 1 ? '' : 's'}</b>${horas ? `, somando <b>${numero(horas)} hora${horas === 1 ? '' : 's'}</b> de cinema` : ''}.`
       + (diretorTop ? ` Quem mais apareceu foi <b>${esc(diretorTop[0])}</b>` + (paisTop ? `, e o país que mais rendeu foi <b>${esc(paisTop[0])}</b>` : '') + '.' : '')
       + (generoTop ? ` Gênero do período: <b>${esc(generoTop[0])}</b>.` : '')
     : 'Nenhum filme visto neste período ainda.';
@@ -4242,13 +4501,18 @@ function renderEstatisticas() {
     <div class="tl-topo est-topo">
       <h2>Estatísticas</h2>
       <div class="chips-linha est-periodos" role="radiogroup" aria-label="Período">
-        ${['tudo', ...anos].map((p) => `<button class="chip${p === periodo ? ' ativo' : ''}" data-e="periodo" data-periodo="${p}" role="radio" aria-checked="${p === periodo}">${p === 'tudo' ? 'Tudo' : p}</button>`).join('')}
+        ${['tudo', ...anos].map((p) => `<button class="chip${p === periodo || p === anoSel ? ' ativo' : ''}" data-e="periodo" data-periodo="${p}" role="radio" aria-checked="${p === periodo || p === anoSel}">${p === 'tudo' ? 'Tudo' : p}</button>`).join('')}
       </div>
       <button class="redondo tl-fechar" data-e="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
+      ${anoSel ? `<div class="chips-linha est-meses" role="radiogroup" aria-label="Mês de ${anoSel}">
+        <button class="chip chip-mes${!doMesSo ? ' ativo' : ''}" data-e="periodo" data-periodo="${anoSel}" role="radio" aria-checked="${!doMesSo}">O ano todo</button>
+        ${mesesComFilmes(anoSel).map((m) => `<button class="chip chip-mes${m === periodo ? ' ativo' : ''}" data-e="periodo" data-periodo="${m}" role="radio" aria-checked="${m === periodo}">${MESES[Number(m.slice(5)) - 1]}</button>`).join('')}
+      </div>` : ''}
     </div>
     <section class="est-hero">
-      <span class="est-kicker">${icone('Sparkles')} ${periodo === 'tudo' ? 'Sua retrospectiva' : `Retrospectiva ${periodo}`}</span>
+      <span class="est-kicker">${icone('Sparkles')} ${periodo === 'tudo' ? 'Sua retrospectiva' : `Retrospectiva de ${nomePeriodo(periodo)}`}</span>
       <p>${frase}</p>
+      ${d.lista.length ? `<button class="btn btn-primario est-story" data-e="story">${icone('ImagePlus')} Criar stories da retrospectiva</button>` : ''}
     </section>
     <div class="est-tiles">
       ${tile('Filmes vistos', numero(d.lista.length), d.sessoes.length > d.lista.length ? `${numero(d.sessoes.length)} sessões` : '')}
@@ -4259,8 +4523,8 @@ function renderEstatisticas() {
     </div>
     <div class="est-grade">
       <section class="est-cartao est-largo">
-        <h3>Filmes por mês</h3>
-        ${d.sessoes.length ? colunasHTML(porMes, (n) => `${n} filme${n === 1 ? '' : 's'}`) : '<p class="est-vazio">As datas começam a contar quando você marca um filme como visto (ou lança o dia nos detalhes).</p>'}
+        <h3>${doMesSo ? 'Filmes por dia' : 'Filmes por mês'}</h3>
+        ${d.sessoes.length ? colunasHTML(doMesSo ? porDia : porMes, (n) => `${n} filme${n === 1 ? '' : 's'}`) : '<p class="est-vazio">As datas começam a contar quando você marca um filme como visto (ou lança o dia nos detalhes).</p>'}
       </section>
       <section class="est-cartao"><h3>Diretores mais vistos</h3>${barrasHTML(ranking(d.lista.flatMap((f) => nomesDiretores(f.diretor))), { clicar: 'diretor' })}</section>
       <section class="est-cartao"><h3>Países</h3>${barrasHTML(ranking(d.lista.map(paisPrincipal)), { clicar: 'pais' })}</section>
@@ -4285,6 +4549,7 @@ estatisticas.addEventListener('click', (e) => {
   switch (alvo.dataset.e) {
     case 'fechar': fecharEstatisticas(); break;
     case 'periodo': periodoEst = alvo.dataset.periodo; renderEstatisticas(); break;
+    case 'story': abrirRetrospectivaStory(periodoEst); break;
     case 'filme': abrirPainel(alvo.dataset.id); break;
     case 'diretor': fecharEstatisticas(); filtrarDiretor(alvo.dataset.valor); break;
     case 'pais': fecharEstatisticas(); filtrarPais(alvo.dataset.valor); break;

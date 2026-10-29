@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net, screen, session, webFrameMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net, screen, session, webFrameMain, clipboard, ClipboardItem } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 
@@ -49,9 +50,79 @@ function gravarAgora() {
   clearTimeout(timerGravar);
   timerGravar = null;
   armazem.gravarFilmes(PASTA, filmes);
+  mudouDesdeBackup = true;
 }
 function gravarConfig() {
   armazem.gravarJSON(C.config, config);
+  mudouDesdeBackup = true;
+}
+
+// ---------- Backup diário ----------
+//
+// Uma cópia por dia (diario-AAAA-MM-DD.json) com os filmes e o que o app guarda
+// nas configurações (watchlists, tierlists, listas…), sem as chaves das APIs.
+// A cópia do dia é refeita a cada hora em que algo mudou e ao fechar o app;
+// ficam os 30 dias mais recentes. Se houver uma pasta extra (a do Google
+// Drive, por exemplo), a mesma cópia vai para lá também.
+const MAX_DIARIOS = 30;
+const CONFIG_NO_BACKUP = ['stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas'];
+const RE_DIARIO = /^diario-\d{4}-\d{2}-\d{2}\.json$/;
+let mudouDesdeBackup = true;
+let ultimoBackup = { em: null, erroExtra: null };
+
+const diaLocal = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function instantaneo() {
+  const cfg = {};
+  for (const k of CONFIG_NO_BACKUP) if (k in config) cfg[k] = config[k];
+  return { versao: 2, app: 'NANDFlix', salvoEm: new Date().toISOString(), filmes, config: cfg };
+}
+
+function limparDiarios(pasta) {
+  const velhos = fs.readdirSync(pasta).filter((n) => RE_DIARIO.test(n)).sort().reverse().slice(MAX_DIARIOS);
+  for (const n of velhos) fs.unlinkSync(path.join(pasta, n));
+}
+
+function backupDiario({ forcar = false } = {}) {
+  const nome = `diario-${diaLocal()}.json`;
+  if (!forcar && !mudouDesdeBackup && fs.existsSync(path.join(C.backups, nome))) return;
+  if (!filmes.length) return; // lista vazia (primeira vez): nada a guardar
+  const dados = instantaneo();
+  armazem.gravarJSON(path.join(C.backups, nome), dados);
+  limparDiarios(C.backups);
+  ultimoBackup = { em: dados.salvoEm, erroExtra: null };
+  if (config.pastaBackup) {
+    try {
+      armazem.gravarJSON(path.join(config.pastaBackup, nome), dados);
+      limparDiarios(config.pastaBackup);
+    } catch (e) { ultimoBackup.erroExtra = e.message; }
+  }
+  mudouDesdeBackup = false;
+}
+
+function listaDiarios() {
+  if (!fs.existsSync(C.backups)) return [];
+  return fs.readdirSync(C.backups).filter((n) => RE_DIARIO.test(n)).sort().reverse().map((n) => {
+    const st = fs.statSync(path.join(C.backups, n));
+    return { arquivo: n, dia: n.slice(7, 17), salvoEm: st.mtime.toISOString(), tamanho: st.size };
+  });
+}
+
+// Lê um backup (o diário, ou um arquivo exportado: versão 1 só com filmes, ou 2 com as configurações).
+function lerBackup(arquivo) {
+  const dados = armazem.lerJSON(arquivo, null);
+  const lista = Array.isArray(dados) ? dados : dados && dados.filmes;
+  if (!Array.isArray(lista) || lista.some((f) => !f || typeof f.titulo !== 'string')) return null;
+  return { filmes: lista, config: (dados && !Array.isArray(dados) && dados.config) || null };
+}
+
+function aplicarBackup(b) {
+  armazem.fazerBackup(PASTA);
+  backupDiario({ forcar: true }); // o estado de agora fica guardado antes de trocar
+  filmes = b.filmes.map((f) => novoFilme(f));
+  if (b.config) for (const k of CONFIG_NO_BACKUP) if (k in b.config) config[k] = b.config[k];
+  gravarAgora();
+  gravarConfig();
 }
 
 function avisar(canal, dados) {
@@ -449,7 +520,7 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
   // (watchlistHoje é o formato antigo, de um dia só; o app o apaga ao salvar o novo).
   // filmesDoMes: { 'AAAA-MM': id }, o filme favorito de cada mês (só aparece no calendário).
   // tierlist: [{ id, nome, cor, filmes: [ids] }], as tiers de cima para baixo.
-  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio'];
+  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas'];
   for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
   if ('omdbKey' in mudancas) config.limiteAtingidoEm = null;
   gravarConfig();
@@ -459,7 +530,7 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
 });
 
 ipcMain.handle('filme:atualizar', (_e, id, mudancas) => {
-  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa'];
+  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa', 'pagina', 'paginaEm', 'story', 'listas', 'shots'];
   const limpo = {};
   for (const k of permitidas) if (k in mudancas) limpo[k] = mudancas[k];
   // Mudar a busca da capa faz o filme ser procurado de novo no TMDB por ela.
@@ -677,6 +748,126 @@ ipcMain.handle('capa:baixar', async (_e, id) => {
   return { arquivo: r.filePath };
 });
 
+// ---------- Story para o Instagram ----------
+
+// O editor desenha a imagem num canvas; imagens de outra origem (capa:// e o
+// TMDB) "sujariam" o canvas e impediriam de exportar. Por isso elas chegam
+// aqui como data: URL. Só servem as capas baixadas e as imagens do TMDB.
+ipcMain.handle('imagem:dados', async (_e, src) => {
+  try {
+    const url = new URL(String(src || ''));
+    let dados;
+    let tipo = 'image/jpeg';
+    if (url.protocol === 'capa:') {
+      const arquivo = path.join(url.hostname === 'foto' ? C.imagens : C.capas, path.basename(decodeURIComponent(url.pathname)));
+      dados = await fs.promises.readFile(arquivo);
+      if (/\.png$/i.test(arquivo)) tipo = 'image/png';
+      else if (/\.webp$/i.test(arquivo)) tipo = 'image/webp';
+    } else if (url.protocol === 'https:' && url.hostname === 'image.tmdb.org') {
+      const r = await net.fetch(url.toString());
+      if (!r.ok) return null;
+      tipo = r.headers.get('content-type') || tipo;
+      dados = Buffer.from(await r.arrayBuffer());
+    } else return null;
+    return `data:${tipo};base64,${dados.toString('base64')}`;
+  } catch { return null; }
+});
+
+// ---------- Imagens das páginas e shots favoritos ----------
+
+// Guarda uma imagem colada na pasta "imagens" e devolve o endereço dela
+// (capa://foto/<arquivo>). Sem bytes, usa a imagem que estiver no clipboard.
+const EXT_IMAGEM = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+
+// A imagem do clipboard (print, "Copiar imagem" do navegador…). No Electron
+// 44 o clipboard é como o da web: itens com tipos (readImage não existe mais).
+async function imagemDoClipboard() {
+  try {
+    for (const item of await clipboard.read()) {
+      const tipo = item.types.find((t) => EXT_IMAGEM[t]);
+      if (!tipo) continue;
+      const blob = await item.getType(tipo);
+      return { dados: Buffer.from(await blob.arrayBuffer()), ext: EXT_IMAGEM[tipo] };
+    }
+  } catch { /* clipboard vazio ou sem permissão */ }
+  // Um arquivo copiado no Explorer não aparece como imagem: pergunta ao
+  // PowerShell qual arquivo está copiado.
+  if (process.platform !== 'win32') return null;
+  const caminhos = await new Promise((resolve) => {
+    let saida = '';
+    const ps = spawn('powershell.exe', ['-NoProfile', '-STA', '-Command',
+      '[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Clipboard -Format FileDropList | ForEach-Object { $_.FullName }'],
+    { windowsHide: true });
+    ps.stdout.on('data', (d) => { saida += d; });
+    ps.on('error', () => resolve([]));
+    ps.on('close', () => resolve(saida.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)));
+    setTimeout(() => { ps.kill(); resolve([]); }, 8000);
+  });
+  for (const caminho of caminhos) {
+    const ext = (caminho.match(/\.(png|jpe?g|webp|gif)$/i) || [])[1];
+    if (ext && fs.existsSync(caminho)) return { dados: await fs.promises.readFile(caminho), ext: ext.toLowerCase().replace('jpeg', 'jpg') };
+  }
+  return null;
+}
+ipcMain.handle('imagem:guardar', async (_e, bytes, tipo) => {
+  let dados;
+  let ext = EXT_IMAGEM[tipo];
+  if (bytes && ext) {
+    dados = Buffer.from(bytes);
+  } else {
+    const doClipboard = await imagemDoClipboard();
+    if (!doClipboard) return { erro: 'Não há nenhuma imagem copiada.' };
+    ({ dados, ext } = doClipboard);
+  }
+  if (!dados.length) return { erro: 'A imagem está vazia.' };
+  const nome = `${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}.${ext}`;
+  await fs.promises.mkdir(C.imagens, { recursive: true });
+  await fs.promises.writeFile(path.join(C.imagens, nome), dados);
+  return { src: `capa://foto/${nome}` };
+});
+
+const bytesDoPng = (dataUrl) => Buffer.from(String(dataUrl).replace(/^data:image\/png;base64,/, ''), 'base64');
+
+ipcMain.handle('story:salvar', async (_e, dataUrl, nome) => {
+  const r = await dialog.showSaveDialog(janela, {
+    title: 'Salvar story',
+    defaultPath: path.join(app.getPath('pictures'), `${nomeSeguro(nome || 'Story')}.png`),
+    filters: [{ name: 'Imagem PNG', extensions: ['png'] }],
+  });
+  if (r.canceled || !r.filePath) return { cancelado: true };
+  await fs.promises.writeFile(r.filePath, bytesDoPng(dataUrl));
+  return { arquivo: r.filePath };
+});
+
+// Várias imagens de uma vez (os stories da retrospectiva): escolhe a pasta e
+// grava "<nome> 1.png", "<nome> 2.png"…
+ipcMain.handle('story:salvarVarias', async (_e, dataUrls, nome) => {
+  const r = await dialog.showOpenDialog(janela, {
+    title: 'Escolha a pasta para salvar os stories',
+    defaultPath: app.getPath('pictures'),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (r.canceled || !r.filePaths.length) return { cancelado: true };
+  const base = nomeSeguro(nome || 'Story');
+  const arquivos = [];
+  for (const [i, d] of (dataUrls || []).entries()) {
+    const arquivo = path.join(r.filePaths[0], `${base} ${i + 1}.png`);
+    await fs.promises.writeFile(arquivo, bytesDoPng(d));
+    arquivos.push(arquivo);
+  }
+  return { pasta: r.filePaths[0], arquivos };
+});
+
+// O clipboard do Electron novo segue a API da web: uma lista de ClipboardItem
+// (writeImage não existe mais).
+ipcMain.handle('story:copiar', async (_e, dataUrl) => {
+  const png = new Blob([bytesDoPng(dataUrl)], { type: 'image/png' });
+  await clipboard.write([new ClipboardItem({ 'image/png': png })]);
+  return true;
+});
+
+ipcMain.handle('arquivo:mostrar', (_e, arquivo) => { if (arquivo) shell.showItemInFolder(arquivo); });
+
 ipcMain.handle('capas:baixarTodas', async () => {
   const r = await dialog.showOpenDialog(janela, {
     title: 'Escolha a pasta para salvar todas as capas',
@@ -891,7 +1082,7 @@ ipcMain.handle('backup:exportar', async () => {
     filters: [{ name: 'Backup (JSON)', extensions: ['json'] }],
   });
   if (r.canceled || !r.filePath) return { cancelado: true };
-  armazem.gravarJSON(r.filePath, { versao: 1, exportadoEm: new Date().toISOString(), filmes });
+  armazem.gravarJSON(r.filePath, { ...instantaneo(), exportadoEm: new Date().toISOString() });
   return { arquivo: r.filePath };
 });
 
@@ -902,15 +1093,46 @@ ipcMain.handle('backup:importar', async () => {
     properties: ['openFile'],
   });
   if (r.canceled || !r.filePaths.length) return { cancelado: true };
-  const dados = armazem.lerJSON(r.filePaths[0], null);
-  const lista = Array.isArray(dados) ? dados : dados && dados.filmes;
-  if (!Array.isArray(lista) || lista.some((f) => !f || typeof f.titulo !== 'string')) {
-    return { erro: 'Esse arquivo não parece um backup do Filmes legais.' };
-  }
-  armazem.fazerBackup(PASTA);
-  filmes = lista.map((f) => novoFilme(f));
-  gravarAgora();
-  return { ...resumo(filmes), filmes };
+  const b = lerBackup(r.filePaths[0]);
+  if (!b) return { erro: 'Esse arquivo não parece um backup do NANDFlix.' };
+  aplicarBackup(b);
+  return { ...resumo(filmes), filmes, comConfig: Boolean(b.config) };
+});
+
+ipcMain.handle('backup:status', () => ({
+  diarios: listaDiarios(),
+  ultimo: ultimoBackup,
+  pastaExtra: config.pastaBackup || '',
+}));
+
+ipcMain.handle('backup:escolherPasta', async () => {
+  const r = await dialog.showOpenDialog(janela, {
+    title: 'Pasta extra para os backups (a do Google Drive, por exemplo)',
+    defaultPath: config.pastaBackup || app.getPath('home'),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (r.canceled || !r.filePaths.length) return { cancelado: true };
+  config.pastaBackup = r.filePaths[0];
+  gravarConfig();
+  backupDiario({ forcar: true });
+  return { pasta: config.pastaBackup, erro: ultimoBackup.erroExtra };
+});
+
+ipcMain.handle('backup:tirarPasta', () => {
+  delete config.pastaBackup;
+  gravarConfig();
+  return true;
+});
+
+ipcMain.handle('backup:agora', () => { backupDiario({ forcar: true }); return ultimoBackup; });
+
+ipcMain.handle('backup:restaurar', (_e, arquivo) => {
+  const nome = path.basename(String(arquivo || ''));
+  if (!RE_DIARIO.test(nome)) return { erro: 'Backup inválido.' };
+  const b = lerBackup(path.join(C.backups, nome));
+  if (!b) return { erro: 'Não deu para ler esse backup.' };
+  aplicarBackup(b);
+  return { ok: true };
 });
 
 // ---------- Inicialização ----------
@@ -935,10 +1157,12 @@ if (!travaUnica) {
     armazem.fazerBackup(PASTA);
     filmes = armazem.lerFilmes(PASTA);
 
-    // capa://img/<arquivo> → arquivo da pasta de capas (sem sair dela).
+    // capa://img/<arquivo> → arquivo da pasta de capas (sem sair dela);
+    // capa://foto/<arquivo> → imagem colada numa página ou shot favorito.
     protocol.handle('capa', (req) => {
-      const nome = path.basename(decodeURIComponent(new URL(req.url).pathname));
-      const arquivo = path.join(C.capas, nome);
+      const url = new URL(req.url);
+      const nome = path.basename(decodeURIComponent(url.pathname));
+      const arquivo = path.join(url.hostname === 'foto' ? C.imagens : C.capas, nome);
       if (!fs.existsSync(arquivo)) return new Response('', { status: 404 });
       return net.fetch(pathToFileURL(arquivo).toString());
     });
@@ -955,10 +1179,13 @@ if (!travaUnica) {
 
     criarJanela();
     iniciarAtualizacoes();
+    try { backupDiario(); } catch (e) { console.error('backup', e); }
+    setInterval(() => { try { backupDiario(); } catch (e) { console.error('backup', e); } }, 60 * 60 * 1000);
   });
 
   app.on('before-quit', () => {
     if (timerGravar) gravarAgora();
+    try { backupDiario(); } catch { /* fecha mesmo assim */ }
     for (const { filme } of lixeira.values()) apagarCapaSeSobrou(filme);
     lixeira.clear();
   });
