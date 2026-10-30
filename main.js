@@ -1089,36 +1089,9 @@ ipcMain.handle('letterboxd:importar', async (_e, pastaDada) => {
     return { erro: e.message };
   }
   armazem.fazerBackup(PASTA);
-  const limite = filmes.flatMap((f) => f.vistoEm || []).sort()[0] || null;
-  let ordem = filmes.reduce((m, f) => Math.max(m, f.ordem || 0), 0);
-  const res = { novosWatchlist: 0, novosVistos: 0, marcadosVistos: 0, datas: 0, notas: 0, primeiroDia: null };
-  for (const item of itens) {
-    let f = filmes.find((x) => mesmoFilme(x, { titulo: item.titulo, ano: item.ano }));
-    let tmdbId = null;
-    if (!f && config.tmdbKey) {
-      tmdbId = await tmdb.idPorTitulo(config.tmdbKey, item.titulo, item.ano).catch(() => null);
-      if (tmdbId) f = filmes.find((x) => String(x.tmdbId) === String(tmdbId));
-    }
-    const novo = !f;
-    if (!f) {
-      if (!item.visto && !item.watchlist) continue;
-      f = novoFilme({ ordem: ++ordem, titulo: item.titulo, ano: item.ano, tmdbId: tmdbId || '' });
-      filmes.push(f);
-      if (item.visto) res.novosVistos++; else res.novosWatchlist++;
-    }
-    if (item.visto) {
-      if (!f.visto && !novo) res.marcadosVistos++;
-      f.visto = true;
-      const dias = [...(f.vistoEm || [])];
-      for (const d of item.datas) {
-        if (limite && d >= limite) continue;
-        if (!dias.includes(d)) { dias.push(d); res.datas++; }
-      }
-      f.vistoEm = dias.sort();
-    }
-    if (item.nota && !f.minhaNota) { f.minhaNota = item.nota; res.notas++; }
-  }
-  res.primeiroDia = filmes.flatMap((f) => f.vistoEm || []).sort()[0] || null;
+  const res = await letterboxd.aplicar(itens, filmes, {
+    idPorTitulo: config.tmdbKey ? (titulo, ano) => tmdb.idPorTitulo(config.tmdbKey, titulo, ano) : null,
+  });
   gravarAgora();
   buscarCapasQueFaltam();
   return { ...res, filmes };

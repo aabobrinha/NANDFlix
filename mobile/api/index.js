@@ -18,6 +18,8 @@ import { novoFilme, acharRepetido } from '../../lib/filmes.js';
 import tmdb from '../../lib/tmdb.js';
 import omdb from '../../lib/omdb.js';
 import trailer from '../../lib/trailer.js';
+import letterboxd from '../../lib/letterboxd.js';
+import { textosDoExport, escolherArquivos } from './letterboxd-zip.mjs';
 // URL e chave do Supabase, de lib/nuvem.config.json (o montar.js põe aqui na hora
 // de montar). Sem esse arquivo (a versão pública do GitHub), o app funciona só
 // com os dados do aparelho: sem conta, sem sincronia e sem atualização sozinha.
@@ -541,7 +543,23 @@ window.api = {
   tirarPastaBackup: soNoPc,
   backupAgora: soNoPc,
   restaurarBackup: soNoPc,
-  importarLetterboxd: soNoPc,
+  // O .zip do export do Letterboxd (ou os .csv), escolhido no celular.
+  importarLetterboxd: async () => {
+    const arquivos = await escolherArquivos();
+    if (!arquivos.length) return { cancelado: true };
+    let itens;
+    try {
+      itens = letterboxd.lerTextos(await textosDoExport(arquivos));
+    } catch (e) {
+      return { erro: e.message };
+    }
+    const res = await letterboxd.aplicar(itens, filmes, {
+      idPorTitulo: config.tmdbKey ? (titulo, ano) => tmdb.idPorTitulo(config.tmdbKey, titulo, ano) : null,
+    });
+    gravarAgora();
+    buscarCapasQueFaltam();
+    return { ...res, filmes };
+  },
   dadosImagem,
   guardarImagem,
   salvarStory: (dataUrl, nome) => compartilharImagens([dataUrl], nome),

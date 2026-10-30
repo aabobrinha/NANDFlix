@@ -18,16 +18,16 @@ O NANDFlix é um app de desktop para catalogar os filmes que você quer ver. Ele
 | Arquivo | O que é |
 |---|---|
 | [`NANDFlix.exe`](NANDFlix.exe) | Versão portátil para Windows: é só abrir, não precisa instalar. |
-| [`dist/NANDFlix-Setup-1.0.8.exe`](dist/NANDFlix-Setup-1.0.8.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
-| [`dist/NANDFlix-1.0.8-portable.exe`](dist/NANDFlix-1.0.8-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
+| [`dist/NANDFlix-Setup-1.0.9.exe`](dist/NANDFlix-Setup-1.0.9.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
+| [`dist/NANDFlix-1.0.9-portable.exe`](dist/NANDFlix-1.0.9-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
 
-| [`NANDFlix-Android-1.0.8.apk`](../../releases/latest) | App para Android (na página de Releases). |
+| [`NANDFlix-Android-1.0.9.apk`](../../releases/latest) | App para Android (na página de Releases). |
 
 Os mesmos arquivos estão na página de [Releases](../../releases).
 
 > O executável não é assinado digitalmente, então o Windows pode mostrar o aviso do SmartScreen na primeira vez. Clique em **Mais informações → Executar assim mesmo**.
 
-## NANDFlix no Android (versão 1.0.8)
+## NANDFlix no Android (versão 1.0.9)
 
 A mesma lista no celular, com uma interface feita para o toque, no jeito dos apps de streaming:
 
@@ -37,11 +37,12 @@ A mesma lista no celular, com uma interface feita para o toque, no jeito dos app
 - **Calendário** com a grade do mês em capas, a watchlist de hoje, o diário do mês em lista e a página de cada dia; deslizar o dedo troca o mês.
 - **Tierlist** numa página só: segure uma capa por um instante e arraste para a tier; a bandeja "Sem tier" fica presa embaixo.
 - **Stories e retrospectiva**: **Compartilhar** abre o menu do Android (Instagram, WhatsApp, salvar no aparelho).
+- **Importar do Letterboxd** (em Configurações): escolha o `.zip` do export do Letterboxd direto, sem descompactar.
 - O botão **Voltar** do Android fecha o que estiver aberto.
 
 **Instalar**: baixe o `.apk` da página de Releases no celular e abra; o Android pede para permitir apps de fora da loja. O app do celular guarda os dados no próprio aparelho; para ter a mesma lista do computador, configure a nuvem (abaixo).
 
-> Planilha, backups em arquivo e importar do Letterboxd continuam só no computador.
+> Planilha e backups em arquivo continuam só no computador.
 
 ## Funcionalidades
 
@@ -155,7 +156,7 @@ Nas Estatísticas, **Criar stories da retrospectiva** gera imagens 1080×1920 pr
 O ranking segue a tierlist: primeiro os filmes das tiers mais altas, na ordem de dentro de cada tier, depois os sem tier, pela sua nota. Na retrospectiva de um mês, o filme do mês é sempre o nº 1. Cada imagem tem **Copiar** e **Salvar**, e **Salvar todas** grava todas numa pasta.
 
 ### Importar do Letterboxd
-Em **Configurações → Importar do Letterboxd**, escolha a pasta do export de dados do Letterboxd (*Settings → Import & Export → Export your data*, descompactado):
+Em **Configurações → Importar do Letterboxd**, escolha a pasta do export de dados do Letterboxd (*Settings → Import & Export → Export your data*, descompactado). No Android, escolha o `.zip` do export como veio:
 
 - Os filmes vistos são marcados como vistos, com as datas do seu diário (inclusive as revisões). Só entram as datas de antes do primeiro dia já registrado no NANDFlix, para não repetir o que o calendário daqui já tem.
 - As suas notas preenchem "Sua nota" onde ela ainda está vazia.

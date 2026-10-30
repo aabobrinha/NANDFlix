@@ -72,3 +72,8 @@ html.celular #paginas::before, html.celular #retrospectiva::before {
   content: ''; position: fixed; z-index: 4; top: 0; left: 0; right: 0; height: calc(60px + env(safe-area-inset-top, 0px));
   background: linear-gradient(180deg, var(--canvas) 70%, rgba(5, 6, 8, 0)); pointer-events: none;
 }
+
+/* Configurações no celular: sem o que só funciona no PC (planilha, backup em
+   arquivo, baixar capas, pasta de dados, backup automático). Fica o Letterboxd. */
+html.celular #cfg-importar, html.celular #cfg-exportar, html.celular #cfg-backup-exp, html.celular #cfg-backup-imp,
+html.celular #cfg-capas-todas, html.celular #cfg-pasta, html.celular #cfg-backup-auto { display: none !important; }

@@ -1,6 +1,6 @@
 {
   "name": "nandflix-celular",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "private": true,
   "description": "NANDFlix para Android: a mesma interface do app de PC, com os dados no celular e sincronizados pelo Supabase.",
   "scripts": {
@@ -15,7 +15,8 @@
     "@capacitor/filesystem": "^8.1.5",
     "@capacitor/share": "^8.0.3",
     "@capgo/capacitor-updater": "^8.54.0",
-    "@supabase/supabase-js": "^2.118.0"
+    "@supabase/supabase-js": "^2.118.0",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.0",
