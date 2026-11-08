@@ -34,6 +34,7 @@
             <button class="menu-topo-item" role="menuitem" id="btn-paginas"><span data-icone="NotebookPen"></span><span>Suas páginas</span></button>
             <button class="menu-topo-item" role="menuitem" id="btn-tierlist"><span data-icone="Medal"></span><span>Tierlist</span></button>
             <button class="menu-topo-item" role="menuitem" id="btn-estatisticas"><span data-icone="ChartColumn"></span><span>Estatísticas</span></button>
+            <button class="menu-topo-item" role="menuitem" id="btn-premios"><span data-icone="Trophy"></span><span>Prêmios</span></button>
             <div class="sortear-topo" id="sortear-topo" role="none">
               <span class="menu-topo-sep" aria-hidden="true"></span>
               <button class="menu-topo-item" role="menuitem" id="btn-sortear"><span data-icone="Dices"></span><span>Sortear</span><kbd>R</kbd></button>
@@ -94,6 +95,7 @@
         <button class="chip chip-diretor" id="chip-pais" title="Tirar o filtro de país" hidden></button>
         <button class="chip chip-diretor" id="chip-lista" title="Tirar o filtro de lista" hidden></button>
         <button class="chip chip-diretor" id="chip-onde" title="Tirar o filtro de onde assistir" hidden></button>
+        <button class="chip chip-diretor" id="chip-premio" title="Tirar o filtro de prêmio" hidden></button>
         <button class="chip chip-listas" id="btn-listas" aria-haspopup="menu"><span data-icone="Tags"></span>Listas<span data-icone="ChevronDown"></span></button>
         <button class="chip chip-listas" id="btn-filtros" aria-haspopup="menu"><span data-icone="ListFilter"></span>Filtros<span data-icone="ChevronDown"></span></button>
         <span class="contagem" id="contagem"></span>
@@ -164,6 +166,10 @@
     <div class="calendario-caixa retrospectiva-caixa" id="retrospectiva-caixa" role="dialog" aria-modal="true" aria-label="Estatísticas"></div>
   </div>
 
+  <div class="calendario premios-tela" id="premios" hidden>
+    <div class="calendario-caixa premios-caixa" id="premios-caixa" role="dialog" aria-modal="true" aria-label="Prêmios"></div>
+  </div>
+
   <div class="calendario paginas" id="paginas" hidden>
     <div class="calendario-caixa paginas-caixa" id="paginas-caixa" role="dialog" aria-modal="true" aria-label="Suas páginas"></div>
   </div>
@@ -189,6 +195,7 @@
   <script src="story.js"></script>
   <script src="listas.js"></script>
   <script src="onde.js"></script>
+  <script src="premios.js"></script>
   <script src="retro.js"></script>
   <script src="busca.js"></script>
 </body>

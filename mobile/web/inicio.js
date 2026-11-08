@@ -229,6 +229,7 @@ function abrirMais() {
   abrirFolha(`<div class="cel-mais">
     ${item('paginas', 'NotebookPen', 'Suas páginas')}
     ${item('estatisticas', 'ChartColumn', 'Estatísticas')}
+    ${item('premios', 'Trophy', 'Prêmios (Oscar)')}
     ${item('sortear', 'Dices', 'Sortear um filme')}
     ${item('sortear-filtro', 'SlidersHorizontal', 'Sortear com filtro')}
     ${item('adicionar', 'Plus', 'Adicionar filme')}
@@ -275,6 +276,7 @@ function aoTocarCelular(e) {
     case 'mais': abrirMais(); break;
     case 'paginas': fecharFolha(); $('#btn-paginas').click(); break;
     case 'estatisticas': fecharFolha(); abrirEstatisticas(); break;
+    case 'premios': fecharFolha(); abrirPremios(); break;
     case 'config': fecharFolha(); abrirConfiguracoes(); break;
   }
 }

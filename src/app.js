@@ -14,6 +14,7 @@ const estado = {
   pais: '', // filtro de país, escolhido no cabeçalho do grupo ou no painel
   lista: '', // filtro por uma das listas da pessoa (listas.js)
   onde: '', // filtro de onde assistir: 'meus' | 'streaming' | 'cinema' | 'stremio' (onde.js)
+  premio: '', // filtro de prêmio: 'oscar:indicado' | 'oscar:venceu' | 'oscar:venceu:Best Picture' (premios.js)
   ordenacao: 'ordem',
   vista: 'grade',
   painelId: null,
@@ -205,6 +206,7 @@ function filtrados() {
     if (estado.pais && !paisesDe(f).includes(estado.pais)) return false;
     if (estado.lista && !listasDe(f).includes(estado.lista)) return false;
     if (estado.onde && !passaOnde(f, estado.onde)) return false;
+    if (estado.premio && !passaPremio(f, estado.premio)) return false;
     if (!palavras.length) return true;
     const alvo = normalizar([f.titulo, f.ano, f.diretor, f.notas, f.buscaCapa, ...paisesDe(f)].join(' '));
     return palavras.every((p) => alvo.includes(p));
@@ -805,6 +807,7 @@ function renderPainel() {
         <p class="painel-ficha" data-info="elenco-painel"${elenco ? '' : ' hidden'}><b>Elenco:</b> <span>${esc(elenco)}</span></p>
         <p class="painel-ficha" data-info="generos-painel"${generos(f.info).length ? '' : ' hidden'}><b>Gêneros:</b> <span>${esc(generos(f.info).join(', '))}</span></p>
         ${f.notas ? `<p class="painel-ficha"><b>Suas notas:</b> <span>${esc(f.notas)}</span></p>` : ''}
+        ${premiosPainelHTML(f)}
       </div>
     </div>
     <div id="painel-relacionados"></div>
@@ -1937,13 +1940,13 @@ let proximoSorteio = null;
 
 // Guardados nas configurações. Valem só para o sorteio (a lista da tela não muda):
 // duração máxima ("tenho 1h40"), gêneros, décadas, países e "só da watchlist de hoje".
-const FILTROS_SORTEIO_VAZIOS = { duracao: 0, generos: [], decadas: [], paises: [], listas: [], onde: [], soWatchlist: false };
+const FILTROS_SORTEIO_VAZIOS = { duracao: 0, generos: [], decadas: [], paises: [], listas: [], onde: [], premios: [], soWatchlist: false };
 const filtrosSorteio = () => ({ ...FILTROS_SORTEIO_VAZIOS, ...(estado.config.filtrosSorteio || {}) });
 const minutosDe = (f) => f.duracao || parseInt(f.info && f.info.duracao, 10) || 0;
 const decadaDe = (f) => { const a = anoNumero(f.ano); return Number.isFinite(a) ? Math.floor(a / 10) * 10 : null; };
 
 function filtrosSorteioAtivos(fs = filtrosSorteio()) {
-  return Boolean(fs.duracao || fs.generos.length || fs.decadas.length || fs.paises.length || fs.listas.length || fs.onde.length || fs.soWatchlist);
+  return Boolean(fs.duracao || fs.generos.length || fs.decadas.length || fs.paises.length || fs.listas.length || fs.onde.length || fs.premios.length || fs.soWatchlist);
 }
 
 function passaNoSorteio(f, fs) {
@@ -1954,6 +1957,7 @@ function passaNoSorteio(f, fs) {
   if (fs.listas.length && !listasDe(f).some((l) => fs.listas.includes(l))) return false;
   // Onde assistir: basta um (nos meus serviços OU nos cinemas…).
   if (fs.onde.length && !fs.onde.some((o) => passaOnde(f, o))) return false;
+  if (fs.premios.length && !fs.premios.some((p) => passaPremio(f, p))) return false;
   return true;
 }
 
@@ -1976,6 +1980,7 @@ function resumoFiltrosSorteio(fs = filtrosSorteio()) {
   if (fs.decadas.length) partes.push(fs.decadas.map((d) => `anos ${String(d).slice(2)}`).join(', '));
   if (fs.paises.length) partes.push(fs.paises.join(', '));
   if (fs.listas.length) partes.push(fs.listas.join(', '));
+  if (fs.premios.length) partes.push(fs.premios.map((p) => rotuloFiltroPremio(p).toLowerCase()).join(', '));
   if (fs.onde.length) partes.push(fs.onde.map((o) => (FILTROS_ONDE[o] ? FILTROS_ONDE[o].rotulo.toLowerCase() : o)).join(', '));
   return partes;
 }
@@ -1999,6 +2004,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
       ${secao('Sortear de', 'origem')}
       ${listasTodas.length ? secao('Das suas listas', 'listas') : ''}
       ${secao('Onde assistir', 'onde')}
+      ${secao('Prêmios', 'premios')}
       ${secao('Quanto tempo você tem?', 'duracao')}
       ${generosTodos.length ? secao('Gêneros', 'generos') : ''}
       ${decadasTodas.length ? secao('Década', 'decadas') : ''}
@@ -2018,6 +2024,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
       decadas: decadasTodas.map(([d, n]) => chip('decadas', d, `Anos ${d < 2000 ? String(d).slice(2) : d}`, fs.decadas.includes(d), n)).join(''),
       paises: paisesTodos.map(([p, n]) => chip('paises', p, p, fs.paises.includes(p), n)).join(''),
       listas: listasTodas.map(([l, n]) => chip('listas', l, l, fs.listas.includes(l), n)).join(''),
+      premios: FILTROS_PREMIO_SORTEIO.map((p) => chip('premios', p, rotuloFiltroPremio(p), fs.premios.includes(p), naoVistos.filter((f) => passaPremio(f, p)).length)).join(''),
       onde: filtrosOndeDisponiveis().map((o) => chip('onde', o, FILTROS_ONDE[o].rotulo, fs.onde.includes(o), naoVistos.filter((f) => passaOnde(f, o)).length)).join(''),
     };
     for (const [nome, h] of Object.entries(html)) { const el = $(`[data-secao="${nome}"]`, modal); if (el) el.innerHTML = h; }
@@ -2044,6 +2051,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
     if (grupo === 'paises') fs = { ...fs, paises: alternarEm(fs.paises, valor) };
     if (grupo === 'listas') fs = { ...fs, listas: alternarEm(fs.listas, valor) };
     if (grupo === 'onde') fs = { ...fs, onde: alternarEm(fs.onde, valor) };
+    if (grupo === 'premios') fs = { ...fs, premios: alternarEm(fs.premios, valor) };
     salvar();
   });
   $('#filtros-limpar', modal).onclick = () => { fs = { ...FILTROS_SORTEIO_VAZIOS }; salvar(); };
@@ -4804,6 +4812,8 @@ $('#btn-estatisticas').addEventListener('click', () => abrirEstatisticas());
 // ---------- Início ----------
 
 (async function iniciar() {
+  // Espera os outros scripts (onde.js, premios.js…): o render e o sorteio usam funções deles.
+  if (document.readyState === 'loading') await new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true }));
   $('#btn-lupa').dataset.dica = `Pesquisar (${MAC ? '⌘' : 'Ctrl'} F)`;
   const dados = await api.carregar();
   estado.filmes = dados.filmes;

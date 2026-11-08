@@ -36,6 +36,8 @@ contextBridge.exposeInMainWorld('api', {
   abrirLink: chamar('abrir:link'),
   extrasAgora: chamar('extras:agora'),
   provedoresTmdb: chamar('tmdb:provedores'),
+  premios: chamar('premios:dados'),
+  atualizarPremios: chamar('premios:atualizar'),
   abrirPastaDados: chamar('abrir:pastaDados'),
   lerPlanilha: chamar('planilha:ler'),
   aplicarPlanilha: chamar('planilha:aplicar'),

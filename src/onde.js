@@ -83,7 +83,7 @@ function servicosCurtosHTML(f, max = 4) {
 // ---- O menu "Filtros" da barra da lista ----
 //
 // Cada parte do app registra uma seção: { titulo, itensHTML(), aoClicar(e) → true
-// se tratou, ativa() }. Aqui fica "Onde assistir"; os prêmios (premios.js) põem a deles.
+// se tratou, ativa(), atualizarChip() }. Aqui fica "Onde assistir"; os prêmios (premios.js) põem a deles.
 const SECOES_FILTRO = [];
 
 function aplicarFiltroDaBarra() {
@@ -103,10 +103,7 @@ function abrirMenuFiltros(botao) {
 
 // Os filtros ligados viram chips com ✕ (como o de diretor e o de país).
 function atualizarChipsFiltros() {
-  if (estado.onde && !filtrosOndeDisponiveis().includes(estado.onde)) estado.onde = '';
-  const chip = $('#chip-onde');
-  chip.hidden = !estado.onde;
-  chip.innerHTML = `${icone('Tv')}<span>${esc(estado.onde ? FILTROS_ONDE[estado.onde].rotulo : '')}</span>${icone('X')}`;
+  for (const s of SECOES_FILTRO) s.atualizarChip();
   $('#btn-filtros').classList.toggle('ativo-leve', SECOES_FILTRO.some((s) => s.ativa()));
 }
 
@@ -118,6 +115,12 @@ const itemMenuHTML = (atual, attrs, nome, qtd) => `
 SECOES_FILTRO.push({
   titulo: 'Onde assistir',
   ativa: () => Boolean(estado.onde),
+  atualizarChip: () => {
+    if (estado.onde && !filtrosOndeDisponiveis().includes(estado.onde)) estado.onde = '';
+    const chip = $('#chip-onde');
+    chip.hidden = !estado.onde;
+    chip.innerHTML = `${icone('Tv')}<span>${esc(estado.onde ? FILTROS_ONDE[estado.onde].rotulo : '')}</span>${icone('X')}`;
+  },
   itensHTML: () => filtrosOndeDisponiveis()
     .map((k) => itemMenuHTML(estado.onde === k, `data-onde="${k}"`, FILTROS_ONDE[k].rotulo, estado.filmes.filter((f) => passaOnde(f, k)).length)).join('')
     + `<button class="tl-menu-item" data-onde-config><span class="tl-menu-check">${icone('Settings')}</span><span class="tl-menu-nome">${meusServicos().size ? 'Meus serviços…' : 'Escolher os streamings que assino…'}</span></button>`,

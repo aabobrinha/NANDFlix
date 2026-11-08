@@ -9,7 +9,8 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "import": "node scripts/import.js"
+    "import": "node scripts/import.js",
+    "premios": "node scripts/premios.js"
   },
   "build": {
     "appId": "app.filmeslegais",

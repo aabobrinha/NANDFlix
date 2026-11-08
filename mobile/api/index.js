@@ -21,6 +21,8 @@ import omdb from '../../lib/omdb.js';
 import trailer from '../../lib/trailer.js';
 import letterboxd from '../../lib/letterboxd.js';
 import { Extras } from '../../lib/extras.js';
+import { Acervo } from '../../lib/premios.js';
+import historicoOscar from '../../lib/premios-oscar.json';
 import { textosDoExport, escolherArquivos } from './letterboxd-zip.mjs';
 // URL e chave do Supabase, de lib/nuvem.config.json (o montar.js põe aqui na hora
 // de montar). Sem esse arquivo (a versão pública do GitHub), o app funciona só
@@ -48,6 +50,7 @@ const C = {
   sincronia: `${PASTA}/sincronia.json`,
   imagens: `${PASTA}/imagens`,
   capas: `${PASTA}/capas`,
+  premios: `${PASTA}/premios.json`,
 };
 // A versão do app (mobile/package.json), posta pelo montar.js.
 // eslint-disable-next-line no-undef
@@ -366,6 +369,13 @@ let pronto = null;
 // Notas do TMDB e do Letterboxd, onde assistir e Stremio (lib/extras.js).
 const extras = new Extras({ filmes: () => filmes, config: () => config, atualizarFilme, avisar, gravarAgora });
 
+// Prêmios (lib/premios.js): o histórico vem no app; as cerimônias recentes, da Wikipédia.
+let acervo = null;
+const pegarAcervo = () => {
+  if (!acervo) acervo = new Acervo({ historico: { oscar: historicoOscar }, lerCache: () => lerJSON(C.premios, null), gravarCache: (d) => gravarJSON(C.premios, d) });
+  return acervo;
+};
+
 function iniciar() {
   if (pronto) return pronto;
   pronto = (async () => {
@@ -560,6 +570,8 @@ window.api = {
   },
   abrirLink: async (url) => { if (String(url).startsWith('https://')) abrirFora(String(url)); },
   extrasAgora: (id, opcoes) => extras.agora(id, opcoes || {}),
+  premios: async (id) => { await iniciar(); return pegarAcervo().dados(id); },
+  atualizarPremios: async (id, opcoes) => { await iniciar(); return chamar(() => pegarAcervo().atualizar(id, opcoes || {})); },
   provedoresTmdb: () => chamar(() => tmdb.provedores(config.tmdbKey, config.pais || 'BR')),
   abrirLetterboxd: async (id) => {
     const f = filmes.find((x) => x.id === id);

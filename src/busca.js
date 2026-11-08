@@ -16,6 +16,7 @@ const ACOES_PALETA = [
   { titulo: 'Suas páginas', icone: 'NotebookPen', termos: 'anotacoes textos resenhas', fazer: () => abrirPaginas() },
   { titulo: 'Tierlist', icone: 'Medal', termos: 'ranking tiers', fazer: () => abrirTierlist() },
   { titulo: 'Estatísticas', icone: 'ChartColumn', termos: 'retrospectiva numeros', fazer: () => abrirEstatisticas() },
+  { titulo: 'Prêmios (Oscar)', icone: 'Trophy', termos: 'oscar academy awards cedula bolao palpites indicados vencedores premiacao', fazer: () => abrirPremios() },
   { titulo: 'Retrospectiva do mês em stories', icone: 'Sparkles', termos: 'instagram imagem mes', fazer: () => abrirRetrospectivaStory(hoje().slice(0, 7)) },
   { titulo: 'Retrospectiva do ano em stories', icone: 'Sparkles', termos: 'instagram imagem ano', fazer: () => abrirRetrospectivaStory(hoje().slice(0, 4)) },
   { titulo: 'Sortear um filme', icone: 'Dices', termos: 'aleatorio sorteio', fazer: () => $('#btn-sortear').click() },

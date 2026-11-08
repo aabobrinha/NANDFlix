@@ -15,6 +15,7 @@ const letterboxd = require('./lib/letterboxd');
 const { Marcas } = require('./lib/marcas');
 const { Nuvem } = require('./lib/nuvem');
 const { Extras } = require('./lib/extras');
+const { Acervo } = require('./lib/premios');
 
 app.setName(armazem.NOME_APP);
 // FILMES_LEGAIS_DADOS: outra pasta de dados (para testar sem mexer na lista de verdade).
@@ -306,6 +307,16 @@ async function buscarCapasQueFaltam({ incluirNaoEncontradas = false } = {}) {
 
 const extras = new Extras({ filmes: () => filmes, config: () => config, atualizarFilme, avisar, gravarAgora });
 ipcMain.handle('extras:agora', (_e, id, opcoes) => extras.agora(id, opcoes || {}));
+// ---------- Prêmios (lib/premios.js): o histórico vem no app; as cerimônias recentes, da Wikipédia ----------
+
+const acervo = new Acervo({
+  historico: { oscar: require('./lib/premios-oscar.json') },
+  lerCache: () => armazem.lerJSON(path.join(PASTA, 'premios.json'), null),
+  gravarCache: (d) => armazem.gravarJSON(path.join(PASTA, 'premios.json'), d),
+});
+ipcMain.handle('premios:dados', (_e, id) => acervo.dados(id));
+ipcMain.handle('premios:atualizar', (_e, id, opcoes) => chamar(() => acervo.atualizar(id, opcoes || {})));
+
 ipcMain.handle('tmdb:provedores', () => chamar(() => tmdb.provedores(config.tmdbKey, config.pais || 'BR')));
 ipcMain.handle('abrir:link', (_e, url) => { if (String(url).startsWith('https://')) shell.openExternal(String(url)); });
 

@@ -38,6 +38,9 @@ A mesma lista no celular, com uma interface feita para o toque, no jeito dos app
 - **Tierlist** numa página só: segure uma capa por um instante e arraste para a tier; a bandeja "Sem tier" fica presa embaixo.
 - **Stories e retrospectiva**: **Compartilhar** abre o menu do Android (Instagram, WhatsApp, salvar no aparelho).
 - **Importar do Letterboxd** (em Configurações): escolha o `.zip` do export do Letterboxd direto, sem descompactar.
+- **Prêmios (Oscar)** em Mais: a mesma cédula do computador, numa coluna.
+- **Onde assistir**: a pílula **Nos meus serviços** e as fileiras **Nos seus streamings** e **Nos cinemas** no início; a nota do site escolhido no canto das capas.
+- **Assistir** sem o app do Stremio instalado: o app avisa e oferece abrir no Stremio Web (ou usar sempre o Stremio Web).
 - O botão **Voltar** do Android fecha o que estiver aberto.
 
 **Instalar**: baixe o `.apk` da página de Releases no celular e abra; o Android pede para permitir apps de fora da loja. O app do celular guarda os dados no próprio aparelho; para ter a mesma lista do computador, configure a nuvem (abaixo).
@@ -57,7 +60,7 @@ A mesma lista no celular, com uma interface feita para o toque, no jeito dos app
 
 ### Menu do topo
 - Ficam sempre à vista a lupa, a seta ▾, **adicionar filme** e **configurações**.
-- Passar o mouse na seta abre a lista com ícone e nome: Buscar em tudo, Calendário, Suas páginas, Tierlist, Estatísticas, Sortear e Sortear com filtro. Também abre clicando, e pelo teclado (↑↓ e Esc).
+- Passar o mouse na seta abre a lista com ícone e nome: Buscar em tudo, Calendário, Suas páginas, Tierlist, Estatísticas, Prêmios, Sortear e Sortear com filtro. Também abre clicando, e pelo teclado (↑↓ e Esc).
 
 ### Busca única (Ctrl + K)
 - Uma caixa só que procura nos seus filmes, no texto das suas páginas (com o trecho onde a palavra aparece), no TMDB (só o que ainda não está na lista) e nas ações do app.
@@ -155,6 +158,25 @@ Nas Estatísticas, **Criar stories da retrospectiva** gera imagens 1080×1920 pr
 
 O ranking segue a tierlist: primeiro os filmes das tiers mais altas, na ordem de dentro de cada tier, depois os sem tier, pela sua nota. Na retrospectiva de um mês, o filme do mês é sempre o nº 1. Cada imagem tem **Copiar** e **Salvar**, e **Salvar todas** grava todas numa pasta.
 
+### Prêmios: a cédula do Oscar
+Aberta pelo menu do topo (**Prêmios**), pela busca (Ctrl + K) ou, no celular, por **Mais**.
+
+- A **lista de prêmios** no alto (por enquanto o Oscar) e uma **aba por ano**, de 1929 até hoje. Abre na cerimônia mais recente com indicados; a próxima aparece como "em breve" até os indicados saírem.
+- Em cada categoria, os indicados com capa, filme e pessoa (diretor, atores, canção). **Visto** vem marcado sozinho para os filmes que você já viu; marcar um filme que não está na lista o adiciona como visto (sem data: dá para pôr no calendário depois, em "Lançar outro dia"). **Palpite** é o seu voto em quem vence a categoria.
+- No alto, quantos dos filmes indicados você viu, quantos palpites fez e, depois da cerimônia, quantos acertou (cada categoria mostra **Acertou** ou **Errou**, e o vencedor fica dourado). **Só o que falta ver** esconde os que você já viu.
+- Os dados vêm das páginas das cerimônias na Wikipédia, que são atualizadas minutos depois de cada anúncio: o app busca as cerimônias recentes sozinho (a cada 3 horas entre janeiro e março, uma vez por dia no resto do ano). O histórico já vem dentro do app. As cédulas vão para a nuvem.
+- Os prêmios também são **filtros**: em **Filtros** na barra da lista (indicados, vencedores ou uma categoria, como "venceu Melhor Filme"), nos filtros do sorteio e nos da tierlist. Nos detalhes do filme aparece, por exemplo, "Oscar: 6 vitórias · 13 indicações", com cada categoria; o ano abre a cédula daquela cerimônia.
+
+### Onde assistir
+- Nos detalhes, os streamings em que o filme está no seu país (por assinatura, grátis, aluguel e compra), com os logos; **Nos cinemas** quando ele estreou há pouco e ainda não saiu em digital (ou a data, se estreia nos próximos 30 dias); e **No Stremio** quando ele está no catálogo do Stremio (se dá para assistir depende dos complementos do seu Stremio).
+- Em **Configurações → Onde assistir**: o país e os streamings que você assina. Os seus aparecem primeiro e destacados, e viram filtro: **Filtros → Nos meus serviços** na lista, e a seção **Onde assistir** nos filtros do sorteio.
+- Os streamings vêm do JustWatch, pelo TMDB. Tudo é atualizado sozinho a cada 7 dias.
+
+### Notas de cada site
+- Nos detalhes, no destaque e na prévia, um selo para cada site: **IMDb**, **Letterboxd**, **Metascore**, **Rotten Tomatoes** e **TMDB**. Clicar abre a página do filme no site.
+- Uma nota no canto de cada capa, do site que você escolher em **Configurações → Nota nas capas** (ou nenhuma). **Ordenar por: Nota** usa o mesmo site.
+- Letterboxd e TMDB não precisam de chave e são atualizados a cada 7 dias; IMDb, Metascore e Rotten Tomatoes vêm do OMDb (chave opcional).
+
 ### Importar do Letterboxd
 Em **Configurações → Importar do Letterboxd**, escolha a pasta do export de dados do Letterboxd (*Settings → Import & Export → Export your data*, descompactado). No Android, escolha o `.zip` do export como veio:
 
@@ -164,7 +186,7 @@ Em **Configurações → Importar do Letterboxd**, escolha a pasta do export de 
 - Filmes que não estão na lista são procurados no TMDB antes, para não duplicar por diferença de título. Um backup é feito antes de importar.
 
 ### Stremio e Letterboxd
-- **Assistir** abre o filme no app do Stremio e traz a janela para a frente. Também dá para usar o Stremio Web.
+- **Assistir** abre o filme no app do Stremio e traz a janela para a frente. Também dá para usar o Stremio Web. Sem o app instalado (no computador ou no celular), o NANDFlix avisa e oferece abrir no Stremio Web.
 - **Letterboxd** abre a página do filme para registrar que você viu.
 
 ### Capas, trailers e informações
@@ -262,6 +284,7 @@ npm install        # instala as dependências
 npm start          # abre o app em modo de desenvolvimento
 npm run build      # gera o portátil e o instalador em dist/
 npm run import -- "minha-lista.xlsx"   # importa uma planilha pela linha de comando
+npm run premios    # refaz lib/premios-oscar.json (o histórico do Oscar) pela Wikipédia
 ```
 
 Para importar pela linha de comando com filmes já salvos, acrescente `--substituir` ou `--juntar` (com o app fechado).
@@ -291,6 +314,9 @@ NANDFlix/
 ├── preload.js          ponte segura entre a interface e o processo principal
 ├── lib/
 │   ├── armazem.js      leitura e gravação dos dados e backups
+│   ├── extras.js       notas do Letterboxd e do TMDB, onde assistir, cinemas e Stremio
+│   ├── premios.js      indicados e vencedores do Oscar (Wikipédia e Wikidata)
+│   ├── premios-oscar.json  o histórico do Oscar (npm run premios)
 │   ├── marcas.js       quando cada dado mudou (para a sincronia)
 │   ├── nuvem.js        login e sincronia com o Supabase
 │   ├── filmes.js       modelo do filme, repetidos e junção de listas
@@ -306,6 +332,8 @@ NANDFlix/
 │   ├── story.js        editor de story
 │   ├── retro.js        retrospectiva em stories
 │   ├── listas.js       listas suas
+│   ├── onde.js         onde assistir e o menu Filtros
+│   ├── premios.js      prêmios: a cédula do Oscar e os filtros por prêmio
 │   └── busca.js        busca única (Ctrl + K)
 ├── mobile/             app de Android (Capacitor)
 │   ├── api/            a ponte do celular: dados no aparelho, nuvem, TMDB
@@ -313,7 +341,7 @@ NANDFlix/
 │   ├── android/        projeto Android
 │   └── montar.js       monta mobile/www
 ├── supabase/           SQL do banco da nuvem e das atualizações do celular
-├── scripts/import.js   importação pela linha de comando
+├── scripts/            importação pela linha de comando e o histórico do Oscar
 └── build/              ícone do app
 ```
 
@@ -321,7 +349,7 @@ NANDFlix/
 
 - [Electron](https://www.electronjs.org/), com HTML, CSS e JavaScript puros, sem framework.
 - [SheetJS](https://sheetjs.com/) para as planilhas e [Lucide](https://lucide.dev/) para os ícones.
-- APIs: TMDB (capas, logos, trailers e informações), OMDb (notas, opcional) e YouTube (trailers, pelo player sem cookies).
+- APIs: TMDB (capas, logos, trailers, informações e, pelo JustWatch, onde assistir), OMDb (notas, opcional), YouTube (trailers, pelo player sem cookies), Letterboxd (a média de cada filme, da página pública), Cinemeta (o catálogo do Stremio) e Wikipédia com Wikidata (indicados e vencedores do Oscar).
 - [electron-updater](https://www.electron.build/auto-update) para a atualização automática pelas releases do GitHub.
 - [Supabase](https://supabase.com) para a nuvem e [Capacitor](https://capacitorjs.com) para o app de Android (com o [Capgo Updater](https://github.com/Cap-go/capacitor-updater) para se atualizar sem reinstalar).
 - Fonte [Montserrat](https://fonts.google.com/specimen/Montserrat) (licença OFL), pelo pacote `@fontsource/montserrat`.
