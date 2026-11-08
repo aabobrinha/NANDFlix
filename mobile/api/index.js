@@ -20,6 +20,7 @@ import tmdb from '../../lib/tmdb.js';
 import omdb from '../../lib/omdb.js';
 import trailer from '../../lib/trailer.js';
 import letterboxd from '../../lib/letterboxd.js';
+import { Extras } from '../../lib/extras.js';
 import { textosDoExport, escolherArquivos } from './letterboxd-zip.mjs';
 // URL e chave do Supabase, de lib/nuvem.config.json (o montar.js põe aqui na hora
 // de montar). Sem esse arquivo (a versão pública do GitHub), o app funciona só
@@ -27,13 +28,14 @@ import { textosDoExport, escolherArquivos } from './letterboxd-zip.mjs';
 // eslint-disable-next-line no-undef
 const nuvemConfig = NUVEM_CONFIG;
 
-// A busca do trailer lê a página de resultados do YouTube, que o WebView não
-// deixa ler (CORS): no aparelho, esse pedido vai pela rede nativa do Android.
+// A busca do trailer lê a página de resultados do YouTube e a nota do Letterboxd
+// vem da página do filme, que o WebView não deixa ler (CORS): no aparelho, esses
+// pedidos vão pela rede nativa do Android.
 if (Capacitor.isNativePlatform()) {
   const fetchOriginal = window.fetch.bind(window);
   window.fetch = async (url, opcoes = {}) => {
     const u = String((url && url.url) || url);
-    if (!u.startsWith('https://www.youtube.com/results')) return fetchOriginal(url, opcoes);
+    if (!u.startsWith('https://www.youtube.com/results') && !u.startsWith('https://letterboxd.com/')) return fetchOriginal(url, opcoes);
     const r = await CapacitorHttp.get({ url: u, headers: opcoes.headers || {}, responseType: 'text' });
     return new Response(typeof r.data === 'string' ? r.data : JSON.stringify(r.data), { status: r.status });
   };
@@ -110,6 +112,7 @@ function aplicarTmdb(f, d, { trocarFilme = false } = {}) {
   const info = { ...(outroFilme ? {} : f.info || {}), ...d.info, atualizadoEm: new Date().toISOString() };
   if (outroFilme) for (const k of NOTAS_OMDB) delete info[k];
   const m = {
+    ...(outroFilme ? { extras: null } : {}),
     tmdbId: d.tmdbId,
     tmdbEm: new Date().toISOString(),
     idiomaOriginal: d.idiomaOriginal,
@@ -146,7 +149,7 @@ function buscarCapasQueFaltam({ incluirNaoEncontradas = false } = {}) {
   if (buscaEmAndamento) return buscaEmAndamento;
   if (!config.tmdbKey) return Promise.resolve({ pulada: 'chave' });
   const fila = filmes.filter((f) => !f.tmdbEm || (incluirNaoEncontradas && !f.tmdbId));
-  if (!fila.length) return Promise.resolve({ total: 0, encontradas: 0 });
+  if (!fila.length) { extras.atualizar(); return Promise.resolve({ total: 0, encontradas: 0 }); }
   buscaEmAndamento = (async () => {
     const total = fila.length;
     let feitos = 0; let encontradas = 0; let erro = null;
@@ -163,6 +166,7 @@ function buscarCapasQueFaltam({ incluirNaoEncontradas = false } = {}) {
     gravarAgora();
     const r = { total: feitos, encontradas, erro: erro ? { tipo: erro.tipo, mensagem: erro.message } : null };
     avisar('capas:fim', r);
+    extras.atualizar();
     return r;
   })().finally(() => { buscaEmAndamento = null; });
   return buscaEmAndamento;
@@ -359,6 +363,9 @@ const relacionadosCache = new Map();
 const soNoPc = async () => ({ erro: 'Isso só funciona no app do computador.' });
 
 let pronto = null;
+// Notas do TMDB e do Letterboxd, onde assistir e Stremio (lib/extras.js).
+const extras = new Extras({ filmes: () => filmes, config: () => config, atualizarFilme, avisar, gravarAgora });
+
 function iniciar() {
   if (pronto) return pronto;
   pronto = (async () => {
@@ -416,10 +423,11 @@ window.api = {
     return { filmes, config: configPublica(), pastaDados: '', versao: VERSAO };
   },
   salvarConfig: async (mudancas) => {
-    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas'];
+    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'pais', 'meusServicos', 'notaNaCapa', 'premios'];
     for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
     gravarConfig();
     if ('tmdbKey' in mudancas && config.tmdbKey) buscarCapasQueFaltam();
+    if ('pais' in mudancas) extras.atualizar();
     return configPublica();
   },
   atualizarFilme: async (id, mudancas) => {
@@ -443,7 +451,7 @@ window.api = {
     filmes.push(f);
     gravarDepois();
     if (config.tmdbKey) {
-      processarTmdb(f, { tmdbId: dados.tmdbId || null }).catch(() => {}).then(() => { gravarAgora(); avisar('filme:mudou', f); });
+      processarTmdb(f, { tmdbId: dados.tmdbId || null }).catch(() => {}).then(() => { gravarAgora(); avisar('filme:mudou', f); extras.agora(f.id); });
     }
     return f;
   },
@@ -550,6 +558,9 @@ window.api = {
     }
     return { ok: true, url: l.app };
   },
+  abrirLink: async (url) => { if (String(url).startsWith('https://')) abrirFora(String(url)); },
+  extrasAgora: (id, opcoes) => extras.agora(id, opcoes || {}),
+  provedoresTmdb: () => chamar(() => tmdb.provedores(config.tmdbKey, config.pais || 'BR')),
   abrirLetterboxd: async (id) => {
     const f = filmes.find((x) => x.id === id);
     if (!f) return { ok: false };

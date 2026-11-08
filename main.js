@@ -14,6 +14,7 @@ const { novoFilme, juntar, resumo, acharRepetido, mesmoFilme } = require('./lib/
 const letterboxd = require('./lib/letterboxd');
 const { Marcas } = require('./lib/marcas');
 const { Nuvem } = require('./lib/nuvem');
+const { Extras } = require('./lib/extras');
 
 app.setName(armazem.NOME_APP);
 // FILMES_LEGAIS_DADOS: outra pasta de dados (para testar sem mexer na lista de verdade).
@@ -73,7 +74,7 @@ function gravarConfig() {
 // ficam os 30 dias mais recentes. Se houver uma pasta extra (a do Google
 // Drive, por exemplo), a mesma cópia vai para lá também.
 const MAX_DIARIOS = 30;
-const CONFIG_NO_BACKUP = ['stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas'];
+const CONFIG_NO_BACKUP = ['stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'pais', 'meusServicos', 'notaNaCapa', 'premios'];
 const RE_DIARIO = /^diario-\d{4}-\d{2}-\d{2}\.json$/;
 let mudouDesdeBackup = true;
 let ultimoBackup = { em: null, erroExtra: null };
@@ -207,6 +208,8 @@ async function aplicarTmdb(f, d, { trocarFilme = false } = {}) {
   const info = { ...(outroFilme ? {} : f.info || {}), ...d.info, atualizadoEm: new Date().toISOString() };
   if (outroFilme) for (const k of NOTAS_OMDB) delete info[k];
   const mudancas = {
+    // Ao trocar de filme ("Trocar capa"), os extras eram do filme antigo.
+    ...(outroFilme ? { extras: null } : {}),
     tmdbId: d.tmdbId,
     tmdbEm: new Date().toISOString(),
     idiomaOriginal: d.idiomaOriginal,
@@ -259,7 +262,7 @@ async function buscarCapasQueFaltam({ incluirNaoEncontradas = false } = {}) {
     ...consultar.map((f) => ({ f, consultar: true })),
     ...semArquivo.map((f) => ({ f, consultar: false })),
   ];
-  if (!fila.length) { buscarNotasQueFaltam(); return { total: 0, encontradas: 0 }; }
+  if (!fila.length) { buscarNotasQueFaltam(); extras.atualizar(); return { total: 0, encontradas: 0 }; }
 
   buscaEmAndamento = (async () => {
     const total = fila.length;
@@ -288,6 +291,7 @@ async function buscarCapasQueFaltam({ incluirNaoEncontradas = false } = {}) {
     const resultado = { total: feitos, encontradas, erro: erro ? { tipo: erro.tipo, mensagem: erro.message } : null };
     avisar('capas:fim', resultado);
     buscarNotasQueFaltam();
+    extras.atualizar();
     return resultado;
   })();
 
@@ -297,6 +301,13 @@ async function buscarCapasQueFaltam({ incluirNaoEncontradas = false } = {}) {
     buscaEmAndamento = null;
   }
 }
+
+// ---------- Extras: notas do TMDB e do Letterboxd, onde assistir, Stremio ----------
+
+const extras = new Extras({ filmes: () => filmes, config: () => config, atualizarFilme, avisar, gravarAgora });
+ipcMain.handle('extras:agora', (_e, id, opcoes) => extras.agora(id, opcoes || {}));
+ipcMain.handle('tmdb:provedores', () => chamar(() => tmdb.provedores(config.tmdbKey, config.pais || 'BR')));
+ipcMain.handle('abrir:link', (_e, url) => { if (String(url).startsWith('https://')) shell.openExternal(String(url)); });
 
 // ---------- OMDb: notas do IMDb, Metascore e Rotten Tomatoes (opcional) ----------
 
@@ -613,12 +624,13 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
   // (watchlistHoje é o formato antigo, de um dia só; o app o apaga ao salvar o novo).
   // filmesDoMes: { 'AAAA-MM': id }, o filme favorito de cada mês (só aparece no calendário).
   // tierlist: [{ id, nome, cor, filmes: [ids] }], as tiers de cima para baixo.
-  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas'];
+  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'pais', 'meusServicos', 'notaNaCapa', 'premios'];
   for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
   if ('omdbKey' in mudancas) config.limiteAtingidoEm = null;
   gravarConfig();
   if ('tmdbKey' in mudancas && config.tmdbKey) buscarCapasQueFaltam();
   if ('omdbKey' in mudancas) buscarNotasQueFaltam();
+  if ('pais' in mudancas) extras.atualizar();
   return configPublica();
 });
 
@@ -649,7 +661,7 @@ ipcMain.handle('filme:adicionar', async (_e, dados) => {
   if (config.tmdbKey) {
     processarTmdb(filme, { tmdbId: dados.tmdbId || null })
       .catch(() => {})
-      .then(() => { gravarAgora(); avisar('filme:mudou', filme); buscarNotasQueFaltam(); });
+      .then(() => { gravarAgora(); avisar('filme:mudou', filme); buscarNotasQueFaltam(); extras.agora(filme.id); });
   }
   return filme;
 });

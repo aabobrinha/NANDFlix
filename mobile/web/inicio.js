@@ -113,7 +113,7 @@ function capaCelHTML(f, { nota = false } = {}) {
     : nota && f.minhaNota ? `<span class="cel-selo cel-selo-nota">${icone('Star', { preenchido: true })}${notaLegivel(f.minhaNota)}</span>` : '';
   return `<button class="cel-capa" data-cel="filme" data-id="${f.id}" aria-label="${esc(f.titulo)}">
     ${src ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">` : `<span class="cel-capa-vazia">${esc(f.titulo)}</span>`}
-    ${f.visto && !nota ? `<span class="cel-visto">${icone('Check')}</span>` : ''}${selo}
+    ${f.visto && !nota ? `<span class="cel-visto">${icone('Check')}</span>` : ''}${selo}${seloNotaHTML(f)}
   </button>`;
 }
 

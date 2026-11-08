@@ -218,6 +218,13 @@ function filtrados() {
     diretor: (a, b) => comparaGrupo((a.diretor || '').trim(), (b.diretor || '').trim()) || anoNumero(a.ano) - anoNumero(b.ano) || comparaTitulo(a, b),
     pais: (a, b) => comparaGrupo(paisPrincipal(a), paisPrincipal(b)) || anoNumero(a.ano) - anoNumero(b.ano) || comparaTitulo(a, b),
     recentes: (a, b) => String(b.adicionadoEm).localeCompare(String(a.adicionadoEm)) || (b.ordem || 0) - (a.ordem || 0),
+    // Pela nota do site escolhido para as capas (sem nota: no fim).
+    nota: (a, b) => {
+      const site = siteNaCapa() || 'letterboxd';
+      const na = notaDe0a100(a, site);
+      const nb = notaDe0a100(b, site);
+      return (nb ?? -1) - (na ?? -1) || comparaTitulo(a, b);
+    },
   };
   return lista.sort(ordens[estado.ordenacao] || ordens.ordem);
 }
@@ -307,6 +314,7 @@ function cartaoHTML(f) {
         ${f.visto ? `<span class="selo-visto" title="Visto">${icone('Check')}</span>` : ''}
         ${f.favorito ? `<span class="selo-fav" title="Favorito">${icone('Star', { preenchido: true })}</span>` : ''}
         ${hojeNaLista ? seloHojeHTML() : ''}
+        ${seloNotaHTML(f)}
       </div>
       <div class="info">
         <h3 title="${esc(f.titulo)}"><span>${esc(f.titulo)}</span></h3>
@@ -333,7 +341,7 @@ const cacheFileira = new Map();
 // (ver atualizarCartao), sem recriar o elemento. Recriar tirava da página o
 // botão que acabou de ser clicado e, com ele focado, o Chromium rolava a página.
 function assinatura(f) {
-  return [f.titulo, f.ano, f.diretor, f.capaLocal, f.poster].join('\u0001');
+  return [f.titulo, f.ano, f.diretor, f.capaLocal, f.poster, seloNotaHTML(f)].join('\u0001');
 }
 const estadoCartao = (f) => `${Boolean(f.visto)}|${Boolean(f.favorito)}|${naWatchlist(f.id)}`;
 
@@ -784,7 +792,7 @@ function renderPainel() {
         <div class="painel-listas">${listasDoFilmeHTML(f)}</div>
         <div class="painel-vistos">${vistosEmHTML(f)}</div>
         ${paginaNoPainelHTML(f)}
-        <div class="notas-linha">${notasHTML(f.info)}</div>
+        <div class="notas-linha">${notasHTML(f.info, f)}</div>
         <p class="painel-sinopse" data-info="sinopse-painel"${sinopse ? '' : ' hidden'}>${esc(sinopse)}</p>
       </div>
       <div class="painel-fichas">
@@ -830,6 +838,13 @@ function renderPainel() {
     </div>`;
 
   carregarRelacionados(f);
+  // Notas do Letterboxd e do TMDB e onde assistir: busca de novo se tiverem mais de 7 dias.
+  api.extrasAgora(f.id).then((ex) => {
+    if (!ex || estado.painelId !== f.id) return;
+    f.extras = ex;
+    atualizarExtrasPainel(f);
+    agendarRender();
+  });
 
   if (!f.info) {
     const id = f.id;
@@ -846,9 +861,15 @@ function renderPainel() {
       const lista = generos(info);
       if (g && lista.length) { $('span', g).textContent = lista.join(', '); g.hidden = false; }
       const notas = $('#painel .notas-linha');
-      if (notas) notas.innerHTML = notasHTML(info);
+      if (notas) notas.innerHTML = notasHTML(info, f);
     });
   }
+}
+
+// Os extras chegaram (ou mudaram): redesenha as notas do painel.
+function atualizarExtrasPainel(f) {
+  const notas = $('#painel .painel-corpo .notas-linha');
+  if (notas) notas.innerHTML = notasHTML(f.info, f);
 }
 
 // "2001  1h 56m  [PG-13]", como a linha de dados do modal da Netflix.
@@ -1032,7 +1053,7 @@ function renderPainelExterno(f) {
       <div>
         <p class="painel-meta">${painelMetaHTML(f)}</p>
         <p class="painel-externo-aviso">${icone('Info')} Este filme não está na sua lista.</p>
-        <div class="notas-linha">${notasHTML(info)}</div>
+        <div class="notas-linha">${notasHTML(info, f)}</div>
         ${info.sinopse ? `<p class="painel-sinopse">${esc(info.sinopse)}</p>` : ''}
       </div>
       <div class="painel-fichas">
@@ -1790,21 +1811,94 @@ function metaCurtaHTML(f) {
   return html;
 }
 
-function notasHTML(info) {
-  if (!info) return '';
+// ---------- Notas de cada site (IMDb, Letterboxd, Metascore, Rotten Tomatoes, TMDB) ----------
+//
+// IMDb, Metascore e Rotten Tomatoes vêm do OMDb (f.info); Letterboxd e TMDB vêm
+// dos extras (lib/extras.js), atualizados toda semana. Cada selo abre a página
+// do filme no site. `notaNaCapa` (Configurações) escolhe o site do selo das capas.
+const corMeta = (n) => (n >= 61 ? '#54a72a' : n >= 40 ? '#d3a400' : '#e8302b');
+const buscaUrl = (f) => encodeURIComponent(f.titulo || '');
+const SITES_NOTA = {
+  letterboxd: {
+    nome: 'Letterboxd',
+    valor: (f, info) => (f.extras && f.extras.letterboxd) || (info && info.letterboxd) || '',
+    max: 5,
+    marca: () => `<span class="marca-lb">${LB_PONTOS}</span>`,
+    link: (f) => (f.extras && f.extras.letterboxdUrl) || f.linkLetterboxd || (f.imdbID ? `https://letterboxd.com/imdb/${f.imdbID}/` : `https://letterboxd.com/search/films/${buscaUrl(f)}/`),
+  },
+  imdb: {
+    nome: 'IMDb',
+    valor: (f, info) => (info && info.imdb) || '',
+    max: 10,
+    marca: () => '<span class="marca-imdb">IMDb</span>',
+    link: (f) => (f.imdbID ? `https://www.imdb.com/title/${f.imdbID}/` : `https://www.imdb.com/find/?q=${buscaUrl(f)}`),
+  },
+  metascore: {
+    nome: 'Metascore',
+    valor: (f, info) => (info && info.metascore) || '',
+    max: 100,
+    marca: (v) => `<span class="marca-meta" style="background:${corMeta(Number(v))}">${esc(v)}</span>`,
+    semNumero: true,
+    rotulo: 'Metascore',
+    link: (f) => `https://www.metacritic.com/search/${buscaUrl(f)}/?category=2`,
+  },
+  rotten: {
+    nome: 'Rotten Tomatoes',
+    valor: (f, info) => (info && info.rotten) || '',
+    max: 100,
+    marca: (v) => `<span class="marca-rt" aria-hidden="true">${parseInt(v, 10) >= 60 ? '🍅' : '🤢'}</span>`,
+    link: (f) => `https://www.rottentomatoes.com/search?search=${buscaUrl(f)}`,
+  },
+  tmdb: {
+    nome: 'TMDB',
+    valor: (f, info) => (f.extras && f.extras.tmdb) || (info && info.tmdb) || '',
+    max: 10,
+    marca: () => '<span class="marca-tmdb">TMDB</span>',
+    link: (f) => (f.tmdbId ? `https://www.themoviedb.org/movie/${f.tmdbId}` : `https://www.themoviedb.org/search/movie?query=${buscaUrl(f)}`),
+  },
+};
+const ORDEM_SITES = ['imdb', 'letterboxd', 'metascore', 'rotten', 'tmdb'];
+const siteNaCapa = () => (estado.config.notaNaCapa === 'nenhuma' ? null : SITES_NOTA[estado.config.notaNaCapa] ? estado.config.notaNaCapa : 'letterboxd');
+
+// A nota do site de 0 a 100, para comparar (ordenar por nota); null sem nota.
+function notaDe0a100(f, site) {
+  const s = SITES_NOTA[site];
+  const n = parseFloat(String(s.valor(f, f.info)).replace(',', '.'));
+  return Number.isFinite(n) ? (n / s.max) * 100 : null;
+}
+
+// `f`: o filme (ou o do TMDB, nos detalhes de um filme fora da lista), para os
+// links e as notas dos extras; `info`: as informações (padrão f.info).
+function notasHTML(info, f = {}) {
   const chips = [];
-  if (info.imdb) chips.push(`<span class="nota-chip" title="Nota no IMDb"><span class="marca-imdb">IMDb</span>${esc(info.imdb)}</span>`);
-  if (info.metascore) {
-    const n = Number(info.metascore);
-    const cor = n >= 61 ? '#54a72a' : n >= 40 ? '#d3a400' : '#e8302b';
-    chips.push(`<span class="nota-chip" title="Metascore"><span class="marca-meta" style="background:${cor}">${esc(info.metascore)}</span><span class="rotulo-nota">Metascore</span></span>`);
-  }
-  if (info.rotten) {
-    const fresco = parseInt(info.rotten, 10) >= 60;
-    chips.push(`<span class="nota-chip" title="Rotten Tomatoes">${fresco ? '🍅' : '🤢'} ${esc(info.rotten)}</span>`);
+  for (const site of ORDEM_SITES) {
+    const s = SITES_NOTA[site];
+    const v = String(s.valor(f, info) || '');
+    if (!v) continue;
+    const titulo = `${s.nome}: ${v}${s.max === 100 && !v.includes('%') ? '/100' : s.max === 5 ? ' de 5' : s.max === 10 ? ' de 10' : ''} · abrir no ${s.nome}`;
+    chips.push(`<button type="button" class="nota-chip nota-${site}" data-link="${esc(s.link(f))}" title="${esc(titulo)}" aria-label="${esc(titulo)}">${s.marca(v)}${s.semNumero ? '' : esc(v)}${s.rotulo ? `<span class="rotulo-nota">${s.rotulo}</span>` : ''}</button>`);
   }
   return chips.join('');
 }
+
+// O selo da capa: a nota do site escolhido em Configurações.
+function seloNotaHTML(f) {
+  const site = siteNaCapa();
+  if (!site) return '';
+  const s = SITES_NOTA[site];
+  const v = String(s.valor(f, f.info) || '');
+  if (!v) return '';
+  return `<span class="selo-nota selo-nota-${site}" title="${esc(`${s.nome}: ${v}`)}">${site === 'metascore' ? s.marca(v) : `${s.marca(v)}<span>${esc(v)}</span>`}</span>`;
+}
+
+// Selos de nota e outros links para sites: abrem no navegador (no celular, no app do site).
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-link]');
+  if (!el) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (el.dataset.link) api.abrirLink(el.dataset.link);
+}, true);
 
 function creditosHTML(f) {
   const partes = [];
@@ -2017,7 +2111,7 @@ function mostrarDestaque(opcoes = {}) {
         </div>
       </div>
       <div class="destaque-textos">
-        <div class="notas-linha" data-info="notas">${notasHTML(f.info)}</div>
+        <div class="notas-linha" data-info="notas">${notasHTML(f.info, f)}</div>
         <p class="sinopse" data-info="sinopse"${f.info && f.info.sinopse ? '' : ' hidden'}>${esc(f.info ? f.info.sinopse : '')}</p>
         <p class="creditos" data-info="creditos">${creditosHTML(f)}</p>
         <div class="destaque-botoes">
@@ -2055,7 +2149,7 @@ async function carregarExtrasDestaque(f, token) {
   carregarInfo(f).then((info) => {
     if (!info || token !== tokenDestaque) return;
     $('[data-info="meta"]', el).innerHTML = metaHTML(f);
-    $('[data-info="notas"]', el).innerHTML = notasHTML(info);
+    $('[data-info="notas"]', el).innerHTML = notasHTML(info, f);
     $('[data-info="creditos"]', el).innerHTML = creditosHTML(f);
     const sinopse = $('[data-info="sinopse"]', el);
     sinopse.textContent = info.sinopse;
@@ -2203,7 +2297,7 @@ function previaHTML(f) {
       </div>
       <div class="meta-linha" data-info="meta">${metaCurtaHTML(f)}</div>
       <div class="generos" data-info="generos">${esc(generos(f.info).slice(0, 3).join(' • '))}</div>
-      <div class="notas-linha" data-info="notas">${notasHTML(f.info)}</div>
+      <div class="notas-linha" data-info="notas">${notasHTML(f.info, f)}</div>
       ${f.diretor ? `<p class="creditos"><b>Direção:</b> ${esc(f.diretor)}</p>` : ''}
       ${f.notas ? `<p class="notas-pessoais">${esc(f.notas)}</p>` : ''}
     </div>`;
@@ -2229,7 +2323,7 @@ async function abrirPrevia(cartao) {
     if (token !== tokenPrevia || !info) return;
     $('[data-info="meta"]', previa).innerHTML = metaCurtaHTML(f);
     $('[data-info="generos"]', previa).textContent = generos(info).slice(0, 3).join(' • ');
-    $('[data-info="notas"]', previa).innerHTML = notasHTML(info);
+    $('[data-info="notas"]', previa).innerHTML = notasHTML(info, f);
   });
   const videoId = await trailerDe(f.id);
   if (token !== tokenPrevia) return;
@@ -2459,6 +2553,13 @@ function abrirConfiguracoes() {
         </div>
       </div>
       <div class="secao">
+        <h3>Nota nas capas</h3>
+        <div class="chips-linha" id="cfg-nota-capa">
+          ${[...ORDEM_SITES, 'nenhuma'].map((s) => `<button class="chip${(siteNaCapa() || 'nenhuma') === s ? ' ativo' : ''}" data-site="${s}" aria-pressed="${(siteNaCapa() || 'nenhuma') === s}">${s === 'nenhuma' ? 'Nenhuma' : SITES_NOTA[s].nome}</button>`).join('')}
+        </div>
+        <p>A nota que aparece no canto de cada capa (e a usada em “Ordenar por nota”). Letterboxd e TMDB não precisam de chave; IMDb, Metascore e Rotten Tomatoes vêm do OMDb.</p>
+      </div>
+      <div class="secao">
         <h3>Capas e informações</h3>
         <div class="linha-botoes">
           <button class="btn" id="cfg-capas" ${pendentes || naoEncontrados ? '' : 'disabled'} title="Capas, logos, trailers e informações pelo TMDB">${icone('RefreshCw')} Atualizar pelo TMDB${pendentes ? ` (${pendentes})` : ''}</button>
@@ -2517,6 +2618,13 @@ function abrirConfiguracoes() {
   $$('input[name="stremio"]', modal).forEach((r) => {
     r.onchange = async () => { estado.config = await api.salvarConfig({ stremio: r.value }); };
   });
+  $('#cfg-nota-capa', modal).onclick = async (e) => {
+    const b = e.target.closest('[data-site]');
+    if (!b) return;
+    $$('#cfg-nota-capa .chip', modal).forEach((x) => { x.classList.toggle('ativo', x === b); x.setAttribute('aria-pressed', x === b); });
+    estado.config = await api.salvarConfig({ notaNaCapa: b.dataset.site });
+    render();
+  };
   $('#cfg-capas', modal).onclick = () => { fecharModal(); buscarCapas({ incluirNaoEncontradas: true }); };
   $('#cfg-infos', modal)?.addEventListener('click', () => { fecharModal(); buscarInfos(); });
   $('#cfg-importar', modal).onclick = () => { fecharModal(); importarPlanilha(); };
@@ -2886,7 +2994,8 @@ api.aoMudarFilme((novo) => {
   if (!f) return;
   // Só os campos da capa: o que o usuário está digitando no painel não é sobrescrito.
   const logoAntes = srcLogo(f);
-  for (const k of ['imdbID', 'tmdbId', 'tmdbEm', 'poster', 'capaLocal', 'capaNaoEncontrada', 'capaPersonalizada', 'logo', 'logoLocal', 'info', 'duracao', 'duracaoDe', 'trailerId', 'trailerManual']) f[k] = novo[k];
+  for (const k of ['imdbID', 'tmdbId', 'tmdbEm', 'poster', 'capaLocal', 'capaNaoEncontrada', 'capaPersonalizada', 'logo', 'logoLocal', 'info', 'duracao', 'duracaoDe', 'trailerId', 'trailerManual', 'extras']) f[k] = novo[k];
+  if (estado.painelId === f.id) atualizarExtrasPainel(f);
   if (!f.diretor && novo.diretor) f.diretor = novo.diretor;
   // A logo chegou (ou mudou): troca o título em texto por ela.
   if (srcLogo(f) !== logoAntes) {

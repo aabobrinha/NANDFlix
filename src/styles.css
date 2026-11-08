@@ -382,11 +382,44 @@ main::-webkit-scrollbar-thumb:hover { background: var(--divisor); }
   display: inline-flex; align-items: center; gap: 5px;
   height: 24px; padding: 0 8px; border-radius: 999px;
   background: rgba(5, 6, 8, .55);
+  border: 1px solid transparent; color: inherit; font-family: inherit; cursor: pointer;
   font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  transition: border-color .15s ease-out, background-color .15s ease-out;
 }
-.nota-chip .marca-imdb { background: #F5C518; color: #000; font-weight: 800; font-size: 9.5px; padding: 1px 3px; border-radius: 2px; }
-.nota-chip .marca-meta { color: #fff; font-weight: 700; font-size: 10.5px; padding: 0 4px; border-radius: 2px; }
+.nota-chip:hover, .nota-chip:focus-visible { border-color: rgba(232, 235, 240, .35); }
+/* Marcas de cada site (nos selos de nota e no canto das capas) */
+.marca-imdb { background: #F5C518; color: #000; font-weight: 800; font-size: 9.5px; padding: 1px 3px; border-radius: 2px; line-height: 1.2; }
+.marca-meta { color: #fff; font-weight: 700; font-size: 10.5px; padding: 0 4px; border-radius: 2px; line-height: 1.5; }
+.marca-tmdb {
+  background: linear-gradient(90deg, #90CEA1, #01B4E4); color: #0D253F;
+  font-weight: 800; font-size: 9px; letter-spacing: .02em; padding: 1px 3px; border-radius: 3px; line-height: 1.2;
+}
+.marca-lb { display: inline-flex; line-height: 0; }
+.marca-lb svg.lb-pontos { width: 21px; height: 8px; }
+.marca-rt { font-size: 12px; line-height: 1; }
 .nota-chip .rotulo-nota { font-weight: 500; color: rgba(232, 235, 240, .7); font-size: 11px; }
+
+/* Nota no canto de baixo da capa (o site sai de Configurações → Nota nas capas) */
+.selo-nota {
+  position: absolute; left: 6px; bottom: 6px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 20px; padding: 0 6px; border-radius: 999px;
+  background: rgba(5, 6, 8, .78); color: var(--texto);
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
+  pointer-events: none;
+  transition: opacity .2s ease-out;
+}
+.selo-nota .marca-imdb { font-size: 8.5px; }
+.selo-nota .marca-tmdb { font-size: 8px; }
+.selo-nota .marca-lb svg.lb-pontos { width: 17px; height: 7px; }
+.selo-nota-metascore { padding: 0; background: none; box-shadow: none; }
+.selo-nota-metascore .marca-meta { font-size: 11px; padding: 2px 5px; border-radius: 3px; box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
+.fileira .cartao:focus-within .selo-nota, .lista.grade .cartao:focus-within .selo-nota { opacity: 0; }
+@media (hover: hover) and (pointer: fine) {
+  .fileira .cartao:hover .selo-nota, .lista.grade .cartao:hover .selo-nota { opacity: 0; }
+}
+.lista.compacta .selo-nota { display: none; }
 .sinopse {
   margin: 0; max-width: 560px;
   font-size: 15px; line-height: 1.5; color: rgba(232, 235, 240, .9);
