@@ -13,6 +13,7 @@ const estado = {
   diretor: '', // "filmes do mesmo diretor", escolhido no painel
   pais: '', // filtro de país, escolhido no cabeçalho do grupo ou no painel
   lista: '', // filtro por uma das listas da pessoa (listas.js)
+  onde: '', // filtro de onde assistir: 'meus' | 'streaming' | 'cinema' | 'stremio' (onde.js)
   ordenacao: 'ordem',
   vista: 'grade',
   painelId: null,
@@ -203,6 +204,7 @@ function filtrados() {
     if (diretores.length && !diretoresDe(f.diretor).some((d) => diretores.includes(d))) return false;
     if (estado.pais && !paisesDe(f).includes(estado.pais)) return false;
     if (estado.lista && !listasDe(f).includes(estado.lista)) return false;
+    if (estado.onde && !passaOnde(f, estado.onde)) return false;
     if (!palavras.length) return true;
     const alvo = normalizar([f.titulo, f.ano, f.diretor, f.notas, f.buscaCapa, ...paisesDe(f)].join(' '));
     return palavras.every((p) => alvo.includes(p));
@@ -486,6 +488,7 @@ function render() {
   $('#chip-lista').hidden = !estado.lista;
   $('#chip-lista').innerHTML = `${icone('Tag')}<span>${esc(estado.lista || '')}</span>${icone('X')}`;
   $('#btn-listas').classList.toggle('ativo-leve', Boolean(estado.lista));
+  atualizarChipsFiltros();
   if (vazio) $('#secao-sorteado').hidden = true;
   atualizarTopo();
   renderFileira();
@@ -793,6 +796,7 @@ function renderPainel() {
         <div class="painel-vistos">${vistosEmHTML(f)}</div>
         ${paginaNoPainelHTML(f)}
         <div class="notas-linha">${notasHTML(f.info, f)}</div>
+        <div class="onde-assistir" data-info="onde">${ondeAssistirHTML(f)}</div>
         <p class="painel-sinopse" data-info="sinopse-painel"${sinopse ? '' : ' hidden'}>${esc(sinopse)}</p>
       </div>
       <div class="painel-fichas">
@@ -870,6 +874,8 @@ function renderPainel() {
 function atualizarExtrasPainel(f) {
   const notas = $('#painel .painel-corpo .notas-linha');
   if (notas) notas.innerHTML = notasHTML(f.info, f);
+  const onde = $('#painel [data-info="onde"]');
+  if (onde) onde.innerHTML = ondeAssistirHTML(f);
 }
 
 // "2001  1h 56m  [PG-13]", como a linha de dados do modal da Netflix.
@@ -1931,13 +1937,13 @@ let proximoSorteio = null;
 
 // Guardados nas configurações. Valem só para o sorteio (a lista da tela não muda):
 // duração máxima ("tenho 1h40"), gêneros, décadas, países e "só da watchlist de hoje".
-const FILTROS_SORTEIO_VAZIOS = { duracao: 0, generos: [], decadas: [], paises: [], listas: [], soWatchlist: false };
+const FILTROS_SORTEIO_VAZIOS = { duracao: 0, generos: [], decadas: [], paises: [], listas: [], onde: [], soWatchlist: false };
 const filtrosSorteio = () => ({ ...FILTROS_SORTEIO_VAZIOS, ...(estado.config.filtrosSorteio || {}) });
 const minutosDe = (f) => f.duracao || parseInt(f.info && f.info.duracao, 10) || 0;
 const decadaDe = (f) => { const a = anoNumero(f.ano); return Number.isFinite(a) ? Math.floor(a / 10) * 10 : null; };
 
 function filtrosSorteioAtivos(fs = filtrosSorteio()) {
-  return Boolean(fs.duracao || fs.generos.length || fs.decadas.length || fs.paises.length || fs.listas.length || fs.soWatchlist);
+  return Boolean(fs.duracao || fs.generos.length || fs.decadas.length || fs.paises.length || fs.listas.length || fs.onde.length || fs.soWatchlist);
 }
 
 function passaNoSorteio(f, fs) {
@@ -1946,6 +1952,8 @@ function passaNoSorteio(f, fs) {
   if (fs.decadas.length && !fs.decadas.includes(decadaDe(f))) return false;
   if (fs.paises.length && !paisesDe(f).some((p) => fs.paises.includes(p))) return false;
   if (fs.listas.length && !listasDe(f).some((l) => fs.listas.includes(l))) return false;
+  // Onde assistir: basta um (nos meus serviços OU nos cinemas…).
+  if (fs.onde.length && !fs.onde.some((o) => passaOnde(f, o))) return false;
   return true;
 }
 
@@ -1968,6 +1976,7 @@ function resumoFiltrosSorteio(fs = filtrosSorteio()) {
   if (fs.decadas.length) partes.push(fs.decadas.map((d) => `anos ${String(d).slice(2)}`).join(', '));
   if (fs.paises.length) partes.push(fs.paises.join(', '));
   if (fs.listas.length) partes.push(fs.listas.join(', '));
+  if (fs.onde.length) partes.push(fs.onde.map((o) => (FILTROS_ONDE[o] ? FILTROS_ONDE[o].rotulo.toLowerCase() : o)).join(', '));
   return partes;
 }
 
@@ -1989,6 +1998,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
     <div class="modal-corpo filtros-sorteio">
       ${secao('Sortear de', 'origem')}
       ${listasTodas.length ? secao('Das suas listas', 'listas') : ''}
+      ${secao('Onde assistir', 'onde')}
       ${secao('Quanto tempo você tem?', 'duracao')}
       ${generosTodos.length ? secao('Gêneros', 'generos') : ''}
       ${decadasTodas.length ? secao('Década', 'decadas') : ''}
@@ -2008,6 +2018,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
       decadas: decadasTodas.map(([d, n]) => chip('decadas', d, `Anos ${d < 2000 ? String(d).slice(2) : d}`, fs.decadas.includes(d), n)).join(''),
       paises: paisesTodos.map(([p, n]) => chip('paises', p, p, fs.paises.includes(p), n)).join(''),
       listas: listasTodas.map(([l, n]) => chip('listas', l, l, fs.listas.includes(l), n)).join(''),
+      onde: filtrosOndeDisponiveis().map((o) => chip('onde', o, FILTROS_ONDE[o].rotulo, fs.onde.includes(o), naoVistos.filter((f) => passaOnde(f, o)).length)).join(''),
     };
     for (const [nome, h] of Object.entries(html)) { const el = $(`[data-secao="${nome}"]`, modal); if (el) el.innerHTML = h; }
     const n = candidatosSorteio(fs, { paraHoje: paraHoje && !fs.soWatchlist }).length;
@@ -2032,6 +2043,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
     if (grupo === 'decadas') fs = { ...fs, decadas: alternarEm(fs.decadas, Number(valor)) };
     if (grupo === 'paises') fs = { ...fs, paises: alternarEm(fs.paises, valor) };
     if (grupo === 'listas') fs = { ...fs, listas: alternarEm(fs.listas, valor) };
+    if (grupo === 'onde') fs = { ...fs, onde: alternarEm(fs.onde, valor) };
     salvar();
   });
   $('#filtros-limpar', modal).onclick = () => { fs = { ...FILTROS_SORTEIO_VAZIOS }; salvar(); };
@@ -2298,6 +2310,7 @@ function previaHTML(f) {
       <div class="meta-linha" data-info="meta">${metaCurtaHTML(f)}</div>
       <div class="generos" data-info="generos">${esc(generos(f.info).slice(0, 3).join(' • '))}</div>
       <div class="notas-linha" data-info="notas">${notasHTML(f.info, f)}</div>
+      <div class="servicos-linha">${servicosCurtosHTML(f)}</div>
       ${f.diretor ? `<p class="creditos"><b>Direção:</b> ${esc(f.diretor)}</p>` : ''}
       ${f.notas ? `<p class="notas-pessoais">${esc(f.notas)}</p>` : ''}
     </div>`;
@@ -2552,6 +2565,7 @@ function abrirConfiguracoes() {
           <label><input type="radio" name="stremio" value="web" ${c.stremio === 'web' ? 'checked' : ''}> Stremio Web</label>
         </div>
       </div>
+      <div class="secao" id="cfg-onde"></div>
       <div class="secao">
         <h3>Nota nas capas</h3>
         <div class="chips-linha" id="cfg-nota-capa">
@@ -2618,6 +2632,7 @@ function abrirConfiguracoes() {
   $$('input[name="stremio"]', modal).forEach((r) => {
     r.onchange = async () => { estado.config = await api.salvarConfig({ stremio: r.value }); };
   });
+  montarCfgOnde($('#cfg-onde', modal));
   $('#cfg-nota-capa', modal).onclick = async (e) => {
     const b = e.target.closest('[data-site]');
     if (!b) return;
