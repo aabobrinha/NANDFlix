@@ -8,6 +8,7 @@
 
 import { carregarDisco, descarregar, fs } from './disco.js';
 import { App } from '@capacitor/app';
+import { AppLauncher } from '@capacitor/app-launcher';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { Filesystem, Directory } from '@capacitor/filesystem';
@@ -258,6 +259,19 @@ async function guardarImagem(bytes, tipo) {
 
 function abrirFora(url) {
   window.open(url, '_system');
+}
+
+// O Stremio do Android (com.stremio.one) ou qualquer app que abra stremio://.
+// Precisa do <queries> no AndroidManifest.xml: sem ele, o Android 11 em diante
+// esconde os outros apps e a resposta é sempre "não".
+async function stremioInstalado() {
+  if (!Capacitor.isNativePlatform()) return true;
+  for (const url of ['com.stremio.one', 'stremio:///']) {
+    try {
+      if ((await AppLauncher.canOpenUrl({ url })).value) return true;
+    } catch { /* tenta o próximo */ }
+  }
+  return false;
 }
 
 function linksStremio(f) {
@@ -521,9 +535,20 @@ window.api = {
     const f = filmes.find((x) => x.id === id);
     if (!f) return { ok: false };
     const l = linksStremio(f);
-    const url = forcarWeb || config.stremio === 'web' ? l.web : l.app;
-    abrirFora(url);
-    return { ok: true, url };
+    if (forcarWeb || config.stremio === 'web') {
+      abrirFora(l.web);
+      return { ok: true, url: l.web };
+    }
+    // Sem o app do Stremio, o link stremio:// não vai a lugar nenhum: a interface
+    // pergunta se abre o Stremio Web (como no PC).
+    if (!(await stremioInstalado())) return { ok: false, semApp: true };
+    try {
+      const { completed } = await AppLauncher.openUrl({ url: l.app });
+      if (!completed) return { ok: false, semApp: true };
+    } catch {
+      return { ok: false, semApp: true };
+    }
+    return { ok: true, url: l.app };
   },
   abrirLetterboxd: async (id) => {
     const f = filmes.find((x) => x.id === id);

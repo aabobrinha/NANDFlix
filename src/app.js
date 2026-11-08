@@ -658,7 +658,7 @@ async function abrirStremio(id) {
   if (r.semApp) {
     const escolha = await perguntar({
       titulo: 'Stremio não encontrado',
-      texto: 'Não encontrei o app do Stremio instalado neste computador. Quer abrir o filme no Stremio Web?',
+      texto: `Não encontrei o app do Stremio instalado neste ${api.celular ? 'celular' : 'computador'}. Quer abrir o filme no Stremio Web?`,
       botoes: [
         { rotulo: 'Cancelar', valor: null, classe: 'btn-fantasma' },
         { rotulo: 'Sempre usar o Stremio Web', valor: 'sempre' },
