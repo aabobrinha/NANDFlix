@@ -159,7 +159,7 @@ html.cel-coberto .cel-nav, html.cel-coberto .cel-topo { opacity: 0; pointer-even
 /* A marca no topo da tela inicial */
 .cel-titulo.marca-nandflix {
   font: 800 28px/1 var(--display); letter-spacing: .005em; text-transform: lowercase;
-  background: linear-gradient(90deg, #F6F1FF 0%, #CDB6FF 60%, #A982F0 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  background: linear-gradient(90deg, var(--sobre-acento) 0%, var(--acento-brilho) 60%, var(--acento-brilho-2) 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 
 /* Destaque: a capa inteira em cima; gêneros e botões embaixo dela, no cartão.

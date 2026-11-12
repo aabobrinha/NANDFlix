@@ -27,7 +27,7 @@ html.celular #tierlist .tl-filtros, html.celular #tierlist .tl-nova {
 html.celular #tierlist .tl-filtros { grid-column: 2; }
 html.celular #tierlist .tl-nova { grid-column: 3; }
 html.celular #tierlist .tl-filtros .ico, html.celular #tierlist .tl-nova .ico { width: 22px; height: 22px; }
-html.celular #tierlist .tl-filtros.ativo { background: linear-gradient(135deg, #9B6CF0, #6D4AA8); color: #fff; }
+html.celular #tierlist .tl-filtros.ativo { background: linear-gradient(135deg, var(--acento-vivo), var(--acento)); color: #fff; }
 
 /* As tiers, uma embaixo da outra, sem rolagem própria */
 html.celular #tierlist .tl-tiers { flex: none; min-height: 0; overflow: visible; padding: 6px 0 20px; gap: 12px; }

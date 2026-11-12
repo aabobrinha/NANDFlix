@@ -188,7 +188,7 @@ const paisesDe = (f) => (f.info && f.info.pais
   : []);
 const paisPrincipal = (f) => paisesDe(f)[0] || '';
 // No painel cada país é um link que filtra a lista por ele.
-const paisesHTML = (f) => paisesDe(f).map((p) => `<button class="link-pais" data-p="pais" data-pais="${esc(p)}" title="Ver só os filmes deste país">${esc(p)}</button>`).join(', ');
+const paisesHTML = (f) => paisesDe(f).map((p) => `<button class="link-pais" data-p="pais" data-pais="${esc(p)}" title="${vocTexto('Ver só {itens} deste país')}">${esc(p)}</button>`).join(', ');
 
 // ---------- Lista ----------
 
@@ -252,11 +252,11 @@ function filtrarPais(pais) {
 // Ordenar por diretor ou por país separa a lista em grupos, cada um com um
 // cabeçalho (nome e quantidade); clicar no nome filtra só aquele grupo.
 const AGRUPAMENTOS = {
-  diretor: { chave: (f) => (f.diretor || '').trim(), semChave: 'Diretor não informado', filtrar: filtrarDiretor, dica: 'Ver só os filmes deste diretor' },
+  diretor: { chave: (f) => (f.diretor || '').trim(), semChave: 'Diretor não informado', filtrar: filtrarDiretor, get dica() { return vocTexto('Ver só {itens} deste diretor'); } },
   pais: {
     chave: paisPrincipal, semChave: 'País não informado', semChavePendente: 'País ainda não carregado',
     pendente: (f) => !f.tmdbEm, buscar: () => buscarCapas({ incluirNaoEncontradas: true }),
-    filtrar: filtrarPais, dica: 'Ver só os filmes deste país',
+    filtrar: filtrarPais, get dica() { return vocTexto('Ver só {itens} deste país'); },
   },
 };
 
@@ -284,7 +284,7 @@ function cabecalhoGrupo(chave, fs, ag) {
     }
   }
   const quantidade = fs.length;
-  const texto = `${quantidade} filme${quantidade === 1 ? '' : 's'}`;
+  const texto = voc('qtd', quantidade);
   const contagem = $('.grupo-contagem', el);
   if (contagem.textContent !== texto) contagem.textContent = texto;
   return el;
@@ -326,7 +326,7 @@ function cartaoHTML(f) {
         <h3 title="${esc(f.titulo)}"><span>${esc(f.titulo)}</span></h3>
         <p class="info-meta">${esc(meta(f))}</p>
         <span class="info-ano">${esc(f.ano)}</span>
-        ${f.diretor ? `<button class="info-diretor" data-acao="diretor" title="Ver os filmes deste diretor na sua lista">${esc(f.diretor)}</button>` : ''}
+        ${f.diretor ? `<button class="info-diretor" data-acao="diretor" title="${vocTexto('Ver {itens} deste diretor na sua lista')}">${esc(f.diretor)}</button>` : ''}
       </div>
       <div class="acoes">
         <button class="acao${f.visto ? ' visto-on' : ''}" data-acao="visto" title="${tituloVisto}" aria-label="${tituloVisto}">${icone('Check')}</button>
@@ -571,17 +571,33 @@ function watchlists() {
   if (c.watchlistHoje && c.watchlistHoje.dia && !w[c.watchlistHoje.dia]) w = { ...w, [c.watchlistHoje.dia]: c.watchlistHoje.ids || [] };
   return w;
 }
-function idsWatchlist(dia = hoje()) {
+// O que está gravado naquele dia (todas as plataformas misturadas, como é sincronizado).
+function idsWatchlistGravados(dia = hoje()) {
   if (dia < hoje()) return [];
   const ids = watchlists()[dia];
   return Array.isArray(ids) ? ids.filter((id) => porId(id)) : [];
 }
-const naWatchlist = (id) => idsWatchlist().includes(id);
+// Plataformas: cada plataforma enxerga só a sua watchlist (no hub, todas).
+function idsWatchlist(dia = hoje()) {
+  const ok = testeDaPlataforma();
+  return idsWatchlistGravados(dia).filter((id) => ok(porId(id)));
+}
+const naWatchlist = (id) => idsWatchlistGravados().includes(id);
 
+// `ids` é a watchlist como a plataforma atual a vê. Os itens das outras
+// plataformas que estão no mesmo dia ficam como estavam (nos mesmos lugares).
 function salvarWatchlist(ids, dia = hoje()) {
   const w = {};
   for (const [d, lista] of Object.entries(watchlists())) if (d >= hoje() && lista.length) w[d] = lista;
-  if (ids.length) w[dia] = ids;
+  const ok = testeDaPlataforma();
+  const novos = [...ids];
+  const final = [];
+  for (const id of idsWatchlistGravados(dia)) {
+    if (!ok(porId(id))) final.push(id); // de outra plataforma: preserva
+    else if (novos.length) final.push(novos.shift()); // vaga de um item visível: recebe o próximo da ordem nova
+  }
+  final.push(...novos);
+  if (final.length) w[dia] = final;
   else delete w[dia];
   estado.config.watchlists = w;
   delete estado.config.watchlistHoje;
@@ -684,7 +700,7 @@ async function abrirStremio(id, { stremio = false } = {}) {
   if (r.semApp) {
     const escolha = await perguntar({
       titulo: 'Stremio não encontrado',
-      texto: `Não encontrei o app do Stremio instalado neste ${api.celular ? 'celular' : 'computador'}. Quer abrir o filme no Stremio Web?`,
+      texto: `Não encontrei o app do Stremio instalado neste ${api.celular ? 'celular' : 'computador'}. Quer abrir ${vocDe(porId(id), 'este')} no Stremio Web?`,
       botoes: [
         { rotulo: 'Cancelar', valor: null, classe: 'btn-fantasma' },
         { rotulo: 'Sempre usar o Stremio Web', valor: 'sempre' },
@@ -755,6 +771,7 @@ function renderPainel() {
   const f = porId(estado.painelId);
   if (!f) { fecharPainel(); return; }
   if (f.externo) { renderPainelExterno(f); return; }
+  $('#painel').setAttribute('aria-label', `Detalhes ${vocDe(f, 'de')}`); // o do próprio item: um anime é "anime" até no nandhub
   // Ao marcar visto/favorito o painel é redesenhado; o foco volta ao mesmo botão.
   const ativo = document.activeElement;
   const focoAntes = ativo && ativo.closest && ativo.closest('#painel [data-p]') ? ativo.dataset.p : null;
@@ -837,7 +854,7 @@ function renderPainel() {
       <label for="c-diretor">${serie ? 'Estúdio' : 'Diretor'}</label>
       <div class="campo-com-botoes">
         <input id="c-diretor" data-campo="diretor" value="${esc(f.diretor)}">
-        <button class="btn btn-icone" data-p="mesmo-diretor" title="Ver os filmes deste diretor na sua lista" aria-label="Ver os filmes deste diretor na sua lista"${f.diretor ? '' : ' disabled'}>${icone('Search')}</button>
+        <button class="btn btn-icone" data-p="mesmo-diretor" title="${vocTexto('Ver {itens} deste diretor na sua lista')}" aria-label="${vocTexto('Ver {itens} deste diretor na sua lista')}"${f.diretor ? '' : ' disabled'}>${icone('Search')}</button>
         ${serie ? '' : `<button class="btn btn-icone" data-p="diretor-letterboxd" title="Ver todos os filmes do diretor no Letterboxd" aria-label="Ver todos os filmes do diretor no Letterboxd"${f.diretor ? '' : ' disabled'}>${LB_PONTOS}</button>`}
       </div>
     </div>
@@ -934,7 +951,7 @@ function atualizarBotoesPainel(f) {
   if (escrever) {
     // Só aparece depois de marcar como visto (ou se o filme já tem página).
     escrever.hidden = !f.visto && !temPagina(f);
-    escrever.innerHTML = temPagina(f) ? `${icone('BookOpen')} Abrir sua página` : `${icone('NotebookPen')} Escrever sobre o filme`;
+    escrever.innerHTML = temPagina(f) ? `${icone('BookOpen')} Abrir sua página` : `${icone('NotebookPen')} ${vocTextoDe(f, 'Escrever sobre {artigo} {item}')}`;
   }
   const botaoStory = $('#painel .painel-botoes [data-p="story"]');
   if (botaoStory) botaoStory.hidden = !f.visto;
@@ -1556,9 +1573,9 @@ async function abrirTrocarCapa(id) {
   };
   abrirModal(`${cabecalhoModal(`Trocar capa — ${f.titulo}`)}
     <div class="modal-corpo">
-      ${f.tmdbId ? `<h3 class="trocar-subtitulo">Outras capas deste filme</h3>
+      ${f.tmdbId ? `<h3 class="trocar-subtitulo">Outras capas ${vocDe(f, 'deste')}</h3>
       <div id="outras-capas"><p class="mensagem carregando">Carregando as capas</p></div>
-      <h3 class="trocar-subtitulo">É outro filme? Busque o certo</h3>` : ''}
+      <h3 class="trocar-subtitulo">É outro ${vocDe(f, 'item')}? Busque o certo</h3>` : ''}
       <div class="busca-linha"><input id="busca-tmdb" placeholder="Título ou código tt…" spellcheck="false"><button class="btn btn-laranja" id="btn-busca-tmdb">Buscar</button></div>
       <div id="resultados-tmdb"></div>
     </div>
@@ -1567,7 +1584,7 @@ async function abrirTrocarCapa(id) {
   montarBuscaTmdb({
     termoInicial: f.tmdbId ? '' : (f.buscaCapa || f.titulo),
     atualTmdb: f.tmdbId,
-    aoEscolher: (escolha, botao) => trocar({ tmdbId: escolha.tmdbId }, botao, 'Filme trocado: capa, logo, trailer e informações atualizados.'),
+    aoEscolher: (escolha, botao) => trocar({ tmdbId: escolha.tmdbId }, botao, `${vocDe(f, 'Item')} trocado: capa, logo, trailer e informações atualizados.`),
   });
   if (!f.tmdbId) return;
   $('#busca-tmdb', modal).value = f.buscaCapa || f.titulo;
@@ -1588,11 +1605,11 @@ async function abrirTrocarCapa(id) {
 }
 
 async function abrirAdicionar(termo = '') {
-  abrirModal(`${cabecalhoModal(nandrollLigado() ? 'Adicionar à lista' : 'Adicionar filme')}
+  abrirModal(`${cabecalhoModal(voc('Adicionar'))}
     <div class="modal-corpo">
       ${fontesBuscaHTML()}
       <div class="busca-linha"><input id="busca-tmdb" placeholder="${fonteAtual() === 'anime' ? 'Digite o nome do anime e tecle Enter' : 'Digite o título e tecle Enter'}" spellcheck="false"><button class="btn btn-laranja" id="btn-busca-tmdb">Buscar</button></div>
-      <div id="resultados-tmdb"><p class="mensagem">${nandrollLigado() ? 'Busque e clique no resultado certo. Filmes vêm do TMDB; animes, da AniList.' : 'Busque o filme no TMDB e clique no resultado certo.'}</p></div>
+      <div id="resultados-tmdb"><p class="mensagem">${plataformaAtual().hub ? 'Busque e clique no resultado certo. Filmes vêm do TMDB; animes, da AniList.' : fonteAtual() === 'anime' ? 'Busque o anime na AniList e clique no resultado certo.' : 'Busque o filme no TMDB e clique no resultado certo.'}</p></div>
     </div>
     <div class="modal-rodape"><button class="btn btn-fantasma" id="btn-sem-buscar">Adicionar sem buscar</button></div>`);
 
@@ -1600,7 +1617,7 @@ async function abrirAdicionar(termo = '') {
     const repetido = await api.acharRepetido(dados);
     if (repetido) {
       const seguir = await perguntar({
-        titulo: 'Esse filme já está na lista',
+        titulo: `Esse ${dados.tipo === 'serie' || dados.anilistId ? 'anime' : 'filme'} já está na lista`,
         texto: `“${repetido.titulo}”${repetido.ano ? ` (${repetido.ano})` : ''} já está na sua lista. Adicionar mesmo assim?`,
         botoes: [
           { rotulo: 'Ver o que já está', valor: 'ver', classe: 'btn-fantasma' },
@@ -1913,6 +1930,7 @@ function notaDe0a100(f, site) {
 // `f`: o filme (ou o do TMDB, nos detalhes de um filme fora da lista), para os
 // links e as notas dos extras; `info`: as informações (padrão f.info).
 function notasHTML(info, f = {}) {
+  info = info || {}; // anime recém-adicionado ainda sem informações
   const chips = [];
   if (info.anilist) chips.push(`<span class="nota-chip" title="Nota média na AniList"><span class="marca-anilist">AniList</span>${esc(info.anilist)}%</span>`); // NANDRoll
   for (const site of ORDEM_SITES) {
@@ -1976,7 +1994,12 @@ let proximoSorteio = null;
 // Guardados nas configurações. Valem só para o sorteio (a lista da tela não muda):
 // duração máxima ("tenho 1h40"), gêneros, décadas, países e "só da watchlist de hoje".
 const FILTROS_SORTEIO_VAZIOS = { duracao: 0, generos: [], decadas: [], paises: [], listas: [], onde: [], premios: [], soWatchlist: false };
-const filtrosSorteio = () => ({ ...FILTROS_SORTEIO_VAZIOS, ...(estado.config.filtrosSorteio || {}) });
+// Plataformas: sem prêmios na plataforma, o filtro de prêmio do sorteio não vale.
+const filtrosSorteio = () => {
+  const fs = { ...FILTROS_SORTEIO_VAZIOS, ...(estado.config.filtrosSorteio || {}) };
+  if (!plataformaTem('premios')) fs.premios = [];
+  return fs;
+};
 const minutosDe = (f) => f.duracao || parseInt(f.info && f.info.duracao, 10) || 0;
 const decadaDe = (f) => { const a = anoNumero(f.ano); return Number.isFinite(a) ? Math.floor(a / 10) * 10 : null; };
 
@@ -2001,7 +2024,7 @@ function passaNoSorteio(f, fs) {
 function candidatosSorteio(fs = filtrosSorteio(), { paraHoje = false } = {}) {
   if (paraHoje) {
     const naLista = new Set(idsWatchlist());
-    return estado.filmes.filter((f) => !f.visto && !naLista.has(f.id) && passaNoSorteio(f, fs));
+    return itensDaPlataforma().filter((f) => !f.visto && !naLista.has(f.id) && passaNoSorteio(f, fs)); // Plataformas
   }
   const base = fs.soWatchlist ? idsWatchlist(hoje()).map(porId).filter(Boolean) : filtrados();
   return base.filter((f) => !f.visto && passaNoSorteio(f, fs));
@@ -2024,7 +2047,7 @@ function resumoFiltrosSorteio(fs = filtrosSorteio()) {
 // de capas e põe o escolhido na watchlist de hoje (e "Sortear de" não aparece).
 function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
   let fs = filtrosSorteio();
-  const naoVistos = estado.filmes.filter((f) => !f.visto);
+  const naoVistos = itensDaPlataforma().filter((f) => !f.visto); // Plataformas
   const contar = (lista) => [...lista.reduce((m, v) => m.set(v, (m.get(v) || 0) + 1), new Map())].sort((a, b) => b[1] - a[1]);
   const generosTodos = contar(naoVistos.flatMap((f) => generos(f.info)));
   const decadasTodas = contar(naoVistos.map(decadaDe).filter((d) => d !== null)).sort((a, b) => a[0] - b[0]);
@@ -2039,7 +2062,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
       ${secao('Sortear de', 'origem')}
       ${listasTodas.length ? secao('Das suas listas', 'listas') : ''}
       ${secao('Onde assistir', 'onde')}
-      ${secao('Prêmios', 'premios')}
+      ${plataformaTem('premios') ? secao('Prêmios', 'premios') : ''}
       ${secao('Quanto tempo você tem?', 'duracao')}
       ${generosTodos.length ? secao('Gêneros', 'generos') : ''}
       ${decadasTodas.length ? secao('Década', 'decadas') : ''}
@@ -2053,7 +2076,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
 
   const desenhar = () => {
     const html = {
-      origem: chip('origem', 'tela', paraHoje ? 'Filmes fora da watchlist' : 'Não vistos da lista', !fs.soWatchlist) + chip('origem', 'watchlist', paraHoje ? 'Um da watchlist de hoje' : 'Só da watchlist de hoje', fs.soWatchlist, idsWatchlist(hoje()).length || ''),
+      origem: chip('origem', 'tela', paraHoje ? `${voc('Itens')} fora da watchlist` : 'Não vistos da lista', !fs.soWatchlist) + chip('origem', 'watchlist', paraHoje ? 'Um da watchlist de hoje' : 'Só da watchlist de hoje', fs.soWatchlist, idsWatchlist(hoje()).length || ''),
       duracao: DURACOES.map((m) => chip('duracao', m, m ? `Até ${duracaoLegivel(m)}` : 'Qualquer duração', fs.duracao === m)).join(''),
       generos: generosTodos.map(([g, n]) => chip('generos', g, g, fs.generos.includes(g), n)).join(''),
       decadas: decadasTodas.map(([d, n]) => chip('decadas', d, `Anos ${d < 2000 ? String(d).slice(2) : d}`, fs.decadas.includes(d), n)).join(''),
@@ -2064,7 +2087,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
     };
     for (const [nome, h] of Object.entries(html)) { const el = $(`[data-secao="${nome}"]`, modal); if (el) el.innerHTML = h; }
     const n = candidatosSorteio(fs, { paraHoje: paraHoje && !fs.soWatchlist }).length;
-    $('#filtros-contagem', modal).textContent = n === 1 ? '1 filme pode ser sorteado' : `${n} filmes podem ser sorteados`;
+    $('#filtros-contagem', modal).textContent = `${voc('qtd', n)} ${n === 1 ? 'pode' : 'podem'} ser sorteado${n === 1 ? '' : 's'}`;
     $('#filtros-sortear', modal).disabled = !n;
     $('#filtros-limpar', modal).disabled = !filtrosSorteioAtivos(fs);
   };
@@ -2110,7 +2133,7 @@ function sortear({ rolar = true, avisarSeVazio = true } = {}) {
   const candidatos = candidatosSorteio(fs);
   if (!candidatos.length) {
     if (!avisarSeVazio) return;
-    if (filtrosSorteioAtivos(fs)) aviso('Nenhum filme não visto passa nos filtros do sorteio.', { acao: { rotulo: 'Ajustar filtros', fn: abrirFiltrosSorteio } });
+    if (filtrosSorteioAtivos(fs)) aviso(vocTexto('Nenhum {item} não visto passa nos filtros do sorteio.'), { acao: { rotulo: 'Ajustar filtros', fn: abrirFiltrosSorteio } });
     else aviso('Você já viu todos! 🎉', { tipo: 'ok' });
     return;
   }
@@ -2655,8 +2678,8 @@ ${nandrollConfigHTML()}
         <h3>Atalhos</h3>
         <div class="atalhos">
           <kbd>${mod} F</kbd><span>Pesquisar</span>
-          <kbd>${mod} K</kbd><span>Buscar em tudo (filmes, páginas, TMDB e ações)</span>
-          <kbd>${mod} N</kbd><span>Adicionar filme</span>
+          <kbd>${mod} K</kbd><span>Buscar em tudo (${voc('itens')}, páginas, ${plataformaAtual().id === 'nandanimes' ? 'AniList' : 'TMDB'} e ações)</span>
+          <kbd>${mod} N</kbd><span>${voc('Adicionar')}</span>
           <kbd>R</kbd><span>Sortear</span>
           <kbd>Esc</kbd><span>Fechar painel ou janela</span>
         </div>
@@ -2899,7 +2922,7 @@ async function mostrarNuvem(st) {
     }
     corpo.dataset.conta = st.conta;
     corpo.innerHTML = `
-      <p>${icone('CloudCheck')}<span>Conectado como <b>${esc(st.conta)}</b>. Filmes, notas, páginas, watchlists, tierlists, listas e as chaves das APIs ficam iguais em todos os aparelhos com esta conta.</span></p>
+      <p>${icone('CloudCheck')}<span>Conectado como <b>${esc(st.conta)}</b>. Filmes, animes, notas, páginas, watchlists, tierlists, listas e as chaves das APIs ficam iguais em todos os aparelhos com esta conta.</span></p>
       <p class="cfg-nuvem-status${st.fase === 'erro' ? ' erro' : ''}" id="cfg-nuvem-status" role="status">${esc(statusNuvemTexto(st))}</p>
       <div class="linha-botoes">
         <button class="btn" id="cfg-nuvem-agora">${icone('RefreshCw')} Sincronizar agora</button>
@@ -3635,7 +3658,7 @@ function filmeDoDiaHTML(f, { pensandoEm = null, vistoNoMes = null } = {}) {
     acoes = `<div class="cal-filme-botoes">${principais}${tirar}</div>${mover}`;
   }
   if (vistoNoMes && temPagina(f)) return resenhaDoDiaHTML(f, { vistoNoMes, trofeu: acoes });
-  if (vistoNoMes) acoes += `<button class="cal-escrever" data-c="pagina" data-id="${f.id}">${icone('PenLine')} Escrever sobre o filme</button>`;
+  if (vistoNoMes) acoes += `<button class="cal-escrever" data-c="pagina" data-id="${f.id}">${icone('PenLine')} ${vocTextoDe(f, 'Escrever sobre {artigo} {item}')}</button>`;
   return `
     <article class="cal-filme${pensandoEm ? ' pensando' : ''}${ehDoMes ? ' do-mes' : ''}" data-id="${f.id}">
       ${capinhaHTML(f, 'grande')}
@@ -3688,19 +3711,19 @@ function paginaDiaHTML(dia) {
     ${ehHoje || futuro ? `
       <section class="cal-secao" data-secao="watchlist">
         <h3>${icone('CalendarClock')} ${ehHoje ? 'Pensando em ver hoje' : 'Pensando em ver neste dia'} ${contagem(watchlist.length)}
-          ${ehHoje ? `<span class="cal-sortear-botoes"><button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje" title="Sortear um filme não visto para a watchlist de hoje">${icone('Dices')} Sortear um filme</button><button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje-filtro" title="Sortear só por duração, gênero, década ou país">${icone('SlidersHorizontal')} Sortear com filtro</button></span>` : ''}</h3>
+          ${ehHoje ? `<span class="cal-sortear-botoes"><button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje" title="${vocTexto('Sortear {um} não visto para a watchlist de hoje')}">${icone('Dices')} ${voc('sortear')}</button><button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje-filtro" title="Sortear só por duração, gênero, década ou país">${icone('SlidersHorizontal')} Sortear com filtro</button></span>` : ''}</h3>
         ${watchlist.length
           ? `<div class="cal-filmes">${watchlist.map((f) => filmeDoDiaHTML(f, { pensandoEm: dia })).join('')}</div>`
           : `<p class="cal-vazio">${ehHoje
-            ? `Nenhum filme ainda. Use o ${icone('CalendarClock')} na capa de um filme, na prévia ou nos detalhes para colocar aqui o que você está pensando em ver hoje. A lista some quando o dia vira, às 5h.`
-            : 'Nenhum filme planejado para este dia. No mês, arraste uma capa da watchlist para cá.'}</p>`}
+            ? `${voc('Nenhum')} ainda. Use o ${icone('CalendarClock')} na capa ${vocTexto('de {um}')}, na prévia ou nos detalhes para colocar aqui o que você está pensando em ver hoje. A lista some quando o dia vira, às 5h.`
+            : `${voc('Nenhum')} planejado para este dia. No mês, arraste uma capa da watchlist para cá.`}</p>`}
       </section>` : ''}
     ${futuro ? '' : `
     <section class="cal-secao cal-secao-vistos">
       <h3>${icone('Check')} ${ehHoje ? 'Vistos hoje' : 'Vistos neste dia'} ${contagem(vistos.length)}</h3>
       ${vistos.length
         ? vistosDoDiaHTML(vistos, dia)
-        : `<p class="cal-vazio">${ehHoje ? 'Nenhum filme visto hoje ainda.' : 'Nenhum filme visto neste dia.'}</p>`}
+        : `<p class="cal-vazio">${ehHoje ? 'Nada visto hoje ainda.' : 'Nada visto neste dia.'}</p>`}
     </section>`}`;
 }
 
@@ -3727,9 +3750,9 @@ function sortearParaHoje(_botao, { comFiltro = false } = {}) {
   const { daWatchlist, candidatos } = candidatosRoleta(comFiltro);
   if (!candidatos.length) {
     const ajustar = { rotulo: 'Ajustar filtros', fn: () => abrirFiltrosSorteio({ paraHoje: true }) };
-    if (daWatchlist) aviso('Nenhum filme da watchlist de hoje passa nos filtros.', { acao: ajustar });
-    else if (comFiltro) aviso('Nenhum filme não visto passa nos filtros do sorteio.', { acao: ajustar });
-    else aviso('Não sobrou nenhum filme não visto para sortear.');
+    if (daWatchlist) aviso(vocTexto('Nenhum {item} da watchlist de hoje passa nos filtros.'), { acao: ajustar });
+    else if (comFiltro) aviso(vocTexto('Nenhum {item} não visto passa nos filtros do sorteio.'), { acao: ajustar });
+    else aviso(vocTexto('Não sobrou nenhum {item} não visto para sortear.'));
     return;
   }
   if (!roleta) abrirTelaRoleta();

@@ -146,7 +146,7 @@ function paginaFilmeHTML(f) {
       <div class="pg-fundo" style="${esc(fundoCapa(f))}" aria-hidden="true"></div>
       <button class="redondo pg-fechar" data-pg="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
       <div class="pg-identidade">
-        <button class="pg-capa" data-pg="detalhes" title="Ver os detalhes do filme" aria-label="Ver os detalhes de ${esc(f.titulo)}">${capaHTML(f, { tamanho: 'grande' })}</button>
+        <button class="pg-capa" data-pg="detalhes" title="${vocTextoDe(f, 'Ver os detalhes {de}')}" aria-label="Ver os detalhes de ${esc(f.titulo)}">${capaHTML(f, { tamanho: 'grande' })}</button>
         <div class="pg-dados">
           <span class="pg-rotulo">${icone('NotebookPen')} Sua página</span>
           <h2>${esc(f.titulo)}</h2>
@@ -167,7 +167,7 @@ function paginaFilmeHTML(f) {
     <div class="pg-folha">
       <div class="pg-editor" id="pagina-editor" contenteditable="true" spellcheck="true"
            role="textbox" aria-multiline="true" aria-label="Sua página sobre ${esc(f.titulo)}"
-           data-vazio="Escreva o que achou do filme…"></div>
+           data-vazio="${vocTextoDe(f, 'Escreva o que achou {de}…')}"></div>
       <p class="pg-dica">Atalhos: <kbd>#</kbd> título, <kbd>##</kbd> subtítulo, <kbd>&gt;</kbd> citação, <kbd>-</kbd> lista e <kbd>1.</kbd> lista numerada, seguidos de espaço. <kbd>---</kbd> e Enter cria um divisor.</p>
     </div>
     <footer class="pg-rodape">

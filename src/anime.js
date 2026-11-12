@@ -101,8 +101,13 @@ function ligarNandrollConfig(raiz) {
   };
 }
 
-// A fonte da busca do "Adicionar": só há animes com o NANDRoll ligado.
-const fonteAtual = () => (nandrollLigado() ? fonteBusca : 'filme');
+// A fonte da busca do "Adicionar": cada plataforma busca nas suas (nandanimes na
+// AniList, nandflix no TMDB); só o hub deixa escolher e lembra a última.
+function fonteAtual() {
+  const p = plataformaAtual();
+  if (!p.hub) return p.id === 'nandanimes' ? 'anime' : 'filme';
+  return nandrollLigado() ? fonteBusca : 'filme';
+}
 
 // ehSerie e ehAnime: em plataformas.js (Plataformas).
 
@@ -248,9 +253,13 @@ function chipsTemporadasHTML(f, sel) {
 }
 
 // Contador de episódios, status, próximo episódio e onde assistir.
+// O "Remover da lista" fica à mão no próprio bloco do anime (o do rodapé do painel é fácil de não ver).
+// É o mesmo data-p="excluir": o app.js remove na hora, com "Desfazer" no aviso.
+const removerAnimeHTML = () => `<div class="serie-remover-linha"><button class="btn btn-perigo serie-remover" data-p="excluir">${icone('Trash2')} Remover da lista</button></div>`;
+
 function animeNoPainelHTML(f) {
   if (!ehAnime(f)) return '';
-  if (!ehSerie(f)) return `<div class="serie" data-anime-bloco>${ondeAssistirAnimeHTML(f)}</div>`;
+  if (!ehSerie(f)) return `<div class="serie" data-anime-bloco>${ondeAssistirAnimeHTML(f)}${removerAnimeHTML()}</div>`;
   const ts = temporadasDe(f);
   const sel = indiceTemporada(f);
   const t = sel === null ? null : ts[sel];
@@ -293,6 +302,7 @@ function animeNoPainelHTML(f) {
       ${t && !temporadaLancada(t) ? '<p class="serie-proximo">Ainda não lançada.</p>' : ''}
       ${proximo ? `<p class="serie-proximo">${icone('CalendarClock')} ${esc(proximo)}</p>` : ''}
       ${ts.length ? ondeAssistirAnimeHTML(f, corrente, corrente ? ts.indexOf(corrente) : null) : ondeAssistirAnimeHTML(f)}
+      ${removerAnimeHTML()}
     </div>`;
 }
 
@@ -565,8 +575,9 @@ let fonteBusca = 'filme';
 try { fonteBusca = localStorage.getItem('fonteBusca') === 'anime' ? 'anime' : 'filme'; } catch { /* fica filme */ }
 
 function fontesBuscaHTML() {
-  if (!nandrollLigado()) return '';
-  const chip = (k, r) => `<button class="chip${fonteBusca === k ? ' ativo' : ''}" data-fonte="${k}" role="radio" aria-checked="${fonteBusca === k}">${r}</button>`;
+  if (!nandrollLigado() || !plataformaAtual().hub) return ''; // só o hub tem as duas fontes
+  const atual = fonteAtual();
+  const chip = (k, r) => `<button class="chip${atual === k ? ' ativo' : ''}" data-fonte="${k}" role="radio" aria-checked="${atual === k}">${r}</button>`;
   return `<div class="chips fontes-busca" role="radiogroup" aria-label="Onde buscar">${chip('filme', 'Filmes')}${chip('anime', 'Animes')}</div>`;
 }
 
@@ -576,7 +587,7 @@ function ligarFontesBusca(raiz, aoTrocar) {
   if (!grupo) return;
   grupo.addEventListener('click', (e) => {
     const b = e.target.closest('[data-fonte]');
-    if (!b || b.dataset.fonte === fonteBusca) return;
+    if (!b || b.dataset.fonte === fonteAtual()) return;
     fonteBusca = b.dataset.fonte;
     try { localStorage.setItem('fonteBusca', fonteBusca); } catch { /* só não lembra */ }
     for (const c of $$('[data-fonte]', grupo)) {

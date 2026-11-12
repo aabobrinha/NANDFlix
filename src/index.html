@@ -25,7 +25,7 @@
       </div>
       <div class="topo-dir">
         <div class="pesquisa" id="pesquisa-caixa">
-          <input id="pesquisa" type="search" placeholder="Título, ano, diretor ou notas" autocomplete="off" spellcheck="false" tabindex="-1" aria-label="Pesquisar filmes">
+          <input id="pesquisa" type="search" placeholder="Título, ano, diretor ou notas" autocomplete="off" spellcheck="false" tabindex="-1" aria-label="Pesquisar filmes" data-voc-aria="Pesquisar {itens}">
           <button class="icone-btn" id="btn-lupa" data-dica="Pesquisar" aria-label="Pesquisar"><span data-icone="Search"></span></button>
         </div>
         <!-- Menus: a seta abre (ao passar o mouse ou clicar) a lista com ícone e nome. -->
@@ -38,7 +38,7 @@
             <button class="menu-topo-item" role="menuitem" id="btn-paginas"><span data-icone="NotebookPen"></span><span>Suas páginas</span></button>
             <button class="menu-topo-item" role="menuitem" id="btn-tierlist"><span data-icone="Medal"></span><span>Tierlist</span></button>
             <button class="menu-topo-item" role="menuitem" id="btn-estatisticas"><span data-icone="ChartColumn"></span><span>Estatísticas</span></button>
-            <button class="menu-topo-item" role="menuitem" id="btn-premios"><span data-icone="Trophy"></span><span>Prêmios</span></button>
+            <button class="menu-topo-item" role="menuitem" id="btn-premios" data-recurso="premios"><span data-icone="Trophy"></span><span>Prêmios</span></button>
             <div class="sortear-topo" id="sortear-topo" role="none">
               <span class="menu-topo-sep" aria-hidden="true"></span>
               <button class="menu-topo-item" role="menuitem" id="btn-sortear"><span data-icone="Dices"></span><span>Sortear</span><kbd>R</kbd></button>
@@ -46,7 +46,7 @@
             </div>
           </div>
         </div>
-        <button class="icone-btn btn-mais" id="btn-adicionar" data-dica="Adicionar filme" aria-label="Adicionar filme"><span data-icone="Plus"></span></button>
+        <button class="icone-btn btn-mais" id="btn-adicionar" data-dica="Adicionar filme" aria-label="Adicionar filme" data-voc-dica="{Adicionar}" data-voc-aria="{Adicionar}"><span data-icone="Plus"></span></button>
         <button class="icone-btn" id="btn-config" data-dica="Configurações" aria-label="Configurações"><span data-icone="Settings"></span></button>
       </div>
     </div>
@@ -58,13 +58,13 @@
 
   <main id="principal">
     <section class="bloco" id="secao-sorteado" hidden>
-      <h2 class="titulo-secao sr">Filme sorteado</h2>
-      <section class="destaque" id="destaque" aria-label="Filme sorteado"></section>
+      <h2 class="titulo-secao sr" data-voc="{Item} sorteado">Filme sorteado</h2>
+      <section class="destaque" id="destaque" aria-label="Filme sorteado" data-voc-aria="{Item} sorteado"></section>
     </section>
 
     <section class="bloco" id="secao-favoritos" hidden>
       <div class="cabecalho-fileira">
-        <h2 class="titulo-secao">Filmes na sua lista</h2>
+        <h2 class="titulo-secao" data-voc="{Itens} na sua lista">Filmes na sua lista</h2>
         <span class="divisor-v" aria-hidden="true"></span>
         <span class="kicker" id="kicker-favoritos">0 favoritos</span>
       </div>
@@ -134,7 +134,7 @@
             <button class="btn btn-primario btn-grande" id="btn-importar-vazio">Importar planilha</button>
             <div class="vazio-dir">
               <button class="link-forte" id="btn-importar-app-vazio">ou importe do Letterboxd, IMDb ou Stremio</button>
-              <button class="link-forte" id="btn-adicionar-vazio">ou adicione um filme</button>
+              <button class="link-forte" id="btn-adicionar-vazio" data-voc="ou adicione {um}">ou adicione um filme</button>
               <p>Importe a planilha de filmes para começar. Os vistos, favoritos e notas vêm junto.</p>
             </div>
           </div>
@@ -154,7 +154,7 @@
     </section>
   </main>
 
-  <aside class="painel" id="painel" aria-hidden="true" aria-label="Detalhes do filme">
+  <aside class="painel" id="painel" aria-hidden="true" aria-label="Detalhes">
     <div class="painel-conteudo" id="painel-conteudo"></div>
   </aside>
   <div class="painel-fundo" id="painel-fundo"></div>
@@ -182,7 +182,7 @@
   </div>
 
   <div class="calendario pagina-filme" id="pagina-filme" hidden>
-    <div class="calendario-caixa pagina-caixa" id="pagina-caixa" role="dialog" aria-modal="true" aria-label="Sua página do filme"></div>
+    <div class="calendario-caixa pagina-caixa" id="pagina-caixa" role="dialog" aria-modal="true" aria-label="Sua página"></div>
   </div>
 
   <div class="foco" id="foco" hidden>

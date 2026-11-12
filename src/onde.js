@@ -57,7 +57,7 @@ function ondeAssistirHTML(f) {
   if (ex.cinema === 'agora') selos.push(`<span class="onde-selo onde-cinema">${icone('Clapperboard')} Nos cinemas</span>`);
   if (ex.cinema === 'em-breve') selos.push(`<span class="onde-selo onde-cinema">${icone('Clapperboard')} Nos cinemas a partir de ${dataCurta(ex.cinemaData)}</span>`);
   if (ex.stremio === true) selos.push(`<button type="button" class="onde-selo onde-stremio" data-p="stremio" title="Está no catálogo do Stremio. Se dá para assistir depende dos complementos (add-ons) do seu Stremio.">${icone('Play')} No Stremio</button>`);
-  if (ex.stremio === false) selos.push(`<span class="onde-selo onde-fora" title="Não achei o filme no catálogo do Stremio (Cinemeta).">Fora do catálogo do Stremio</span>`);
+  if (ex.stremio === false) selos.push(`<span class="onde-selo onde-fora" title="Não achei ${typeof f !== 'undefined' ? vocDe(f, 'este') : 'o título'} no catálogo do Stremio (Cinemeta).">Fora do catálogo do Stremio</span>`);
   const grupos = GRUPOS_ONDE.map(([chave, rotulo]) => {
     const lista = ((ex.onde && ex.onde[chave]) || []).slice().sort((a, b) => Number(meus.has(Number(b.id))) - Number(meus.has(Number(a.id))));
     if (!lista.length) return '';
@@ -93,18 +93,21 @@ function aplicarFiltroDaBarra() {
   rolarParaLista();
 }
 
+// Plataformas: seções de recursos que a plataforma não tem (prêmios no nandanimes) somem.
+const secoesFiltroVisiveis = () => SECOES_FILTRO.filter((s) => !s.recurso || plataformaTem(s.recurso));
+
 function abrirMenuFiltros(botao) {
-  const menu = abrirFlutuante(botao, SECOES_FILTRO.map((s) => `
+  const menu = abrirFlutuante(botao, secoesFiltroVisiveis().map((s) => `
     <div class="tl-menu-titulo">${s.titulo}</div>
     <div class="tl-menu-itens" role="menu">${s.itensHTML()}</div>`).join('<div class="tl-menu-sep"></div>'), 'listas-menu listas-menu-tela menu-filtros');
   if (!menu) return;
-  menu.addEventListener('click', (e) => { for (const s of SECOES_FILTRO) if (s.aoClicar(e)) return; });
+  menu.addEventListener('click', (e) => { for (const s of secoesFiltroVisiveis()) if (s.aoClicar(e)) return; });
 }
 
 // Os filtros ligados viram chips com ✕ (como o de diretor e o de país).
 function atualizarChipsFiltros() {
   for (const s of SECOES_FILTRO) s.atualizarChip();
-  $('#btn-filtros').classList.toggle('ativo-leve', SECOES_FILTRO.some((s) => s.ativa()));
+  $('#btn-filtros').classList.toggle('ativo-leve', secoesFiltroVisiveis().some((s) => s.ativa()));
 }
 
 const itemMenuHTML = (atual, attrs, nome, qtd) => `
@@ -122,7 +125,7 @@ SECOES_FILTRO.push({
     chip.innerHTML = `${icone('Tv')}<span>${esc(estado.onde ? FILTROS_ONDE[estado.onde].rotulo : '')}</span>${icone('X')}`;
   },
   itensHTML: () => filtrosOndeDisponiveis()
-    .map((k) => itemMenuHTML(estado.onde === k, `data-onde="${k}"`, FILTROS_ONDE[k].rotulo, estado.filmes.filter((f) => passaOnde(f, k)).length)).join('')
+    .map((k) => itemMenuHTML(estado.onde === k, `data-onde="${k}"`, FILTROS_ONDE[k].rotulo, itensDaPlataforma().filter((f) => passaOnde(f, k)).length)).join('')
     + `<button class="tl-menu-item" data-onde-config><span class="tl-menu-check">${icone('Settings')}</span><span class="tl-menu-nome">${meusServicos().size ? 'Meus serviços…' : 'Escolher os streamings que assino…'}</span></button>`,
   aoClicar: (e) => {
     if (e.target.closest('[data-onde-config]')) {
@@ -164,7 +167,7 @@ async function montarCfgOnde(caixa) {
         <button class="cfg-servico${meus.has(Number(s.id)) ? ' ativo' : ''}" data-servico="${s.id}" aria-pressed="${meus.has(Number(s.id))}" title="${esc(s.nome)}">
           ${s.logo ? `<img src="${esc(s.logo)}" alt="" loading="lazy">` : ''}<span>${esc(s.nome)}</span>
         </button>`).join('') || '<span class="onde-carregando">Coloque a chave do TMDB para ver os serviços.</span>'}</div>
-      <p class="onde-credito">Dados de streaming: JustWatch. “No Stremio” quer dizer que o filme está no catálogo do Stremio; se dá para assistir depende dos complementos (add-ons) instalados no seu Stremio.</p>`;
+      <p class="onde-credito">Dados de streaming: JustWatch. “No Stremio” quer dizer que ${voc('artigo')} ${voc('item')} está no catálogo do Stremio; se dá para assistir depende dos complementos (add-ons) instalados no seu Stremio.</p>`;
     $('#cfg-pais', caixa).onchange = async (e) => {
       estado.config = await api.salvarConfig({ pais: e.target.value });
       provedoresCache = null;

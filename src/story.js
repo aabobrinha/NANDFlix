@@ -481,10 +481,10 @@ function renderControlesStory() {
       ${story.mostrarCapas ? `<div class="story-capas">${
         capas === null ? '<p class="mensagem carregando">Carregando as capas</p>'
           : capas.erro ? `<p class="mensagem">${esc(capas.erro)}</p>`
-            : `<button class="story-capa-opcao${!estado.poster ? ' atual' : ''}" data-s="poster" data-valor="" title="A capa do filme na sua lista"><div class="capa"><img src="${esc(srcCapa(f))}" alt=""></div><span>Da lista</span></button>
+            : `<button class="story-capa-opcao${!estado.poster ? ' atual' : ''}" data-s="poster" data-valor="" title="${vocTextoDe(f, 'A capa {de} na sua lista')}"><div class="capa"><img src="${esc(srcCapa(f))}" alt=""></div><span>Da lista</span></button>
                ${capas.map((c) => `<button class="story-capa-opcao${estado.poster === c.original ? ' atual' : ''}" data-s="poster" data-valor="${esc(c.original)}" title="${c.idioma ? `Idioma: ${esc(c.idioma)}` : 'Sem texto'}"><div class="capa"><img src="${esc(c.miniatura)}" alt="" loading="lazy"></div><span>${c.idioma ? esc(c.idioma.toUpperCase()) : 'sem texto'}</span></button>`).join('')}`
       }</div>` : ''}
-      <p class="story-ajuda">A troca vale só para o story; a capa do filme na lista continua a mesma.</p>
+      <p class="story-ajuda">A troca vale só para o story; a capa ${vocDe(f, 'de')} na lista continua a mesma.</p>
     </section>
 
     <section class="story-secao">
@@ -493,7 +493,7 @@ function renderControlesStory() {
         ${olho('estrelas', f.minhaNota ? `Estrelas · ${notaLegivel(f.minhaNota)}` : 'Estrelas (sem nota)', estado.estrelas.visivel, !f.minhaNota)}
         ${olho('logo', 'Logo do Letterboxd', estado.logo.visivel)}
       </div>
-      ${f.minhaNota ? '' : '<p class="story-ajuda">Dê uma nota nos detalhes do filme para as estrelas aparecerem.</p>'}
+      ${f.minhaNota ? '' : `<p class="story-ajuda">Dê uma nota nos detalhes ${vocDe(f, 'de')} para as estrelas aparecerem.</p>`}
     </section>
 
     <section class="story-secao">

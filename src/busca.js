@@ -10,16 +10,16 @@
 let paleta = null; // { el, itens, sel, termo, geracaoTmdb, tmdb }
 
 const ACOES_PALETA = [
-  { titulo: 'Adicionar filme', icone: 'Plus', termos: 'novo', fazer: () => abrirAdicionar() },
+  { get titulo() { return voc('Adicionar'); }, icone: 'Plus', termos: 'novo', fazer: () => abrirAdicionar() },
   { titulo: 'Calendário', icone: 'CalendarDays', termos: 'diario watchlist hoje dia', fazer: () => abrirCalendario() },
   { titulo: 'Watchlist de hoje', icone: 'CalendarClock', termos: 'hoje calendario', fazer: () => abrirCalendario(hoje()) },
   { titulo: 'Suas páginas', icone: 'NotebookPen', termos: 'anotacoes textos resenhas', fazer: () => abrirPaginas() },
   { titulo: 'Tierlist', icone: 'Medal', termos: 'ranking tiers', fazer: () => abrirTierlist() },
   { titulo: 'Estatísticas', icone: 'ChartColumn', termos: 'retrospectiva numeros', fazer: () => abrirEstatisticas() },
-  { titulo: 'Prêmios', icone: 'Trophy', termos: 'oscar globo de ouro golden globe critics choice bafta sag actor awards spirit gotham cannes veneza venice berlim berlinale festival cedula bolao palpites indicados vencedores premiacao', fazer: () => abrirPremios() },
+  { titulo: 'Prêmios', recurso: 'premios', icone: 'Trophy', termos: 'oscar globo de ouro golden globe critics choice bafta sag actor awards spirit gotham cannes veneza venice berlim berlinale festival cedula bolao palpites indicados vencedores premiacao', fazer: () => abrirPremios() },
   { titulo: 'Retrospectiva do mês em stories', icone: 'Sparkles', termos: 'instagram imagem mes', fazer: () => abrirRetrospectivaStory(hoje().slice(0, 7)) },
   { titulo: 'Retrospectiva do ano em stories', icone: 'Sparkles', termos: 'instagram imagem ano', fazer: () => abrirRetrospectivaStory(hoje().slice(0, 4)) },
-  { titulo: 'Sortear um filme', icone: 'Dices', termos: 'aleatorio sorteio', fazer: () => $('#btn-sortear').click() },
+  { get titulo() { return voc('sortear'); }, icone: 'Dices', termos: 'aleatorio sorteio', fazer: () => $('#btn-sortear').click() },
   { titulo: 'Sortear com filtro', icone: 'SlidersHorizontal', termos: 'sorteio filtros', fazer: () => abrirFiltrosSorteio() },
   { titulo: 'Listas', icone: 'Tags', termos: 'tags colecoes', fazer: () => abrirMenuListasTela($('#btn-listas')) },
   { titulo: 'Configurações', icone: 'Settings', termos: 'chave tmdb omdb opcoes', fazer: () => abrirConfiguracoes() },
@@ -36,7 +36,7 @@ function abrirPaleta(termo = '') {
     <div class="paleta" role="dialog" aria-modal="true" aria-label="Buscar em tudo">
       <div class="paleta-campo">
         ${icone('Search')}
-        <input class="paleta-input" placeholder="Busque um filme, uma página ou uma ação…" spellcheck="false" autocomplete="off"
+        <input class="paleta-input" placeholder="${vocTexto('Busque {um}, uma página ou uma ação…')}" spellcheck="false" autocomplete="off"
                role="combobox" aria-expanded="true" aria-controls="paleta-lista" aria-autocomplete="list">
         <kbd>Esc</kbd>
       </div>
@@ -48,7 +48,7 @@ function abrirPaleta(termo = '') {
       </footer>
     </div>`;
   document.body.append(el);
-  paleta = { el, itens: [], sel: 0, termo: '', geracaoTmdb: 0, tmdb: null, timer: null };
+  paleta = { el, itens: [], sel: 0, termo: '', geracaoTmdb: 0, externo: null, timer: null };
   const input = $('.paleta-input', el);
   input.value = termo;
   input.addEventListener('input', () => atualizarPaleta());
@@ -80,6 +80,15 @@ function trechoComTermo(html, palavras) {
   return `${ini ? '…' : ''}${texto.slice(ini, ini + 140).trim()}${ini + 140 < texto.length ? '…' : ''}`;
 }
 
+// De onde vêm os resultados de fora da lista, conforme a plataforma: filmes no TMDB (precisa da
+// chave), animes na AniList (sem chave). O hub busca nos dois.
+function fontesExternasPaleta() {
+  const fontes = [];
+  if (plataformaInclui('nandflix') && estado.config.tmdbKey) fontes.push('filme');
+  if (plataformaInclui('nandanimes') && nandrollLigado()) fontes.push('anime');
+  return fontes;
+}
+
 function atualizarPaleta() {
   const termo = $('.paleta-input', paleta.el).value.trim();
   const mudouTermo = termo !== paleta.termo;
@@ -89,33 +98,39 @@ function atualizarPaleta() {
   const itens = [];
 
   // Ações
-  const acoes = palavras.length ? ACOES_PALETA.filter((a) => bate(`${a.titulo} ${a.termos}`)) : ACOES_PALETA.slice(0, 7);
+  const disponiveis = ACOES_PALETA.filter((a) => !a.recurso || plataformaTem(a.recurso)); // Plataformas: sem prêmios no nandanimes
+  const acoes = palavras.length ? disponiveis.filter((a) => bate(`${a.titulo} ${a.termos}`)) : disponiveis.slice(0, 7);
   const linhasAcoes = acoes.slice(0, palavras.length ? 4 : 7).map((a) => ({ grupo: 'Ações', tipo: 'acao', ...a }));
   if (!palavras.length) itens.push(...linhasAcoes);
 
   if (palavras.length) {
     // Seus filmes: quem começa com o termo vem primeiro.
     const t0 = normalizar(termo);
-    const filmes = estado.filmes
+    const filmes = itensDaPlataforma() // Plataformas: só os da plataforma atual
       .filter((f) => bate([f.titulo, f.ano, f.diretor, f.buscaCapa, ...listasDe(f)].join(' ')))
       .sort((a, b) => Number(normalizar(b.titulo).startsWith(t0)) - Number(normalizar(a.titulo).startsWith(t0)) || a.titulo.localeCompare(b.titulo, 'pt'))
       .slice(0, 6);
-    for (const f of filmes) itens.push({ grupo: 'Seus filmes', tipo: 'filme', f });
+    for (const f of filmes) itens.push({ grupo: `Seus ${voc('itens')}`, tipo: 'filme', f });
 
     // Suas páginas: só pelo texto (o título já aparece acima).
     if (termo.length >= 3) {
-      const paginas = estado.filmes.filter((f) => temPagina(f) && bate(textoDaPagina(f.pagina))).slice(0, 4);
+      const paginas = itensDaPlataforma().filter((f) => temPagina(f) && bate(textoDaPagina(f.pagina))).slice(0, 4);
       for (const f of paginas) itens.push({ grupo: 'Nas suas páginas', tipo: 'pagina', f, trecho: trechoComTermo(f.pagina, palavras) });
     }
 
     itens.push(...linhasAcoes);
 
-    // TMDB (o que ainda não está na lista)
-    if (paleta.tmdb && paleta.tmdb.termo === termo) {
+    // Fora da lista (o que ainda não está nela): TMDB para filmes, AniList para animes (o hub busca nos dois)
+    const fontes = fontesExternasPaleta();
+    const veio = paleta.externo && paleta.externo.termo === termo;
+    if (veio) {
       const naLista = new Set(estado.filmes.map((f) => String(f.tmdbId)).filter(Boolean));
-      for (const r of paleta.tmdb.itens.filter((x) => !naLista.has(String(x.tmdbId))).slice(0, 5)) itens.push({ grupo: 'No TMDB', tipo: 'tmdb', r });
+      const idsAni = new Set(estado.filmes.map((f) => String(f.anilistId)).filter((x) => x !== 'undefined' && x !== 'null' && x));
+      const lote = fontes.length > 1 ? 3 : 5;
+      if (fontes.includes('filme')) for (const r of paleta.externo.tmdb.filter((x) => !naLista.has(String(x.tmdbId))).slice(0, lote)) itens.push({ grupo: 'No TMDB', tipo: 'tmdb', r });
+      if (fontes.includes('anime')) for (const r of paleta.externo.anilist.filter((x) => !idsAni.has(String(x.anilistId))).slice(0, lote)) itens.push({ grupo: 'Na AniList', tipo: 'anilist', r });
     }
-    itens.push({ grupo: paleta.tmdb && paleta.tmdb.termo === termo ? 'No TMDB' : 'Adicionar', tipo: 'adicionar', titulo: `Adicionar “${termo}”`, icone: 'Plus' });
+    itens.push({ grupo: veio ? 'Adicionar' : 'Adicionar', tipo: 'adicionar', titulo: `Adicionar “${termo}”`, icone: 'Plus' });
   }
 
   paleta.itens = itens;
@@ -126,12 +141,16 @@ function atualizarPaleta() {
   // Busca no TMDB um pouco depois de parar de digitar.
   if (mudouTermo) {
     clearTimeout(paleta.timer);
-    if (termo.length >= 2 && estado.config.tmdbKey) {
+    if (termo.length >= 2 && fontesExternasPaleta().length) {
       const ger = ++paleta.geracaoTmdb;
       paleta.timer = setTimeout(async () => {
-        const r = await api.pesquisarTmdb(termo);
+        const fontes = fontesExternasPaleta();
+        const [rt, ra] = await Promise.all([
+          fontes.includes('filme') ? api.pesquisarTmdb(termo) : null,
+          fontes.includes('anime') ? api.pesquisarAnilist(termo) : null,
+        ]);
         if (!paleta || paleta.geracaoTmdb !== ger) return;
-        paleta.tmdb = { termo, itens: r.ok ? r.dados : [] };
+        paleta.externo = { termo, tmdb: rt && rt.ok ? rt.dados : [], anilist: ra && ra.ok ? ra.dados : [] };
         atualizarPaleta();
       }, 350);
     }
@@ -154,10 +173,11 @@ function linhaPaletaHTML(item, i) {
     const sub = [f.ano, nomesDiretores(f.diretor)[0], f.visto ? (f.minhaNota ? `★ ${notaLegivel(f.minhaNota)}` : 'visto') : ''].filter(Boolean).map(esc).join(' · ');
     return base(miniCapa(srcCapa(f)), esc(f.titulo), sub,
       botao('hoje', 'CalendarClock', naWatchlist(f.id) ? 'Tirar da watchlist de hoje' : 'Pôr na watchlist de hoje', naWatchlist(f.id))
-      + (f.visto ? botao('pagina', temPagina(f) ? 'BookOpen' : 'NotebookPen', temPagina(f) ? 'Abrir sua página' : 'Escrever sobre o filme') + botao('story', 'ImagePlus', 'Criar story') : ''));
+      + (f.visto ? botao('pagina', temPagina(f) ? 'BookOpen' : 'NotebookPen', temPagina(f) ? 'Abrir sua página' : vocTextoDe(f, 'Escrever sobre {artigo} {item}')) + botao('story', 'ImagePlus', 'Criar story') : ''));
   }
   if (item.tipo === 'pagina') return base(miniCapa(srcCapa(item.f)), esc(item.f.titulo), esc(item.trecho));
   if (item.tipo === 'tmdb') return base(miniCapa(item.r.poster), esc(item.r.titulo), esc(item.r.ano || ''), botao('adicionar', 'Plus', 'Adicionar à lista'));
+  if (item.tipo === 'anilist') return base(miniCapa(item.r.poster), esc(item.r.titulo), esc([item.r.ano, item.r.filme ? 'filme de anime' : 'anime'].filter(Boolean).join(' · ')), botao('adicionar', 'Plus', 'Adicionar à lista'));
   return '';
 }
 
@@ -169,7 +189,7 @@ function desenharPaleta() {
     if (item.grupo !== grupo) { grupo = item.grupo; html += `<div class="paleta-grupo">${esc(grupo)}</div>`; }
     html += linhaPaletaHTML(item, i);
   });
-  if (paleta.termo.length >= 2 && estado.config.tmdbKey && !(paleta.tmdb && paleta.tmdb.termo === paleta.termo)) html += '<p class="paleta-buscando">Buscando no TMDB…</p>';
+  if (paleta.termo.length >= 2 && fontesExternasPaleta().length && !(paleta.externo && paleta.externo.termo === paleta.termo)) html += `<p class="paleta-buscando">Buscando ${fontesExternasPaleta().includes('anime') ? (fontesExternasPaleta().includes('filme') ? 'no TMDB e na AniList' : 'na AniList') : 'no TMDB'}…</p>`;
   lista.innerHTML = html || '<p class="paleta-buscando">Nada encontrado.</p>';
   $('.paleta-input', paleta.el).setAttribute('aria-activedescendant', `paleta-op-${paleta.sel}`);
 }
@@ -206,6 +226,12 @@ function executarPaleta(item, { secundaria = false, extra = '' } = {}) {
     else abrirPainel(id);
     return;
   }
+  if (item.tipo === 'anilist') {
+    fechar();
+    if (secundaria || extra === 'adicionar') adicionarAnilistDaPaleta(item.r);
+    else { fonteBusca = 'anime'; abrirAdicionar(item.r.titulo); } // abre o Adicionar já na AniList, buscando
+    return;
+  }
   if (item.tipo === 'tmdb') {
     fechar();
     if (secundaria || extra === 'adicionar') {
@@ -215,6 +241,18 @@ function executarPaleta(item, { secundaria = false, extra = '' } = {}) {
       });
     } else abrirFilmeExterno(item.r.tmdbId);
   }
+}
+
+// Um resultado da AniList direto para a lista (como o Adicionar faz).
+async function adicionarAnilistDaPaleta(r) {
+  const dados = { titulo: r.titulo, ano: r.ano, poster: r.poster, anilistId: r.anilistId, filme: r.filme, tipo: r.filme ? undefined : 'serie' };
+  const repetido = await api.acharRepetido(dados);
+  if (repetido) { aviso(`“${repetido.titulo}” já está na sua lista.`); abrirPainel(repetido.id); return; }
+  const novo = await api.adicionarFilme(dados);
+  estado.filmes.push(novo);
+  render();
+  abrirPainel(novo.id);
+  aviso(`“${novo.titulo}” foi adicionado.`, { tipo: 'ok' });
 }
 
 function teclaPaleta(e) {

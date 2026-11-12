@@ -23,9 +23,10 @@ function montarCelular() {
   topo.innerHTML = `
     <button class="cel-marca" id="cel-marca" data-cel="plataformas" aria-label="Trocar de plataforma"><img src="icone.png" alt=""></button>
     <h1 class="cel-titulo marca-nandflix" id="cel-titulo">nandflix</h1>
-    <button class="cel-icone" data-cel="sortear" aria-label="Sortear um filme">${icone('Dices')}</button>
-    <button class="cel-icone" data-cel="adicionar" aria-label="Adicionar filme">${icone('Plus')}</button>`;
+    <button class="cel-icone" data-cel="sortear" aria-label="Sortear um filme" data-voc-aria="{sortear}">${icone('Dices')}</button>
+    <button class="cel-icone" data-cel="adicionar" aria-label="Adicionar filme" data-voc-aria="{Adicionar}">${icone('Plus')}</button>`;
   document.body.append(topo);
+  aplicarVocabularioEstatico(topo); // o vocabulário da plataforma atual (troca junto, em aplicarPlataforma)
 
   const inicio = document.createElement('div');
   inicio.className = 'cel-inicio';
@@ -237,11 +238,11 @@ function abrirMais() {
   abrirFolha(`<div class="cel-mais">
     ${item('paginas', 'NotebookPen', 'Suas páginas')}
     ${item('estatisticas', 'ChartColumn', 'Estatísticas')}
-    ${item('premios', 'Trophy', 'Prêmios')}
-    ${item('sortear', 'Dices', 'Sortear um filme')}
+    ${plataformaTem('premios') ? item('premios', 'Trophy', 'Prêmios') : ''}
+    ${item('sortear', 'Dices', voc('sortear'))}
     ${item('sortear-filtro', 'SlidersHorizontal', 'Sortear com filtro')}
     ${nandrollLigado() ? item('agenda', 'CalendarClock', 'Agenda de episódios') : ''}
-    ${item('adicionar', 'Plus', nandrollLigado() ? 'Adicionar filme ou anime' : 'Adicionar filme')}
+    ${item('adicionar', 'Plus', voc('Adicionar'))}
     ${item('todos', 'LayoutGrid', voc('todos'))}
     ${item('config', 'Settings', 'Configurações')}
   </div>`, 'cel-folha-mais');

@@ -18,27 +18,31 @@ const ehAnime = (f) => Boolean(f) && (f.anime === true || ehSerie(f));
 
 // rotulos: o vocabulário de cada plataforma (use pelo voc(), abaixo).
 //   item/itens: "filme"/"filmes"; todos: o título da lista inteira;
-//   nenhum: "Nenhum filme"/"Nada"; artigo e genero ('m'|'f') para montar frases.
+//   nenhum: "Nenhum filme"/"Nada"; artigo e genero ('m'|'f') para montar frases;
+//   de/deste/um/este: "do filme", "deste filme", "um filme", "este filme";
+//   adicionar/sortear: o texto do botão ("Adicionar filme", "Sortear um anime").
+// recursos: telas que só existem em certas plataformas (plataformaTem).
 // tema: o nome do tema de cor (CSS html[data-tema]); hub: junta as habilitadas.
 const PLATAFORMAS = [
   {
     id: 'nandflix', nome: 'nandflix', imagem: 'icone.png', emoji: '🎬',
     descricao: 'Seus filmes: watchlist, notas, calendário e tierlists.',
     pertence: (f) => !ehAnime(f),
-    rotulos: { item: 'filme', itens: 'filmes', todos: 'Todos os filmes', nenhum: 'Nenhum filme', artigo: 'o', genero: 'm' },
+    rotulos: { item: 'filme', itens: 'filmes', todos: 'Todos os filmes', nenhum: 'Nenhum filme', artigo: 'o', genero: 'm', de: 'do filme', deste: 'deste filme', um: 'um filme', este: 'este filme', adicionar: 'Adicionar filme', sortear: 'Sortear um filme' },
+    recursos: ['premios'], // telas só de filme
     tema: 'roxo',
   },
   {
     id: 'nandanimes', nome: 'nandanimes', emoji: '🍣',
     descricao: 'Seus animes: episódios, temporadas e o próximo episódio.',
     pertence: ehAnime,
-    rotulos: { item: 'anime', itens: 'animes', todos: 'Todos os animes', nenhum: 'Nenhum anime', artigo: 'o', genero: 'm' },
+    rotulos: { item: 'anime', itens: 'animes', todos: 'Todos os animes', nenhum: 'Nenhum anime', artigo: 'o', genero: 'm', de: 'do anime', deste: 'deste anime', um: 'um anime', este: 'este anime', adicionar: 'Adicionar anime', sortear: 'Sortear um anime' },
     tema: 'laranja',
   },
   {
     id: 'nandhub', nome: 'nandhub', emoji: '🍿', hub: true,
     descricao: 'Tudo junto, numa lista só.',
-    rotulos: { item: 'título', itens: 'títulos', todos: 'Todos', nenhum: 'Nada', artigo: 'o', genero: 'm' },
+    rotulos: { item: 'título', itens: 'títulos', todos: 'Todos', nenhum: 'Nada', artigo: 'o', genero: 'm', de: 'do título', deste: 'deste título', um: 'um título', este: 'este título', adicionar: 'Adicionar à lista', sortear: 'Sortear um título' },
     tema: 'roxo',
   },
 ];
@@ -113,6 +117,36 @@ function voc(chave, n, p = plataformaAtual()) {
   return chave !== k ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 }
 
+// Preenche um modelo com o vocabulário: vocTexto('Adicionar {item}') → "Adicionar anime".
+// Vale o mesmo que voc(): {Itens}, {todos}, {um}, {de}…
+const vocTexto = (modelo, p = plataformaAtual()) => String(modelo).replace(/\{(\w+)\}/g, (_, k) => voc(k, undefined, p));
+
+// A plataforma "de verdade" de um item (o hub não conta): um anime aberto no
+// painel é "anime" mesmo no nandhub. Textos sobre UM item usam estes.
+const plataformaDoItem = (f) => plataformaPorId(ehAnime(f) ? 'nandanimes' : 'nandflix');
+const vocDe = (f, chave, n) => voc(chave, n, plataformaDoItem(f));
+const vocTextoDe = (f, modelo) => vocTexto(modelo, plataformaDoItem(f));
+
+// A plataforma atual tem este recurso (ex.: 'premios')? O hub tem o de qualquer habilitada.
+function plataformaTem(recurso) {
+  const p = plataformaAtual();
+  if (!p.hub) return Boolean(p.recursos && p.recursos.includes(recurso));
+  return plataformasHabilitadas().some((id) => (plataformaPorId(id).recursos || []).includes(recurso));
+}
+
+// Textos fixos do index.html que mudam com a plataforma:
+//   data-voc="modelo" (texto), data-voc-aria, data-voc-dica, data-voc-placeholder, data-voc-titulo.
+//   data-recurso="premios": some onde a plataforma não tem o recurso.
+const ATRIBUTOS_VOC = { vocAria: 'aria-label', vocDica: 'data-dica', vocPlaceholder: 'placeholder', vocTitulo: 'title' };
+function aplicarVocabularioEstatico(raiz = document) {
+  for (const el of raiz.querySelectorAll('[data-voc]')) el.textContent = vocTexto(el.dataset.voc);
+  for (const [chave, atributo] of Object.entries(ATRIBUTOS_VOC)) {
+    const seletor = '[data-' + chave.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase()) + ']';
+    for (const el of raiz.querySelectorAll(seletor)) el.setAttribute(atributo, vocTexto(el.dataset[chave]));
+  }
+  for (const el of raiz.querySelectorAll('[data-recurso]')) el.hidden = !plataformaTem(el.dataset.recurso);
+}
+
 // O ícone de uma plataforma: a imagem dela ou o emoji.
 function iconePlataformaHTML(p, classe = 'marca-icone') {
   return p.imagem ? `<img class="${classe}" src="${p.imagem}" alt="">` : `<span class="${classe} plat-emoji" aria-hidden="true">${p.emoji}</span>`;
@@ -126,6 +160,7 @@ function aplicarPlataforma({ noHtml = true } = {}) {
   estado.plataforma = p.id;
   if (noHtml) marcarPlataformaNoHtml();
   document.title = p.nome;
+  aplicarVocabularioEstatico();
   const icone = $('#marca-icone');
   if (icone && icone.dataset.p !== p.id) { icone.innerHTML = iconePlataformaHTML(p); icone.dataset.p = p.id; }
   const nome = $('#marca-nome');

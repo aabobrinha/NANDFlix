@@ -118,7 +118,7 @@ mesHTML = function mesHTMLCelular(mes) {
         </header>
         <div class="ccal-trilho">
           ${wlHoje.map((f) => `<button class="ccal-wl" data-c="detalhes" data-id="${f.id}" aria-label="${esc(f.titulo)}">${capaCalHTML(f)}</button>`).join('')}
-          <button class="ccal-wl ccal-wl-sortear" data-c="sortear-hoje">${icone('Dices')}<span>Sortear um filme</span></button>
+          <button class="ccal-wl ccal-wl-sortear" data-c="sortear-hoje">${icone('Dices')}<span>${voc('sortear')}</span></button>
         </div>
       </section>` : ''}
     <section class="ccal-secao">
@@ -174,7 +174,7 @@ function itemVistoCelHTML(f, dia) {
         : ''}
       <div class="cdia-rodape">
         ${trofeu}
-        ${pagina ? '' : `<button class="cdia-escrever" data-c="pagina" data-id="${f.id}">${icone('PenLine')} Escrever sobre o filme</button>`}
+        ${pagina ? '' : `<button class="cdia-escrever" data-c="pagina" data-id="${f.id}">${icone('PenLine')} ${vocTextoDe(f, 'Escrever sobre {artigo} {item}')}</button>`}
       </div>
     </article>`;
 }
@@ -204,21 +204,21 @@ paginaDiaHTML = function paginaDiaHTMLCelular(dia) {
       <section class="cal-secao cdia-secao" data-secao="watchlist">
         <header><h3>${ehHoje ? 'Para ver hoje' : 'Para ver neste dia'} ${contagem(watchlist.length)}</h3></header>
         ${ehHoje ? `<div class="cdia-pilulas">
-            <button class="cel-pilula" data-c="sortear-hoje">${icone('Dices')} Sortear um filme</button>
+            <button class="cel-pilula" data-c="sortear-hoje">${icone('Dices')} ${voc('sortear')}</button>
             <button class="cel-pilula" data-c="sortear-hoje-filtro">${icone('SlidersHorizontal')} Com filtro</button>
           </div>` : ''}
         ${watchlist.length
           ? `<div class="cdia-lista">${watchlist.map((f) => itemWatchlistCelHTML(f, dia)).join('')}</div>`
           : `<p class="ccal-vazio">${ehHoje
-            ? `Nada separado ainda. Sorteie um filme ou toque em ${icone('CalendarClock')} nos detalhes de um filme. A lista vira junto com o dia, às 5h.`
-            : 'Nenhum filme planejado para este dia.'}</p>`}
+            ? `Nada separado ainda. Sorteie ${voc('um')} ou toque em ${icone('CalendarClock')} nos detalhes ${voc('de')}. A lista vira junto com o dia, às 5h.`
+            : `${voc('Nenhum')} planejado para este dia.`}</p>`}
       </section>` : ''}
     ${futuro ? '' : `
       <section class="cal-secao cdia-secao">
         <header><h3>${ehHoje ? 'Vistos hoje' : 'Vistos neste dia'} ${contagem(vistos.length)}</h3></header>
         ${vistos.length
           ? `<div class="cdia-lista">${ordenados.map((f) => itemVistoCelHTML(f, dia)).join('')}</div>`
-          : `<p class="ccal-vazio">${ehHoje ? 'Nenhum filme visto hoje ainda.' : 'Nenhum filme visto neste dia.'}</p>`}
+          : `<p class="ccal-vazio">${ehHoje ? 'Nada visto hoje ainda.' : 'Nada visto neste dia.'}</p>`}
       </section>`}`;
 };
 

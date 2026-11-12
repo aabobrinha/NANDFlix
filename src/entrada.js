@@ -42,7 +42,7 @@ function abrirEntrada(filmes, aoTerminar) {
       <h1 class="marca entrada-marca"><img class="marca-icone" src="icone.png" alt=""> nandflix</h1>
       <div class="entrada-passo" data-passo="form">
         <h2 id="entrada-titulo">Sua lista em todo lugar</h2>
-        <p class="entrada-sub">Entre para ter os mesmos filmes, notas, páginas e tierlists no computador e no celular.</p>
+        <p class="entrada-sub">Entre para ter os mesmos filmes, animes, notas, páginas e tierlists no computador e no celular.</p>
         <div class="entrada-abas" role="tablist">
           <button role="tab" class="entrada-aba on" data-modo="entrar" aria-selected="true">Entrar</button>
           <button role="tab" class="entrada-aba" data-modo="criar" aria-selected="false">Criar conta</button>

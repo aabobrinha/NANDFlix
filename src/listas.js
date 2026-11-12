@@ -15,7 +15,7 @@ function todasListas() {
   const usadas = new Set(estado.filmes.flatMap(listasDe));
   return [...new Set([...ordem, ...[...usadas].sort((a, b) => a.localeCompare(b, 'pt', { sensitivity: 'base' }))])];
 }
-const qtdNaLista = (nome) => estado.filmes.filter((f) => listasDe(f).includes(nome)).length;
+const qtdNaLista = (nome) => itensDaPlataforma().filter((f) => listasDe(f).includes(nome)).length;
 
 function salvarOrdemListas(nomes) {
   estado.config.listas = nomes;
@@ -40,7 +40,7 @@ function aposMudarListas(id) {
 
 function listasDoFilmeHTML(f) {
   const minhas = listasDe(f);
-  return `${minhas.map((n) => `<button class="lista-chip" data-p="ver-lista" data-lista="${esc(n)}" title="Ver os filmes desta lista">${icone('Tag')}${esc(n)}</button>`).join('')}
+  return `${minhas.map((n) => `<button class="lista-chip" data-p="ver-lista" data-lista="${esc(n)}" title="${vocTexto('Ver {itens} desta lista')}">${icone('Tag')}${esc(n)}</button>`).join('')}
     <button class="lista-chip lista-chip-mais" data-p="listas" aria-haspopup="menu">${icone(minhas.length ? 'Pencil' : 'ListPlus')}${minhas.length ? 'Listas' : 'Pôr numa lista'}</button>`;
 }
 
@@ -143,7 +143,7 @@ function abrirMenuListasTela(botao) {
         </button>
         <button class="btn btn-icone listas-acao" data-renomear="${esc(n)}" title="Renomear" aria-label="Renomear ${esc(n)}">${icone('Pencil')}</button>
         <button class="btn btn-icone listas-acao perigo" data-apagar="${esc(n)}" title="Apagar a lista" aria-label="Apagar ${esc(n)}">${icone('Trash2')}</button>
-      </div>`).join('') || '<p class="listas-vazio">Nenhuma lista ainda. Crie nos detalhes de um filme, em “Pôr numa lista”.</p>'}</div>
+      </div>`).join('') || `<p class="listas-vazio">Nenhuma lista ainda. Crie nos detalhes ${vocTexto('de {um}')}, em “Pôr numa lista”.</p>`}</div>
     ${estado.lista ? `<div class="tl-menu-sep"></div><button class="tl-menu-item" data-filtrar="">${icone('X')} Mostrar todos</button>` : ''}`, 'listas-menu listas-menu-tela');
   if (!menu) return;
   menu.addEventListener('click', async (e) => {
@@ -193,7 +193,7 @@ async function apagarLista(nome) {
   salvarOrdemListas(ordemAntes.filter((n) => n !== nome));
   if (estado.lista === nome) estado.lista = '';
   aposMudarListas(estado.painelId);
-  aviso(`Lista “${nome}” apagada${ids.length ? ` (${ids.length} ${ids.length === 1 ? 'filme saiu' : 'filmes saíram'} dela)` : ''}.`, {
+  aviso(`Lista “${nome}” apagada${ids.length ? ` (${voc('qtd', ids.length)} ${ids.length === 1 ? 'saiu' : 'saíram'} dela)` : ''}.`, {
     duracao: 8000,
     acao: {
       rotulo: 'Desfazer',

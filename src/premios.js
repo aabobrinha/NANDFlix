@@ -156,7 +156,7 @@ function categoriasNaLista(premio) {
 
 // Escolher um prêmio, indicados ou vencedores, e (opcional) uma categoria.
 function escolherCategoriaPremio(premioInicial = null) {
-  const qtd = (filtro) => estado.filmes.filter((f) => passaPremio(f, filtro)).length;
+  const qtd = (filtro) => itensDaPlataforma().filter((f) => passaPremio(f, filtro)).length;
   const comFilmes = LISTA_PREMIOS.filter((p) => qtd(`${p}:indicado`));
   let [premio, tipo] = estado.premio && !estado.premio.startsWith('*') ? estado.premio.split(':') : [premioInicial || comFilmes[0] || 'oscar', 'indicado'];
   abrirModal(`${cabecalhoModal('Filtrar por prêmio')}
@@ -195,9 +195,10 @@ function escolherCategoriaPremio(premioInicial = null) {
 
 SECOES_FILTRO.push({
   titulo: 'Prêmios',
+  recurso: 'premios',
   ativa: () => Boolean(estado.premio),
   itensHTML: () => {
-    const qtd = (filtro) => estado.filmes.filter((f) => passaPremio(f, filtro)).length;
+    const qtd = (filtro) => itensDaPlataforma().filter((f) => passaPremio(f, filtro)).length;
     const porPremio = estado.premio && !estado.premio.startsWith('*');
     return itemMenuHTML(estado.premio === '*:indicado', 'data-premio="*:indicado"', 'Indicados a algum prêmio', qtd('*:indicado'))
       + itemMenuHTML(estado.premio === '*:venceu', 'data-premio="*:venceu"', 'Vencedores de algum prêmio', qtd('*:venceu'))
@@ -212,6 +213,7 @@ SECOES_FILTRO.push({
     return true;
   },
   atualizarChip: () => {
+    if (estado.premio && !plataformaTem('premios')) estado.premio = ''; // Plataformas: sem prêmios aqui
     const chip = $('#chip-premio');
     chip.hidden = !estado.premio;
     chip.innerHTML = `${icone('Trophy')}<span>${esc(estado.premio ? rotuloFiltroPremio(estado.premio) : '')}</span>${icone('X')}`;
@@ -222,7 +224,7 @@ $('#chip-premio').addEventListener('click', () => filtrarPremio(''));
 // Sorteio: "Indicado a algum prêmio", "Venceu algum prêmio" e um por prêmio
 // (os que têm algum filme não visto da lista).
 function filtrosPremioSorteio() {
-  const naoVistos = estado.filmes.filter((f) => !f.visto);
+  const naoVistos = itensDaPlataforma().filter((f) => !f.visto);
   return ['*:indicado', '*:venceu', ...LISTA_PREMIOS.map((p) => `${p}:indicado`).filter((x) => naoVistos.some((f) => passaPremio(f, x)))];
 }
 

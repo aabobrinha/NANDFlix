@@ -26,6 +26,14 @@
   --acento-rgb: 109, 74, 168;
   --anel-rgb: 155, 123, 220;
   --acento-texto-rgb: 176, 143, 243;
+  /* Tons de apoio do acento (o tema da plataforma redefine todos): vivo = começo dos gradientes
+     de selo, claro/suave = texto sobre fundo de acento, brilho = o título do celular. */
+  --acento-vivo: #9B6CF0;
+  --acento-claro: #E2D4FF;
+  --acento-claro-2: #EDE4FF;
+  --acento-suave: #C9B2F5;
+  --acento-brilho: #CDB6FF;
+  --acento-brilho-2: #A982F0;
   --dourado: #F5B301;
   --laranja: #FF8000;
   --perigo: #FF5A5A;
@@ -967,7 +975,7 @@ span.grupo-nome { color: var(--texto-2); }
 .cal-stat b { color: var(--texto); font-weight: 700; }
 .cal-stat .ico { width: 15px; height: 15px; }
 .cal-stat.roxo { background: rgba(var(--acento-rgb), .24); color: var(--acento-texto); cursor: pointer; transition: background-color .15s ease-out; }
-.cal-stat.roxo b { color: #EDE4FF; }
+.cal-stat.roxo b { color: var(--acento-claro-2); }
 .cal-stat.roxo:hover { background: rgba(var(--acento-rgb), .4); }
 .cal-fechar { margin-left: auto; }
 
@@ -2050,18 +2058,18 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
 }
 .pg-botao .ico { width: 19px; height: 19px; }
 .pg-botao:hover { background: var(--superficie-2); color: var(--texto); }
-.pg-botao.on { background: rgba(var(--acento-rgb), .28); color: #E2D4FF; }
+.pg-botao.on { background: rgba(var(--acento-rgb), .28); color: var(--acento-claro); }
 .pg-sep { width: 1px; height: 22px; margin: 0 6px; background: var(--divisor); }
 .pg-status { flex: none; font-size: 12.5px; color: var(--texto-2); white-space: nowrap; }
 
 /* Página mudada em dois aparelhos ao mesmo tempo */
 .pg-conflito {
   max-width: 660px; margin: 24px auto 0; padding: 14px 16px; border-radius: 10px;
-  background: rgba(var(--acento-rgb), .16); box-shadow: inset 0 0 0 1px rgba(160, 120, 230, .35);
+  background: rgba(var(--acento-rgb), .16); box-shadow: inset 0 0 0 1px rgba(var(--anel-rgb), .35);
   display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: var(--texto);
 }
 .pg-conflito p { display: flex; gap: 10px; margin: 0; line-height: 1.5; }
-.pg-conflito p .ico { flex: none; width: 18px; height: 18px; margin-top: 2px; color: #C9B2F5; }
+.pg-conflito p .ico { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--acento-suave); }
 .pg-conflito summary { cursor: pointer; color: var(--texto-2); font-size: 13px; }
 .pg-conflito .pg-outra { min-height: 0; margin-top: 10px; padding: 12px 14px; border-radius: 8px; background: var(--superficie-2); max-height: 280px; overflow: auto; }
 .pg-conflito-botoes { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
@@ -2799,6 +2807,8 @@ body.com-entrada { overflow: hidden; }
 /* Bloco do painel */
 .serie { display: flex; flex-direction: column; gap: 12px; margin: 6px 0 16px; }
 .serie:empty { display: none; }
+.serie-remover-linha { display: flex; justify-content: flex-start; margin-top: 4px; }
+.serie-remover { gap: 8px; }
 .serie-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
 .serie-conta { min-width: 9ch; font-size: 15px; color: var(--texto-2); font-variant-numeric: tabular-nums; }
 .serie-conta b { font-size: 20px; font-weight: 700; color: var(--texto); }
@@ -3106,6 +3116,12 @@ html[data-tema="laranja"] {
   --acento-rgb: 194, 94, 28;
   --anel-rgb: 240, 142, 69;
   --acento-texto-rgb: 255, 167, 102;
+  --acento-vivo: #F0873A;
+  --acento-claro: #FFE3CF;
+  --acento-claro-2: #FFEDE0;
+  --acento-suave: #FFC49A;
+  --acento-brilho: #FFD2B0;
+  --acento-brilho-2: #F0944A;
 }
 
 /* A marca do topo é um botão: abre a lista de plataformas. */
