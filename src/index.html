@@ -16,7 +16,11 @@
   <header class="topo" id="topo">
     <div class="topo-linha">
       <div class="topo-esq">
-        <h1 class="marca"><img class="marca-icone" src="icone.png" alt=""> nandflix</h1>
+        <!-- Plataformas: a marca troca de plataforma (plataformas.js). -->
+        <div class="marca-caixa" id="marca-caixa">
+          <h1 class="marca"><button class="marca-botao" id="btn-marca" aria-haspopup="menu" aria-expanded="false" aria-controls="marca-menu"><span class="marca-icone-caixa" id="marca-icone"><img class="marca-icone" src="icone.png" alt=""></span><span id="marca-nome">nandflix</span><span class="marca-seta" data-icone="ChevronDown"></span></button></h1>
+          <div class="menu-topo-lista marca-menu" id="marca-menu" role="menu" aria-label="Plataformas"></div>
+        </div>
         <button class="btn btn-fantasma btn-capas" id="btn-capas-faltam" hidden></button>
       </div>
       <div class="topo-dir">
@@ -193,6 +197,7 @@
   <script src="icones.js"></script>
   <script src="movimento.js"></script>
   <script src="entrada.js"></script>
+  <script src="plataformas.js"></script>
   <script src="anime.js"></script>
   <script src="app.js"></script>
   <script src="pagina.js"></script>

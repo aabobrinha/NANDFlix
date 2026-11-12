@@ -531,7 +531,7 @@ window.api = {
     return { filmes, config: configPublica(), pastaDados: '', versao: VERSAO };
   },
   salvarConfig: async (mudancas) => {
-    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios'];
+    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
     for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
     if ('nandroll' in mudancas) { config.nandroll = Boolean(mudancas.nandroll); if (config.nandroll) atualizarSeriesEmExibicao(); }
     gravarConfig();

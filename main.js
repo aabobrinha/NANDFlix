@@ -78,7 +78,7 @@ function gravarConfig() {
 // ficam os 30 dias mais recentes. Se houver uma pasta extra (a do Google
 // Drive, por exemplo), a mesma cópia vai para lá também.
 const MAX_DIARIOS = 30;
-const CONFIG_NO_BACKUP = ['stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'pais', 'meusServicos', 'notaNaCapa', 'premios'];
+const CONFIG_NO_BACKUP = ['stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
 const RE_DIARIO = /^diario-\d{4}-\d{2}-\d{2}\.json$/;
 let mudouDesdeBackup = true;
 let ultimoBackup = { em: null, erroExtra: null };
@@ -728,7 +728,7 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
   // (watchlistHoje é o formato antigo, de um dia só; o app o apaga ao salvar o novo).
   // filmesDoMes: { 'AAAA-MM': id }, o filme favorito de cada mês (só aparece no calendário).
   // tierlist: [{ id, nome, cor, filmes: [ids] }], as tiers de cima para baixo.
-  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios'];
+  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
   for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
   if ('nandroll' in mudancas) { config.nandroll = Boolean(mudancas.nandroll); if (config.nandroll) atualizarSeriesEmExibicao(); }
   if ('omdbKey' in mudancas) config.limiteAtingidoEm = null;

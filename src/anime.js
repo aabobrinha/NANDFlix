@@ -8,15 +8,23 @@
 //   AniList só acrescenta onde assistir.
 // O app.js chama as funções daqui nos pontos marcados com "NANDRoll".
 
-// O NANDRoll é opcional: liga em Configurações. Desligado, o app é o NANDFlix
-// de sempre (sem busca de animes nem filtros); os animes já adicionados ficam
-// na lista, com o painel deles, para nada se perder.
-const nandrollLigado = () => Boolean(estado.config && estado.config.nandroll);
+// Plataformas: os animes ficam ligados quando o nandanimes está habilitado
+// (Configurações > Plataformas; antes era a chave `nandroll`, que migra sozinha).
+// Desabilitado, nada se perde: os animes só não aparecem no nandflix.
+const nandrollLigado = () => plataformaHabilitada('nandanimes');
+
+// Plataformas: os filtros de anime só onde fazem sentido. "Animes" só no hub
+// (no nandanimes é a própria plataforma); "Assistindo" onde há animes.
+function filtroAnimeVisivel(filtro) {
+  if (filtro === 'animes') return nandrollLigado() && plataformaAtual().hub === true;
+  if (filtro === 'assistindo') return nandrollLigado() && plataformaInclui('nandanimes');
+  return true; // os outros filtros valem em todas
+}
 
 // Mostra ou esconde o que é só de anime na tela principal.
 function aplicarNandroll() {
-  const ligado = nandrollLigado();
-  for (const c of $$('.chip[data-filtro="animes"], .chip[data-filtro="assistindo"]')) c.hidden = !ligado;
+  const ligado = nandrollLigado() && plataformaInclui('nandanimes');
+  for (const c of $$('.chip[data-filtro="animes"], .chip[data-filtro="assistindo"]')) c.hidden = !filtroAnimeVisivel(c.dataset.filtro);
   // O botão da agenda fica ao lado dos filtros.
   let agenda = $('#btn-agenda');
   const assistindo = $('.chip[data-filtro="assistindo"]');
@@ -28,7 +36,7 @@ function aplicarNandroll() {
     assistindo.parentElement.after(agenda);
   }
   if (agenda) agenda.hidden = !ligado;
-  if (!ligado && (estado.filtro === 'animes' || estado.filtro === 'assistindo')) {
+  if ((estado.filtro === 'animes' || estado.filtro === 'assistindo') && !filtroAnimeVisivel(estado.filtro)) {
     estado.filtro = 'todos';
     for (const c of $$('.chip[data-filtro]')) { c.classList.toggle('ativo', c.dataset.filtro === 'todos'); c.setAttribute('aria-checked', String(c.dataset.filtro === 'todos')); }
   }
@@ -38,13 +46,12 @@ function aplicarNandroll() {
 function nandrollConfigHTML() {
   return `
       <div class="secao">
-        <h3>NANDRoll (animes)</h3>
+        <h3>nandanimes (animes)</h3>
         <div class="opcoes-radio nandroll-opcoes">
-          <label><input type="checkbox" id="cfg-nandroll" ${nandrollLigado() ? 'checked' : ''}> Ativar animes</label>
           <label><input type="checkbox" id="cfg-nandroll-assistir" ${estado.config.nandrollAssistir !== 'stremio' ? 'checked' : ''}> O botão Assistir abre a plataforma oficial do anime (em vez do Stremio)</label>
           <label><input type="checkbox" id="cfg-nandroll-plataformas" ${todasPlataformas() ? 'checked' : ''}> Mostrar plataformas de fora do Brasil</label>
         </div>
-        <p>Busca de animes na AniList (sem chave), episódios e status das séries, próximo episódio e onde assistir. Desligado, o app fica como o NANDFlix original; os animes já adicionados continuam na lista.</p>
+        <p>Busca de animes na AniList (sem chave), episódios e status das séries, próximo episódio e onde assistir. Para usar, habilite o nandanimes em Plataformas, acima; desabilitado, os animes já adicionados ficam guardados.</p>
         <div class="busca-linha nandroll-importar">
           <input id="cfg-anilist-usuario" placeholder="Seu usuário da AniList" spellcheck="false" autocomplete="off" aria-label="Usuário da AniList">
           <button class="btn" id="cfg-anilist-importar">${icone('Download')} Importar lista</button>
@@ -72,7 +79,13 @@ function ligarNandrollConfig(raiz) {
       if (d.naoEncontrado) { aviso(`Não achei a lista de “${nome}”. Confira o nome e se a lista é pública.`, { tipo: 'erro' }); return; }
       if (!d.series && !d.filmes) { aviso(d.repetidos ? 'Tudo dessa lista já estava aqui.' : 'Essa lista está vazia.'); return; }
       estado.filmes = d.lista;
-      if (!nandrollLigado()) { estado.config = await api.salvarConfig({ nandroll: true }); const caixa = $('#cfg-nandroll', raiz); if (caixa) caixa.checked = true; }
+      // Plataformas: importar animes habilita o nandanimes.
+      if (!nandrollLigado()) {
+        await salvarPlataformas([...plataformasHabilitadas(), 'nandanimes']);
+        aplicarPlataforma();
+        const sec = $('#cfg-plataformas', raiz);
+        if (sec) { sec.replaceWith(htmlParaNo(plataformasConfigHTML())); ligarPlataformasConfig(raiz); }
+      }
       render();
       if (typeof renderCelular === 'function') renderCelular();
       const partes = [d.series ? `${d.series} série${d.series > 1 ? 's' : ''}` : '', d.filmes ? `${d.filmes} filme${d.filmes > 1 ? 's' : ''}` : ''].filter(Boolean).join(' e ');
@@ -86,22 +99,12 @@ function ligarNandrollConfig(raiz) {
     estado.config = await api.salvarConfig({ nandrollTodasPlataformas: fora.checked });
     if (estado.painelId) renderPainel();
   };
-  const caixa = $('#cfg-nandroll', raiz);
-  if (!caixa) return;
-  caixa.onchange = async () => {
-    estado.config = await api.salvarConfig({ nandroll: caixa.checked });
-    aplicarNandroll();
-    render();
-    if (typeof renderCelular === 'function') renderCelular();
-    aviso(caixa.checked ? 'NANDRoll ativado: busque animes em Adicionar.' : 'NANDRoll desativado.', { tipo: 'ok' });
-  };
 }
 
 // A fonte da busca do "Adicionar": só há animes com o NANDRoll ligado.
 const fonteAtual = () => (nandrollLigado() ? fonteBusca : 'filme');
 
-const ehSerie = (f) => Boolean(f) && f.tipo === 'serie';
-const ehAnime = (f) => Boolean(f) && (f.anime === true || ehSerie(f));
+// ehSerie e ehAnime: em plataformas.js (Plataformas).
 
 const STATUS_ROTULOS = { planejo: 'Planejo ver', assistindo: 'Assistindo', pausado: 'Pausado', completo: 'Completo', largado: 'Larguei' };
 
@@ -634,7 +637,7 @@ function atualizarCartaoAnime(el, f) {
 // As séries que a pessoa está vendo: primeiro as com episódio novo, depois as mexidas por último.
 function seriesAssistindo() {
   if (!nandrollLigado()) return [];
-  return estado.filmes.filter((f) => ehSerie(f) && f.status === 'assistindo')
+  return estado.filmes.filter((f) => ehSerie(f) && f.status === 'assistindo' && daPlataforma(f)) // Plataformas
     .sort((a, b) => (episodiosNovos(b) > 0) - (episodiosNovos(a) > 0) || String(b.anilistEm || '').localeCompare(String(a.anilistEm || '')));
 }
 

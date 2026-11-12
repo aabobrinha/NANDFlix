@@ -179,3 +179,26 @@ html.cel-coberto .cel-nav, html.cel-coberto .cel-topo { opacity: 0; pointer-even
 .cel-destaque-botoes { position: static; padding: 14px 14px 14px; }
 /* O contorno claro fica por cima de tudo, para não ser cortado pela capa */
 .cel-destaque::after { content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); pointer-events: none; }
+
+/* Plataformas: a marca do topo (ícone + nome) abre a escolha de plataforma. */
+.cel-marca { display: grid; place-items: center; }
+.cel-marca .plat-emoji { font-size: 27px; }
+.cel-titulo[data-cel] { cursor: pointer; }
+html[data-tema="laranja"] .cel-titulo.marca-nandflix {
+  background-image: linear-gradient(90deg, #FFF5EC 0%, #FFC59A 60%, #F08E45 100%);
+}
+.cel-topo { view-transition-name: cel-topo; }
+.cel-folha-plataformas .cel-folha-caixa {
+  position: absolute; left: 12px; right: 12px; top: calc(64px + env(safe-area-inset-top, 0px));
+  padding: 16px; border-radius: 20px; background: var(--superficie);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .6);
+  transform: translateY(-12px); transition: transform .25s var(--saida);
+}
+.cel-folha-plataformas.aberta .cel-folha-caixa { transform: none; }
+.cel-folha-titulo { margin: 0 4px 12px; font: 600 13px/1 var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--texto-2); }
+.cel-plataformas { grid-template-columns: 1fr; }
+.cel-plataformas button { min-height: 62px; font: 700 20px/1 var(--display); text-transform: lowercase; }
+.cel-plataformas button.ativo { background: rgba(var(--acento-rgb), .22); }
+.cel-plataformas button .ico { margin-left: auto; }
+.cel-plat-icone { width: 30px; height: 30px; flex: none; }
+.plat-emoji.cel-plat-icone { font-size: 26px; }

@@ -199,7 +199,7 @@ function filtrados() {
   const termo = normalizar(estado.busca.trim());
   const palavras = termo.split(/\s+/).filter(Boolean);
   const diretores = diretoresDe(estado.diretor);
-  let lista = estado.filmes.filter((f) => {
+  let lista = itensDaPlataforma().filter((f) => { // Plataformas: só os da plataforma atual
     if (estado.filtro === 'nao-vistos' && f.visto) return false;
     if (estado.filtro === 'vistos' && !f.visto) return false;
     if (estado.filtro === 'favoritos' && !f.favorito) return false;
@@ -416,7 +416,7 @@ function trocarFilhos(conteiner, novos) {
 
 function renderFileira() {
   const fileira = $('#fileira');
-  const favoritos = estado.filmes.filter((f) => f.favorito).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+  const favoritos = itensDaPlataforma().filter((f) => f.favorito).sort((a, b) => (a.ordem || 0) - (b.ordem || 0)); // Plataformas
   $('#secao-favoritos').hidden = favoritos.length === 0;
   const vistosFav = favoritos.filter((f) => f.visto).length;
   $('#kicker-favoritos').textContent = `${favoritos.length} favorito${favoritos.length === 1 ? '' : 's'} · ${vistosFav} de ${favoritos.length} vistos`;
@@ -503,8 +503,11 @@ function render() {
   lista.className = `lista ${estado.vista === 'lista' ? 'compacta' : 'grade'}`;
   trocarFilhos(lista, itensDaLista(visiveis));
 
-  const total = estado.filmes.length;
-  $('#contagem').textContent = vazio ? '' : (visiveis.length === total ? `${total} filmes` : `${visiveis.length} de ${total} filmes`);
+  // Plataformas: contagem e títulos com o vocabulário da plataforma.
+  const total = itensDaPlataforma().length;
+  $('#contagem').textContent = vazio ? '' : (visiveis.length === total ? voc('qtd', total) : `${visiveis.length} de ${voc('qtd', total)}`);
+  $('#titulo-todos .titulo-secao').textContent = voc('todos');
+  $('#sem-resultados .sem-titulo').textContent = `${voc('nenhum')} encontrado.`;
   $('#sem-contagem').textContent = $('#contagem').textContent;
   // Buscou e nada da lista bate: oferece adicionar o filme, já com o texto buscado.
   const termoBusca = estado.busca.trim();
@@ -525,9 +528,10 @@ function render() {
 }
 
 function atualizarEstatisticas() {
-  const total = estado.filmes.length;
-  const vistos = estado.filmes.filter((f) => f.visto).length;
-  const favs = estado.filmes.filter((f) => f.favorito).length;
+  const daTela = itensDaPlataforma(); // Plataformas
+  const total = daTela.length;
+  const vistos = daTela.filter((f) => f.visto).length;
+  const favs = daTela.filter((f) => f.favorito).length;
   const pct = total ? Math.round((vistos / total) * 100) : 0;
   $('#est-vistos-texto').textContent = `${vistos} de ${total} vistos (${pct}%)`;
   $('#est-barra').style.width = `${total ? (vistos / total) * 100 : 0}%`;
@@ -2603,6 +2607,7 @@ function abrirConfiguracoes() {
           <label><input type="radio" name="stremio" value="web" ${c.stremio === 'web' ? 'checked' : ''}> Stremio Web</label>
         </div>
       </div>
+${plataformasConfigHTML()}
 ${nandrollConfigHTML()}
       <div class="secao" id="cfg-onde"></div>
       <div class="secao">
@@ -2668,6 +2673,7 @@ ${nandrollConfigHTML()}
   $('#cfg-salvar-chave', modal).onclick = salvarDoCampo('omdb', '#cfg-chave');
   $('#cfg-como-tmdb', modal).onclick = pedirChaveTmdb;
   $('#cfg-como-chave', modal).onclick = pedirChaveOmdb;
+  ligarPlataformasConfig(modal); // Plataformas
   ligarNandrollConfig(modal); // NANDRoll
   $$('input[name="stremio"]', modal).forEach((r) => {
     r.onchange = async () => { estado.config = await api.salvarConfig({ stremio: r.value }); };
@@ -4928,6 +4934,8 @@ $('#btn-estatisticas').addEventListener('click', () => abrirEstatisticas());
   const dados = await api.carregar();
   estado.filmes = dados.filmes;
   estado.config = dados.config;
+  ligarMenuMarca(); // Plataformas: a marca do topo vira o menu de plataformas
+  prepararPlataforma(); // Plataformas: antes do primeiro render
   atualizarBotaoFiltros();
   estado.versao = dados.versao;
   estado.ordenacao = dados.config.ordenacao || 'ordem';
@@ -4941,6 +4949,8 @@ $('#btn-estatisticas').addEventListener('click', () => abrirEstatisticas());
     await esperarSincronia();
     if (estado.filmes.length && filmeNoDestaque() == null) sortear({ rolar: false, avisarSeVazio: false });
   }
+  // Plataformas: quais sistemas (primeiro uso) e onde entrar (com mais de uma).
+  await escolherPlataformaAoAbrir();
   if (!estado.config.tmdbKey) pedirChaveTmdb();
   else if (estado.filmes.length) buscarCapas({ automatica: true });
 })();

@@ -22,6 +22,10 @@
   --anel-foco: #9B7BDC;
   --gradiente-acento: linear-gradient(135deg, #4C2E7A 0%, #6D4AA8 55%, #7D56B8 100%);
   --gradiente-acento-hover: linear-gradient(135deg, #5A3990 0%, #7D56B8 55%, #8C66C8 100%);
+  /* Os mesmos tons em "r, g, b", para os fundos translúcidos: rgba(var(--acento-rgb), .2) */
+  --acento-rgb: 109, 74, 168;
+  --anel-rgb: 155, 123, 220;
+  --acento-texto-rgb: 176, 143, 243;
   --dourado: #F5B301;
   --laranja: #FF8000;
   --perigo: #FF5A5A;
@@ -107,7 +111,7 @@ svg, .ico { width: 20px; height: 20px; flex: none; fill: none; stroke: currentCo
 .btn-fantasma:hover { background: var(--superficie-2); color: var(--texto); }
 .btn-icone { width: 44px; padding: 0; }
 .btn-grande { min-height: 56px; padding: 0 30px; font-size: 16px; }
-.btn.visto-on { background: rgba(109, 74, 168, .22); color: var(--acento-texto); }
+.btn.visto-on { background: rgba(var(--acento-rgb), .22); color: var(--acento-texto); }
 .btn.fav-on { background: rgba(245, 179, 1, .14); color: var(--dourado); }
 
 .link-forte {
@@ -853,7 +857,7 @@ span.grupo-nome { color: var(--texto-2); }
 .rel-capa:focus-visible { outline: 2px solid var(--anel-foco); outline-offset: 2px; }
 .rel-filme strong { display: block; margin-top: 7px; font-size: 12px; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .rel-filme > span:last-child { font-size: 11px; color: var(--texto-2); }
-.rel-filme.na-lista .rel-capa .capa { box-shadow: 0 0 0 2px rgba(155, 123, 220, .55); }
+.rel-filme.na-lista .rel-capa .capa { box-shadow: 0 0 0 2px rgba(var(--anel-rgb), .55); }
 .rel-mais, .rel-selo {
   position: absolute; top: 6px; right: 6px; z-index: 2;
   width: 28px; height: 28px; border-radius: 50%; border: 0; padding: 0;
@@ -891,7 +895,7 @@ span.grupo-nome { color: var(--texto-2); }
 .dia-visto {
   display: inline-flex; align-items: center; gap: 2px;
   padding: 3px 4px 3px 11px; border-radius: 999px;
-  background: rgba(109, 74, 168, .22); color: var(--acento-texto);
+  background: rgba(var(--acento-rgb), .22); color: var(--acento-texto);
   font-size: 13px; font-weight: 600;
 }
 .dia-visto button {
@@ -962,9 +966,9 @@ span.grupo-nome { color: var(--texto-2); }
 }
 .cal-stat b { color: var(--texto); font-weight: 700; }
 .cal-stat .ico { width: 15px; height: 15px; }
-.cal-stat.roxo { background: rgba(109, 74, 168, .24); color: var(--acento-texto); cursor: pointer; transition: background-color .15s ease-out; }
+.cal-stat.roxo { background: rgba(var(--acento-rgb), .24); color: var(--acento-texto); cursor: pointer; transition: background-color .15s ease-out; }
 .cal-stat.roxo b { color: #EDE4FF; }
-.cal-stat.roxo:hover { background: rgba(109, 74, 168, .4); }
+.cal-stat.roxo:hover { background: rgba(var(--acento-rgb), .4); }
 .cal-fechar { margin-left: auto; }
 
 /* ---------- Filme do mês (dourado, só no calendário) ---------- */
@@ -1012,7 +1016,7 @@ span.grupo-nome { color: var(--texto-2); }
 .est-hero {
   padding: 26px 28px; border-radius: 16px;
   background:
-    radial-gradient(120% 140% at 0% 0%, rgba(109, 74, 168, .45), transparent 60%),
+    radial-gradient(120% 140% at 0% 0%, rgba(var(--acento-rgb), .45), transparent 60%),
     radial-gradient(90% 120% at 100% 100%, rgba(245, 179, 1, .12), transparent 60%),
     rgba(232, 235, 240, .03);
   box-shadow: inset 0 0 0 1px rgba(232, 235, 240, .06);
@@ -1274,7 +1278,7 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
   box-shadow: inset 0 0 0 1px rgba(232, 235, 240, .06);
   transition: box-shadow .15s ease-out;
 }
-.tl-bandeja.tl-alvo { box-shadow: inset 0 0 0 2px rgba(155, 123, 220, .6); }
+.tl-bandeja.tl-alvo { box-shadow: inset 0 0 0 2px rgba(var(--anel-rgb), .6); }
 .tl-bandeja-topo { display: flex; align-items: center; gap: 12px; padding: 12px 14px 0; }
 .tl-bandeja-topo h3 { margin: 0; font: 700 15px/1 var(--ui); }
 .tl-bandeja-topo h3 span { margin-left: 6px; color: var(--texto-2); font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -1325,7 +1329,7 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
 
 /* Hoje: anel roxo e um véu roxo bem leve */
 .cal-dia.hoje {
-  background: linear-gradient(160deg, rgba(109, 74, 168, .26), rgba(109, 74, 168, .08));
+  background: linear-gradient(160deg, rgba(var(--acento-rgb), .26), rgba(var(--acento-rgb), .08));
   box-shadow: inset 0 0 0 2px var(--acento-texto);
 }
 .cal-dia.hoje.com-vistos { box-shadow: inset 0 0 0 2px var(--acento-texto); }
@@ -1420,17 +1424,17 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
   position: fixed; left: 50%; bottom: 32px; translate: -50% 0; z-index: 96;
   display: none; align-items: center; gap: 8px; white-space: nowrap;
   padding: 10px 16px; border-radius: 999px; background: var(--superficie-2);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(155, 123, 220, .4);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(var(--anel-rgb), .4);
   font-size: 13px; font-weight: 500; color: var(--texto);
   pointer-events: none;
 }
 .cal-dica-arrasto .ico { width: 16px; height: 16px; color: var(--acento-texto); }
 .calendario.arrastando .cal-dica-arrasto { display: inline-flex; }
 /* Enquanto arrasta, os dias viram alvos: os que vêm ganham contorno tracejado. */
-.calendario.arrastando .cal-dia.futuro { box-shadow: inset 0 0 0 1px rgba(155, 123, 220, .35); }
+.calendario.arrastando .cal-dia.futuro { box-shadow: inset 0 0 0 1px rgba(var(--anel-rgb), .35); }
 .cal-dia.cal-origem { opacity: .45; }
 .cal-dia.cal-soltar {
-  background: rgba(109, 74, 168, .34) !important;
+  background: rgba(var(--acento-rgb), .34) !important;
   box-shadow: inset 0 0 0 2px var(--acento-texto) !important; opacity: 1;
 }
 
@@ -1528,9 +1532,9 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
 .cal-sortear-botoes { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .cal-sortear {
   min-height: 40px; padding: 0 16px; font-size: 13.5px; font-family: var(--ui); font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(155, 123, 220, .45); color: var(--acento-texto);
+  box-shadow: inset 0 0 0 1px rgba(var(--anel-rgb), .45); color: var(--acento-texto);
 }
-.cal-sortear:hover { background: rgba(109, 74, 168, .22); color: var(--texto); }
+.cal-sortear:hover { background: rgba(var(--acento-rgb), .22); color: var(--texto); }
 .cal-sortear .ico { width: 17px; height: 17px; color: inherit; }
 .cal-sortear:disabled { opacity: .5; }
 
@@ -1922,7 +1926,7 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
 /* Filme de fora da lista: só para ler */
 .painel-poster-externo { cursor: default; }
 .painel-poster-externo:hover { transform: none; }
-.painel-externo-aviso { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 8px 12px; border-radius: 10px; background: rgba(109, 74, 168, .18); color: var(--acento-texto); font-size: 13px; font-weight: 500; }
+.painel-externo-aviso { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 8px 12px; border-radius: 10px; background: rgba(var(--acento-rgb), .18); color: var(--acento-texto); font-size: 13px; font-weight: 500; }
 .painel-externo-aviso .ico { width: 16px; height: 16px; }
 
 /* ---------- Sorteio da watchlist em tela cheia ----------
@@ -1954,11 +1958,11 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
 .roleta-capa { width: clamp(180px, 22vh, 260px); }
 .roleta-capa .capa {
   border-radius: 12px; overflow: hidden;
-  box-shadow: 0 0 0 2px var(--acento-texto), 0 0 50px rgba(155, 123, 220, .35), 0 30px 70px rgba(0, 0, 0, .7);
+  box-shadow: 0 0 0 2px var(--acento-texto), 0 0 50px rgba(var(--anel-rgb), .35), 0 30px 70px rgba(0, 0, 0, .7);
   transition: box-shadow .4s ease-out;
 }
 .roleta-capa .capa img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.roleta-tela.parou .roleta-capa .capa { box-shadow: 0 0 0 3px var(--acento-texto), 0 0 90px rgba(155, 123, 220, .6), 0 30px 70px rgba(0, 0, 0, .7); }
+.roleta-tela.parou .roleta-capa .capa { box-shadow: 0 0 0 3px var(--acento-texto), 0 0 90px rgba(var(--anel-rgb), .6), 0 30px 70px rgba(0, 0, 0, .7); }
 .roleta-info { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 60px; }
 .roleta-titulo h2 { margin: 0; font: 700 clamp(24px, 3vw, 36px)/1.1 var(--display); letter-spacing: -.01em; text-wrap: balance; }
 .roleta-titulo .titulo-logo img { max-width: min(420px, 80vw); max-height: 110px; object-position: center; margin: 0 auto; }
@@ -2046,14 +2050,14 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
 }
 .pg-botao .ico { width: 19px; height: 19px; }
 .pg-botao:hover { background: var(--superficie-2); color: var(--texto); }
-.pg-botao.on { background: rgba(109, 74, 168, .28); color: #E2D4FF; }
+.pg-botao.on { background: rgba(var(--acento-rgb), .28); color: #E2D4FF; }
 .pg-sep { width: 1px; height: 22px; margin: 0 6px; background: var(--divisor); }
 .pg-status { flex: none; font-size: 12.5px; color: var(--texto-2); white-space: nowrap; }
 
 /* Página mudada em dois aparelhos ao mesmo tempo */
 .pg-conflito {
   max-width: 660px; margin: 24px auto 0; padding: 14px 16px; border-radius: 10px;
-  background: rgba(109, 74, 168, .16); box-shadow: inset 0 0 0 1px rgba(160, 120, 230, .35);
+  background: rgba(var(--acento-rgb), .16); box-shadow: inset 0 0 0 1px rgba(160, 120, 230, .35);
   display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: var(--texto);
 }
 .pg-conflito p { display: flex; gap: 10px; margin: 0; line-height: 1.5; }
@@ -2092,7 +2096,7 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
   width: 120px; height: 2px; margin: 2.2em auto; border: 0; border-radius: 2px;
   background: var(--gradiente-acento);
 }
-.pg-editor ::selection { background: rgba(155, 123, 220, .4); }
+.pg-editor ::selection { background: rgba(var(--anel-rgb), .4); }
 .pg-dica { max-width: 660px; margin: 36px auto 0; font-size: 12.5px; line-height: 1.9; color: rgba(156, 159, 163, .8); }
 .pg-dica kbd { margin: 0 1px; }
 
@@ -2181,7 +2185,7 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
 
 .painel-pagina {
   margin: 4px 0 16px; padding: 14px 18px 12px;
-  border-radius: 12px; background: rgba(109, 74, 168, .1);
+  border-radius: 12px; background: rgba(var(--acento-rgb), .1);
   box-shadow: inset 3px 0 0 var(--acento-texto);
 }
 .painel-pagina-rotulo { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--acento-texto); }
@@ -2590,7 +2594,7 @@ img.st-el { display: block; }
   box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
   transition: box-shadow .15s ease-out;
 }
-.pg-editor img:hover { box-shadow: 0 10px 30px rgba(0, 0, 0, .35), 0 0 0 2px rgba(155, 123, 220, .55); }
+.pg-editor img:hover { box-shadow: 0 10px 30px rgba(0, 0, 0, .35), 0 0 0 2px rgba(var(--anel-rgb), .55); }
 
 /* Shot favorito: uma cena, à direita do topo */
 .pg-dados { flex: 1; }
@@ -2612,7 +2616,7 @@ img.st-el { display: block; }
   transition: transform .2s ease-out, box-shadow .2s ease-out;
 }
 .pg-shot-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pg-shot-img:hover { transform: translateY(-3px); box-shadow: 0 20px 44px rgba(0, 0, 0, .65), 0 0 0 2px rgba(155, 123, 220, .6); }
+.pg-shot-img:hover { transform: translateY(-3px); box-shadow: 0 20px 44px rgba(0, 0, 0, .65), 0 0 0 2px rgba(var(--anel-rgb), .6); }
 /* × (tirar) no alto e + (segundo shot) embaixo: só aparecem no hover */
 .pg-shot-botao {
   position: absolute; right: 8px; width: 26px; height: 26px; padding: 0;
@@ -2635,7 +2639,7 @@ img.st-el { display: block; }
 }
 .pg-shot-novo:hover, .pg-shot-novo:focus-visible { opacity: 1; }
 .pg-shot-novo .ico { width: 17px; height: 17px; }
-.pg-shot-novo:hover { border-color: var(--acento-texto); color: var(--texto); background: rgba(109, 74, 168, .18); }
+.pg-shot-novo:hover { border-color: var(--acento-texto); color: var(--texto); background: rgba(var(--acento-rgb), .18); }
 
 /* Visor: a imagem em tela cheia */
 .visor {
@@ -2673,7 +2677,7 @@ img.st-el { display: block; }
   transition: background-color .15s ease-out, border-color .15s ease-out, opacity .15s ease-out;
 }
 .visor-acao .ico { width: 16px; height: 16px; }
-.visor-acao:hover { background: rgba(109, 74, 168, .35); border-color: var(--acento-texto); }
+.visor-acao:hover { background: rgba(var(--acento-rgb), .35); border-color: var(--acento-texto); }
 .visor-acao.feito { cursor: default; color: var(--texto-2); background: transparent; border-color: transparent; }
 .visor-acao.feito .ico { color: var(--acento-texto); }
 .visor.ampliado .visor-acao { opacity: 0; pointer-events: none; }
@@ -2739,7 +2743,7 @@ body.com-entrada { overflow: hidden; }
   background: var(--canvas); border: 1px solid var(--divisor); color: var(--texto); font: 15px var(--ui);
   transition: border-color .15s ease-out, box-shadow .15s ease-out;
 }
-.entrada-campo input:focus { border-color: var(--acento); box-shadow: 0 0 0 3px rgba(109, 74, 168, .28); }
+.entrada-campo input:focus { border-color: var(--acento); box-shadow: 0 0 0 3px rgba(var(--acento-rgb), .28); }
 .entrada-senha { position: relative; display: block; }
 .entrada-senha input { padding-right: 48px; }
 .entrada-olho {
@@ -2757,7 +2761,7 @@ body.com-entrada { overflow: hidden; }
 
 .entrada-envelope {
   width: 64px; height: 64px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center;
-  background: rgba(109, 74, 168, .2); color: var(--acento-texto);
+  background: rgba(var(--acento-rgb), .2); color: var(--acento-texto);
 }
 .entrada-envelope .ico { width: 30px; height: 30px; }
 .entrada-passo[data-passo="confirmar"] .entrada-erro { margin-bottom: 12px; }
@@ -2919,7 +2923,7 @@ span.serie-conta .ico { width: 16px; height: 16px; }
 .onde-selo .ico { width: 14px; height: 14px; }
 .onde-cinema { border-color: rgba(245, 179, 1, .45); color: var(--dourado); }
 .onde-stremio { cursor: pointer; border-color: rgba(123, 91, 245, .55); color: var(--acento-texto); }
-.onde-stremio:hover { background: rgba(109, 74, 168, .18); }
+.onde-stremio:hover { background: rgba(var(--acento-rgb), .18); }
 .onde-fora { color: var(--texto-2); }
 .onde-grupos { display: flex; flex-wrap: wrap; gap: 10px 22px; }
 .onde-grupo { display: flex; flex-direction: column; gap: 6px; }
@@ -2959,7 +2963,7 @@ span.serie-conta .ico { width: 16px; height: 16px; }
 }
 .cfg-servico img { width: 28px; height: 28px; border-radius: 6px; }
 .cfg-servico:hover { border-color: var(--borda-controle); }
-.cfg-servico.ativo { border-color: var(--acento-texto); background: rgba(109, 74, 168, .22); }
+.cfg-servico.ativo { border-color: var(--acento-texto); background: rgba(var(--acento-rgb), .22); }
 
 /* ---------- Prêmios (premios.js): a cédula do Oscar ---------- */
 
@@ -2984,14 +2988,14 @@ span.serie-conta .ico { width: 16px; height: 16px; }
   padding: 22px 26px; border-radius: 16px; margin-bottom: 18px;
   background:
     radial-gradient(110% 140% at 0% 0%, rgba(245, 179, 1, .16), transparent 60%),
-    radial-gradient(90% 120% at 100% 100%, rgba(109, 74, 168, .3), transparent 60%),
+    radial-gradient(90% 120% at 100% 100%, rgba(var(--acento-rgb), .3), transparent 60%),
     rgba(232, 235, 240, .03);
 }
 .pr-resumo .est-kicker { color: var(--dourado); }
 .pr-resumo h3 { margin: 10px 0 10px; font: 700 clamp(20px, 2vw, 26px)/1.2 var(--display); }
 .pr-resumo p { margin: 10px 0 0; color: var(--texto-2); font-size: 14px; }
 .pr-barra { height: 6px; border-radius: 999px; background: rgba(232, 235, 240, .1); overflow: hidden; max-width: 520px; }
-.pr-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #6D4AA8, #F5B301); }
+.pr-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--acento), #F5B301); }
 .pr-numeros { display: flex; gap: 22px; }
 .pr-numeros div { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .pr-numeros b { font: 700 34px/1 var(--display); font-variant-numeric: tabular-nums; }
@@ -3023,7 +3027,7 @@ span.serie-conta .ico { width: 16px; height: 16px; }
 }
 .pr-ind:hover { background: rgba(232, 235, 240, .04); }
 .pr-ind.venceu { background: rgba(245, 179, 1, .09); border-color: rgba(245, 179, 1, .35); }
-.pr-ind.palpite:not(.venceu) { border-color: rgba(176, 143, 243, .45); }
+.pr-ind.palpite:not(.venceu) { border-color: rgba(var(--acento-texto-rgb), .45); }
 .pr-capa {
   position: relative; width: 40px; height: 60px; padding: 0; border: 0; border-radius: 6px; overflow: hidden;
   background: var(--superficie-2); cursor: pointer;
@@ -3047,7 +3051,7 @@ span.serie-conta .ico { width: 16px; height: 16px; }
 .pr-botao .ico { width: 14px; height: 14px; }
 .pr-botao:hover { border-color: var(--borda-controle); color: var(--texto); }
 .pr-botao:disabled { opacity: .5; cursor: progress; }
-.pr-visto.on { background: rgba(109, 74, 168, .28); border-color: var(--acento-texto); color: var(--acento-texto); }
+.pr-visto.on { background: rgba(var(--acento-rgb), .28); border-color: var(--acento-texto); color: var(--acento-texto); }
 .pr-palpite.on { background: rgba(245, 179, 1, .16); border-color: rgba(245, 179, 1, .7); color: var(--dourado); }
 
 /* Nos detalhes do filme: "Oscar: 2 vitórias · 7 indicações" e a lista */
@@ -3072,7 +3076,7 @@ span.serie-conta .ico { width: 16px; height: 16px; }
 .modal-importar { width: min(680px, calc(100vw - 40px)); }
 .importar { display: flex; flex-direction: column; gap: 12px; }
 .imp-intro { margin: 0 0 4px; color: var(--texto-2); font-size: 14px; line-height: 1.5; }
-.imp-status { margin: 0; padding: 10px 14px; border-radius: 10px; background: rgba(109, 74, 168, .18); color: var(--acento-texto); font-size: 13.5px; font-weight: 600; }
+.imp-status { margin: 0; padding: 10px 14px; border-radius: 10px; background: rgba(var(--acento-rgb), .18); color: var(--acento-texto); font-size: 13.5px; font-weight: 600; }
 .imp-status:empty { display: none; }
 .imp-fonte { padding: 16px 18px; border-radius: 14px; background: rgba(232, 235, 240, .035); border: 1px solid rgba(232, 235, 240, .06); }
 .imp-cabeca { display: flex; align-items: center; gap: 10px; }
@@ -3091,3 +3095,111 @@ span.serie-conta .ico { width: 16px; height: 16px; }
 .imp-stremio input:focus { border-color: var(--acento); }
 .importar.ocupado .imp-fonte { opacity: .55; }
 .vazio-dir .link-forte + .link-forte { margin-top: 6px; }
+
+/* ==========================================================================
+   Plataformas (plataformas.js): marca que troca de plataforma, tema de cada
+   uma, transição da troca e a tela de início do nandhub
+   ========================================================================== */
+
+/* Tema do nandanimes: só troca as variáveis do acento (um recálculo de estilo
+   na troca, nada contínuo). Laranja sutil, no espírito da Crunchyroll. */
+html[data-tema="laranja"] {
+  --acento: #C25E1C;
+  --acento-hover: #D26C27;
+  --acento-texto: #FFA766;
+  --sobre-acento: #FFF5EC;
+  --anel-foco: #F08E45;
+  --gradiente-acento: linear-gradient(135deg, #7A3510 0%, #BD5A1A 55%, #DB7430 100%);
+  --gradiente-acento-hover: linear-gradient(135deg, #8B3E14 0%, #CC6621 55%, #E8833B 100%);
+  --acento-rgb: 194, 94, 28;
+  --anel-rgb: 240, 142, 69;
+  --acento-texto-rgb: 255, 167, 102;
+}
+
+/* A marca do topo é um botão: abre a lista de plataformas. */
+.marca-caixa { position: relative; display: flex; min-width: 0; }
+.marca-botao {
+  display: flex; align-items: center; gap: 10px; margin: -6px -8px; padding: 6px 8px; border: 0; border-radius: 12px;
+  background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; text-shadow: inherit;
+  cursor: pointer; transition: background-color .15s ease-out;
+  view-transition-name: marca;
+}
+.marca-botao:hover, .marca-caixa.aberta .marca-botao { background: rgba(255, 255, 255, .07); }
+.marca-botao.sozinha { cursor: default; background: none; }
+.marca-botao.sozinha .marca-seta { display: none; }
+.marca-icone-caixa { display: inline-grid; place-items: center; }
+.marca-seta { color: var(--texto-2); margin-left: -4px; }
+.marca-seta .ico { width: 18px; height: 18px; transition: transform .22s var(--saida); }
+.marca-caixa.aberta .marca-seta .ico { transform: rotate(180deg); }
+.plat-emoji { display: inline-grid; place-items: center; line-height: 1; font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif; text-shadow: none; }
+.marca .plat-emoji.marca-icone { width: 30px; font-size: 27px; }
+.marca-menu { left: -6px; right: auto; top: calc(100% + 12px); min-width: 220px; }
+.marca-caixa.aberta .marca-menu { opacity: 1; pointer-events: auto; transform: none; visibility: visible; transition-delay: 0s; }
+.marca-menu-item { font-size: 15px; font-weight: 600; text-transform: lowercase; }
+.marca-menu-item .ico { margin-left: auto; color: var(--acento-texto); }
+.marca-menu-item[aria-checked="true"] { background: rgba(var(--acento-rgb), .16); }
+.marca-menu-icone { width: 22px; height: 22px; flex: none; }
+.plat-emoji.marca-menu-icone { font-size: 19px; }
+
+/* A troca de plataforma: a tela velha some de leve e a nova sobe (View Transitions). */
+::view-transition-old(root) { animation: plat-sai .2s ease-in both; }
+::view-transition-new(root) { animation: plat-entra .42s cubic-bezier(.2, .8, .2, 1) .05s both; }
+::view-transition-group(marca) { animation-duration: .35s; }
+@keyframes plat-sai { to { opacity: 0; transform: scale(.985); } }
+@keyframes plat-entra { from { opacity: 0; transform: translateY(14px); } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+
+/* Configurações: plataformas habilitadas e onde abrir */
+.cfg-plat { text-transform: lowercase; font-weight: 600; }
+.cfg-plat-icone { width: 20px; height: 20px; }
+.plat-emoji.cfg-plat-icone { font-size: 17px; }
+.cfg-plat-inicial { margin-top: 12px; font-size: 14px; }
+
+/* Tela de início do nandhub e escolha de sistemas (mesma base da entrada) */
+.plat-tela .plat-cartao { width: min(780px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; }
+.plat-tela .entrada-marca .plat-emoji { font-size: 26px; }
+.plat-opcoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.plat-opcao {
+  --plat-fundo: linear-gradient(160deg, rgba(109, 74, 168, .42), rgba(14, 16, 18, .7) 72%);
+  --plat-borda: #B08FF3;
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 14px;
+  min-height: 200px; padding: 22px 20px 18px; border: 0; border-radius: 18px;
+  background: var(--plat-fundo); color: var(--texto); text-align: left; cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09);
+  transition: transform .22s var(--saida), box-shadow .22s ease-out;
+}
+.plat-opcao[data-tema="laranja"] { --plat-fundo: linear-gradient(160deg, rgba(194, 94, 28, .45), rgba(14, 16, 18, .7) 72%); --plat-borda: #FFA766; }
+.plat-opcao[data-hub] { --plat-fundo: linear-gradient(160deg, rgba(109, 74, 168, .4), rgba(194, 94, 28, .28) 55%, rgba(14, 16, 18, .7)); --plat-borda: #E8EBF0; }
+.plat-opcao:hover, .plat-opcao:focus-visible { transform: translateY(-3px); box-shadow: inset 0 0 0 1.5px var(--plat-borda), 0 20px 44px rgba(0, 0, 0, .5); outline: none; }
+.plat-opcao:active { transform: translateY(-1px) scale(.99); }
+.plat-opcao-icone { width: 54px; height: 54px; flex: none; }
+.plat-emoji.plat-opcao-icone { font-size: 46px; }
+.plat-opcao-texto { display: flex; flex-direction: column; gap: 6px; flex: 1; width: 100%; }
+.plat-opcao-texto b { font: 800 24px/1.05 var(--display); text-transform: lowercase; letter-spacing: .005em; }
+.plat-opcao-texto small { font-size: 13px; line-height: 1.45; color: var(--texto-2); }
+.plat-opcao-texto .plat-conta { margin-top: auto; padding-top: 6px; color: var(--texto); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Escolha de sistemas: o cartão liga e desliga */
+.plat-opcao[aria-pressed] { min-height: 180px; opacity: .62; }
+.plat-opcao[aria-pressed="true"] { opacity: 1; box-shadow: inset 0 0 0 2px var(--plat-borda), 0 16px 36px rgba(0, 0, 0, .4); }
+.plat-check {
+  position: absolute; top: 14px; right: 14px; width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center; background: rgba(5, 6, 8, .6); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .3);
+  color: transparent; transition: background-color .18s ease-out, color .18s ease-out;
+}
+.plat-check .ico { width: 16px; height: 16px; stroke-width: 2.5; }
+.plat-opcao[aria-pressed="true"] .plat-check { background: var(--plat-borda); color: #0B0C0E; box-shadow: none; }
+.plat-sempre { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px 10px; font-size: 14px; color: var(--texto-2); cursor: pointer; }
+.plat-sempre input { width: 18px; height: 18px; accent-color: var(--acento); margin: 0; }
+.plat-sempre small { font-size: 12.5px; opacity: .8; }
+
+@media (max-width: 560px) {
+  .plat-opcoes { grid-template-columns: 1fr; gap: 10px; }
+  .plat-opcao, .plat-opcao[aria-pressed] { flex-direction: row; align-items: center; min-height: 0; padding: 16px; gap: 14px; }
+  .plat-opcao-icone { width: 44px; height: 44px; }
+  .plat-emoji.plat-opcao-icone { font-size: 36px; }
+  .plat-opcao-texto b { font-size: 21px; }
+  .plat-opcao[aria-pressed] .plat-opcao-texto { padding-right: 34px; }
+  .plat-check { top: 50%; translate: 0 -50%; }
+}

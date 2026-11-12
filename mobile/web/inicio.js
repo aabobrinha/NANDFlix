@@ -21,7 +21,7 @@ function montarCelular() {
   const topo = document.createElement('header');
   topo.className = 'cel-topo';
   topo.innerHTML = `
-    <button class="cel-marca" data-cel="inicio" aria-label="Início"><img src="icone.png" alt=""></button>
+    <button class="cel-marca" id="cel-marca" data-cel="plataformas" aria-label="Trocar de plataforma"><img src="icone.png" alt=""></button>
     <h1 class="cel-titulo marca-nandflix" id="cel-titulo">nandflix</h1>
     <button class="cel-icone" data-cel="sortear" aria-label="Sortear um filme">${icone('Dices')}</button>
     <button class="cel-icone" data-cel="adicionar" aria-label="Adicionar filme">${icone('Plus')}</button>`;
@@ -54,7 +54,7 @@ const ultimaVezVisto = (f) => (f.vistoEm && f.vistoEm.length ? f.vistoEm.slice()
 
 function filmesDoModo() {
   const m = cel.modo;
-  const todos = estado.filmes;
+  const todos = itensDaPlataforma(); // Plataformas: só os da plataforma atual
   if (m.tipo === 'filtro') {
     if (m.filtro === 'nao-vistos') return todos.filter((f) => !f.visto);
     if (m.filtro === 'vistos') return todos.filter((f) => f.visto);
@@ -149,7 +149,7 @@ function pilulasHTML() {
   const m = cel.modo;
   const ativo = (tipo, valor) => (m.tipo === tipo && (m.filtro === valor || m.genero === valor) ? ' ativa' : '');
   const fechar = m.tipo !== 'inicio' ? `<button class="cel-pilula cel-pilula-x" data-cel="inicio" aria-label="Voltar ao início">${icone('X')}</button>` : '';
-  const filtros = Object.entries(ROTULOS_FILTRO).filter(([k]) => nandrollLigado() || (k !== 'animes' && k !== 'assistindo')).map(([k, r]) => `<button class="cel-pilula${ativo('filtro', k)}" data-cel="filtro" data-filtro="${k}">${r}</button>`).join('');
+  const filtros = Object.entries(ROTULOS_FILTRO).filter(([k]) => filtroAnimeVisivel(k)).map(([k, r]) => `<button class="cel-pilula${ativo('filtro', k)}" data-cel="filtro" data-filtro="${k}">${r}</button>`).join(''); // Plataformas
   return `<div class="cel-pilulas">${fechar}${filtros}
     ${meusServicos().size ? `<button class="cel-pilula${m.tipo === 'onde' && m.onde === 'meus' ? ' ativa' : ''}" data-cel="onde" data-onde="meus">Nos meus serviços</button>` : ''}
     <button class="cel-pilula${m.tipo === 'genero' ? ' ativa' : ''}" data-cel="generos">${m.tipo === 'genero' ? esc(m.genero) : 'Gêneros'} ${icone('ChevronDown')}</button>
@@ -169,17 +169,22 @@ function tituloDoModo() {
   if (m.tipo === 'filtro') return ROTULOS_FILTRO[m.filtro];
   if (m.tipo === 'genero') return m.genero;
   if (m.tipo === 'onde') return FILTROS_ONDE[m.onde] ? FILTROS_ONDE[m.onde].rotulo : '';
-  if (m.tipo === 'todos') return 'Todos os filmes';
+  if (m.tipo === 'todos') return voc('todos');
   return 'Início';
 }
 
 function renderCelular() {
   const el = $('#cel-inicio');
   if (!el) return;
-  // No início, a marca; nas outras telas, o nome delas.
+  // No início, a marca (da plataforma atual; tocar nela troca); nas outras telas, o nome delas.
   const titulo = $('#cel-titulo');
-  titulo.classList.toggle('marca-nandflix', cel.modo.tipo === 'inicio');
-  titulo.textContent = cel.modo.tipo === 'inicio' ? 'nandflix' : tituloDoModo();
+  const plat = plataformaAtual();
+  const naMarca = cel.modo.tipo === 'inicio';
+  titulo.classList.toggle('marca-nandflix', naMarca);
+  titulo.textContent = naMarca ? plat.nome : tituloDoModo();
+  if (naMarca) titulo.dataset.cel = 'plataformas'; else delete titulo.dataset.cel;
+  const marca = $('#cel-marca');
+  if (marca.dataset.p !== plat.id) { marca.innerHTML = iconePlataformaHTML(plat, 'cel-marca-icone'); marca.dataset.p = plat.id; }
   document.documentElement.classList.toggle('cel-modo-todos', cel.modo.tipo === 'todos');
   for (const b of $$('.cel-nav-item')) b.classList.toggle('ativo', b.dataset.cel === 'inicio');
   if (!estado.filmes.length) { el.innerHTML = pilulasHTML(); return; }
@@ -222,7 +227,7 @@ function fecharFolha() {
 
 function abrirGeneros() {
   const conta = new Map();
-  for (const f of estado.filmes) for (const g of generos(f.info)) conta.set(g, (conta.get(g) || 0) + 1);
+  for (const f of itensDaPlataforma()) for (const g of generos(f.info)) conta.set(g, (conta.get(g) || 0) + 1); // Plataformas
   const lista = [...conta].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
   abrirFolha(`<div class="cel-generos">${lista.map(([g, n]) => `<button data-cel="genero" data-genero="${esc(g)}"${cel.modo.genero === g ? ' class="ativo"' : ''}>${esc(g)} <small>${n}</small></button>`).join('')}</div>`, 'cel-folha-generos');
 }
@@ -237,10 +242,27 @@ function abrirMais() {
     ${item('sortear-filtro', 'SlidersHorizontal', 'Sortear com filtro')}
     ${nandrollLigado() ? item('agenda', 'CalendarClock', 'Agenda de episódios') : ''}
     ${item('adicionar', 'Plus', nandrollLigado() ? 'Adicionar filme ou anime' : 'Adicionar filme')}
-    ${item('todos', 'LayoutGrid', 'Todos os filmes')}
+    ${item('todos', 'LayoutGrid', voc('todos'))}
     ${item('config', 'Settings', 'Configurações')}
   </div>`, 'cel-folha-mais');
 }
+
+// Plataformas: tocar na marca abre a escolha (como o menu da marca no PC).
+function abrirPlataformasCelular() {
+  const disponiveis = plataformasDisponiveis();
+  if (disponiveis.length < 2) { irPara({ tipo: 'inicio' }); return; }
+  const atual = plataformaAtual().id;
+  abrirFolha(`<h2 class="cel-folha-titulo">Plataformas</h2><div class="cel-mais cel-plataformas">
+    ${disponiveis.map((p) => `<button data-cel="plataforma" data-plataforma="${p.id}"${p.id === atual ? ' class="ativo" aria-current="true"' : ''}>${iconePlataformaHTML(p, 'cel-plat-icone')}<span>${p.nome}</span>${p.id === atual ? icone('Check') : ''}</button>`).join('')}
+  </div>`, 'cel-folha-plataformas');
+}
+
+// A plataforma mudou (plataformas.js avisa antes de redesenhar): volta ao início dela.
+document.addEventListener('plataforma', () => {
+  cel.modo = { tipo: 'inicio' };
+  cel.destaqueId = null;
+  document.documentElement.classList.remove('cel-modo-todos');
+});
 
 // ---- Toques ----
 
@@ -265,6 +287,8 @@ function aoTocarCelular(e) {
     case 'assistir': abrirStremio(id); break;
     case 'hoje': alternarWatchlist(id); renderCelular(); break;
     case 'inicio': fecharFolha(); irPara({ tipo: 'inicio' }); break;
+    case 'plataformas': abrirPlataformasCelular(); break; // Plataformas
+    case 'plataforma': fecharFolha(); trocarPlataforma(b.dataset.plataforma); break;
     case 'filtro': irPara(cel.modo.tipo === 'filtro' && cel.modo.filtro === b.dataset.filtro ? { tipo: 'inicio' } : { tipo: 'filtro', filtro: b.dataset.filtro }); break;
     case 'generos': abrirGeneros(); break;
     case 'onde': irPara(cel.modo.tipo === 'onde' && cel.modo.onde === b.dataset.onde ? { tipo: 'inicio' } : { tipo: 'onde', onde: b.dataset.onde }); break;
