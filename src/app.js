@@ -693,10 +693,13 @@ async function alternar(id, campo, valor) {
   if (novo && ehSerie(f)) { Object.assign(f, novo); aposMudarDia(id); }
 }
 
-async function abrirStremio(id, { stremio = false } = {}) {
-  // NANDRoll: o Assistir de um anime abre a plataforma oficial, se houver.
-  if (!stremio && await assistirAnime(id)) return;
+async function abrirStremio(id) {
   const r = await api.abrirStremio(id);
+  // NANDRoll: numa série de anime, o aviso oferece marcar o episódio como visto.
+  const serieAnime = porId(id);
+  if (r.ok && ehSerie(serieAnime) && serieAnime.status !== 'completo') {
+    aviso(`Abrindo no Stremio · ${textoDaVez(serieAnime)}`, { acao: { rotulo: 'Vi mais um', fn: () => viMaisUm(id) }, duracao: 8000 });
+  }
   if (r.semApp) {
     const escolha = await perguntar({
       titulo: 'Stremio não encontrado',

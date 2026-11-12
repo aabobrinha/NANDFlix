@@ -20,6 +20,7 @@ import tmdb from '../../lib/tmdb.js';
 import anilist from '../../lib/anilist.js';
 import omdb from '../../lib/omdb.js';
 import trailer from '../../lib/trailer.js';
+import { Episodios } from '../../lib/episodios.js';
 import letterboxd from '../../lib/letterboxd.js';
 import { Extras } from '../../lib/extras.js';
 import { Acervo, listaPremios } from '../../lib/premios.js';
@@ -53,6 +54,7 @@ const C = {
   imagens: `${PASTA}/imagens`,
   capas: `${PASTA}/capas`,
   premios: `${PASTA}/premios.json`,
+  episodios: `${PASTA}/episodios.json`,
 };
 // A versão do app (mobile/package.json), posta pelo montar.js.
 // eslint-disable-next-line no-undef
@@ -465,6 +467,9 @@ async function aplicarImportacao(fonte, itens) {
 // Notas do TMDB e do Letterboxd, onde assistir e Stremio (lib/extras.js).
 const extras = new Extras({ filmes: () => filmes, config: () => config, atualizarFilme, avisar, gravarAgora });
 
+let episodiosDaSerie = null;
+const pegarEpisodios = () => episodiosDaSerie || (episodiosDaSerie = new Episodios({ chave: () => config.tmdbKey, lerCache: () => lerJSON(C.episodios, null), gravarCache: (d) => gravarJSON(C.episodios, d) }));
+
 // Prêmios (lib/premios.js): o histórico vem no app; as cerimônias recentes, da Wikipédia.
 let acervo = null;
 const pegarAcervo = () => {
@@ -531,7 +536,7 @@ window.api = {
     return { filmes, config: configPublica(), pastaDados: '', versao: VERSAO };
   },
   salvarConfig: async (mudancas) => {
-    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
+    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
     for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
     if ('nandroll' in mudancas) { config.nandroll = Boolean(mudancas.nandroll); if (config.nandroll) atualizarSeriesEmExibicao(); }
     gravarConfig();
@@ -655,6 +660,18 @@ window.api = {
   baixarTodasCapas: soNoPc,
   usarArquivoCapa: soNoPc,
   caminhoDoArquivo: () => '',
+  // Título, sinopse e imagem de cada episódio (TMDB), num cache à parte (lib/episodios.js).
+  episodiosSerie: async (id, indice) => {
+    const f = filmes.find((x) => x.id === id);
+    if (!ehSerie(f)) return { ok: false, motivo: 'serie' };
+    try { return await pegarEpisodios().daTemporada(f, indice); } catch { return { ok: false, motivo: 'rede' }; }
+  },
+  // As aberturas no YouTube (como os trailers); a pessoa toca no player embutido.
+  aberturasAnime: async (id, indice) => {
+    const f = filmes.find((x) => x.id === id);
+    if (!f) return { ok: false, motivo: 'serie' };
+    try { return { ok: true, videos: await trailer.aberturasDe(f, Number.isInteger(indice) ? indice : null) }; } catch { return { ok: false, motivo: 'rede' }; }
+  },
   obterTrailer: async (id) => {
     const f = filmes.find((x) => x.id === id);
     if (!f) return null;
@@ -712,6 +729,11 @@ window.api = {
   abrirStremio: async (id, forcarWeb) => {
     const f = filmes.find((x) => x.id === id);
     if (!f) return { ok: false };
+    // Série de anime sem o código do IMDb: pede ao TMDB, para o Stremio abrir direto nela.
+    if (ehSerie(f) && !f.imdbID && f.tmdbTvId && config.tmdbKey) {
+      const imdb = await tmdb.imdbDaSerie(config.tmdbKey, f.tmdbTvId).catch(() => '');
+      if (imdb) atualizarFilme(id, { imdbID: imdb });
+    }
     const l = linksStremio(f);
     if (forcarWeb || config.stremio === 'web') {
       abrirFora(l.web);

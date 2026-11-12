@@ -48,10 +48,9 @@ function nandrollConfigHTML() {
       <div class="secao">
         <h3>nandchan (animes)</h3>
         <div class="opcoes-radio nandroll-opcoes">
-          <label><input type="checkbox" id="cfg-nandroll-assistir" ${estado.config.nandrollAssistir !== 'stremio' ? 'checked' : ''}> O botão Assistir abre a plataforma oficial do anime (em vez do Stremio)</label>
           <label><input type="checkbox" id="cfg-nandroll-plataformas" ${todasPlataformas() ? 'checked' : ''}> Mostrar plataformas de fora do Brasil</label>
         </div>
-        <p>Busca de animes na AniList (sem chave), episódios e status das séries, próximo episódio e onde assistir. Para usar, habilite o nandchan em Plataformas, acima; desabilitado, os animes já adicionados ficam guardados.</p>
+        <p>Busca de animes na AniList (sem chave), episódios e status das séries, próximo episódio e onde assistir. O botão Assistir abre sempre o Stremio; as plataformas oficiais ficam em “Onde assistir”, nos detalhes. Os títulos e as sinopses dos episódios vêm do TMDB (com a sua chave). Para usar, habilite o nandchan em Plataformas, acima; desabilitado, os animes já adicionados ficam guardados.</p>
         <div class="busca-linha nandroll-importar">
           <input id="cfg-anilist-usuario" placeholder="Seu usuário da AniList" spellcheck="false" autocomplete="off" aria-label="Usuário da AniList">
           <button class="btn" id="cfg-anilist-importar">${icone('Download')} Importar lista</button>
@@ -61,8 +60,6 @@ function nandrollConfigHTML() {
 }
 
 function ligarNandrollConfig(raiz) {
-  const oficial = $('#cfg-nandroll-assistir', raiz);
-  if (oficial) oficial.onchange = async () => { estado.config = await api.salvarConfig({ nandrollAssistir: oficial.checked ? 'oficial' : 'stremio' }); };
   const importar = $('#cfg-anilist-importar', raiz);
   const usuario = $('#cfg-anilist-usuario', raiz);
   if (importar && usuario) {
@@ -143,6 +140,18 @@ const temporadaEscolhida = new Map();
 function indiceTemporada(f) {
   const i = temporadaEscolhida.get(f.id);
   return Number.isInteger(i) && temporadasDe(f)[i] ? i : null;
+}
+// A temporada que o painel mostra: a escolhida no seletor ('tudo' = visão geral)
+// ou, sem escolha, a em que a pessoa está (como a Netflix abre na temporada da vez).
+// Série de uma temporada só: null (não há o que escolher).
+function temporadaVista(f) {
+  const ts = temporadasDe(f);
+  if (ts.length < 2) return null;
+  const e = temporadaEscolhida.get(f.id);
+  if (e === 'tudo') return null;
+  if (Number.isInteger(e) && ts[e]) return e;
+  const c = temporadaCorrente(f);
+  return c ? ts.indexOf(c) : null;
 }
 // A temporada em que a pessoa está: a primeira lançada ainda não terminada (ou a última lançada).
 function temporadaCorrente(f) {
@@ -242,13 +251,33 @@ function ondeAssistirAnimeHTML(f, t = null, indice = null) {
 
 // ---- O bloco do painel ----
 
-function chipsTemporadasHTML(f, sel) {
+// O seletor de temporadas, como o da Netflix: um botão com o nome da temporada
+// em vista que abre a lista de todas (com os filmes da franquia na ordem de
+// assistir e o progresso de cada uma). Cabe em qualquer quantidade de temporadas,
+// no PC e no toque, sem encher o painel de chips.
+function seletorTemporadasHTML(f, vista) {
   const ts = temporadasDe(f);
   if (ts.length < 2) return '';
-  const chip = (i, rotulo, extra = '', titulo = '') => `<button class="chip chip-temporada${sel === i ? ' ativo' : ''}${extra}" data-serie="temporada" data-t="${i === null ? '' : i}" role="tab" aria-selected="${sel === i}"${titulo ? ` title="${esc(titulo)}"` : ''}>${rotulo}</button>`;
-  return `<div class="chips-linha temporadas" role="tablist" aria-label="Temporadas">
-    ${chip(null, 'Tudo')}
-    ${ts.map((t, i) => chip(i, `${temporadaCompleta(t) ? icone('Check') : ehFilmeDaOrdem(t) ? icone('Clapperboard') : ''}${esc(rotuloTemporada(f, t, i))}`, temporadaLancada(t) ? '' : ' nao-lancada', `${t.titulo}${t.ano ? ` (${t.ano})` : ''}`)).join('')}
+  const textoLado = (t) => {
+    if (!temporadaLancada(t)) return 'em breve';
+    if (ehFilmeDaOrdem(t)) return Number(t.vistos) ? 'visto' : 'filme';
+    return t.episodios ? `${Number(t.vistos) || 0}/${t.episodios}` : `${Number(t.vistos) || 0} eps`;
+  };
+  const opcao = (i, icones, nome, lado, titulo = '') => {
+    const ativa = vista === i;
+    return `<button class="temp-opcao${ativa ? ' ativa' : ''}${i !== null && !temporadaLancada(ts[i]) ? ' nao-lancada' : ''}" role="option" aria-selected="${ativa}" data-serie="temporada" data-t="${i === null ? '' : i}"${titulo ? ` title="${esc(titulo)}"` : ''}>
+      <span class="temp-icone">${icones}</span><span class="temp-nome">${esc(nome)}</span><span class="temp-lado">${esc(lado)}</span></button>`;
+  };
+  const atual = vista === null ? 'Todas as temporadas' : rotuloTemporada(f, ts[vista], vista);
+  const ladoAtual = vista === null ? '' : textoLado(ts[vista]);
+  return `<div class="temp-seletor" data-temp-seletor>
+    <button class="temp-botao" data-serie="temp-menu" aria-haspopup="listbox" aria-expanded="false" title="Trocar de temporada">
+      ${vista !== null && ehFilmeDaOrdem(ts[vista]) ? icone('Clapperboard') : ''}<span class="temp-nome">${esc(atual)}</span>${ladoAtual ? `<span class="temp-lado">${esc(ladoAtual)}</span>` : ''}${icone('ChevronDown')}
+    </button>
+    <div class="temp-menu" role="listbox" aria-label="Temporadas" hidden>
+      ${opcao(null, icone('LayoutList'), 'Todas as temporadas', '')}
+      ${ts.map((t, i) => opcao(i, temporadaCompleta(t) ? icone('Check') : ehFilmeDaOrdem(t) ? icone('Clapperboard') : '', rotuloTemporada(f, t, i), textoLado(t), `${t.titulo}${t.ano ? ` (${t.ano})` : ''}`)).join('')}
+    </div>
   </div>`;
 }
 
@@ -261,8 +290,8 @@ function animeNoPainelHTML(f) {
   if (!ehAnime(f)) return '';
   if (!ehSerie(f)) return `<div class="serie" data-anime-bloco>${ondeAssistirAnimeHTML(f)}${removerAnimeHTML()}</div>`;
   const ts = temporadasDe(f);
-  const sel = indiceTemporada(f);
-  const t = sel === null ? null : ts[sel];
+  const vista = temporadaVista(f);
+  const t = vista === null ? null : ts[vista];
   const vistos = t ? Number(t.vistos) || 0 : Number(f.episodiosVistos) || 0;
   const total = t ? Number(t.episodios) || 0 : Number(f.episodios) || 0;
   const status = STATUS_ROTULOS[f.status] ? f.status : 'planejo';
@@ -277,11 +306,11 @@ function animeNoPainelHTML(f) {
         ${t.poster ? `<img class="serie-capa-temporada" src="${esc(t.poster)}" alt="" loading="lazy">` : ''}
         <p><b>${esc(t.titulo)}</b><span>${[t.ano, filme ? 'filme' : t.episodios ? `${t.episodios} eps` : '', filme && t.duracao ? `${t.duracao} min` : '', t.exibicao].filter(Boolean).map(esc).join(' · ')}</span></p>
       </div>` : '';
-  // A grade de episódios: da temporada escolhida, ou da única que houver.
-  const iGrade = sel !== null ? sel : ts.length === 1 ? 0 : null;
+  // Os episódios: da temporada em vista, ou da única que houver.
+  const iLista = vista !== null ? vista : ts.length === 1 ? 0 : null;
   return `
     <div class="serie" data-anime-bloco>
-      ${chipsTemporadasHTML(f, sel)}
+      ${seletorTemporadasHTML(f, vista)}
       ${cabecalho}${nomeDaVez}
       <div class="serie-linha">
         <button class="redondo serie-menos" data-serie="menos" title="${filme ? 'Desmarcar o filme' : 'Um episódio a menos'}" aria-label="${filme ? 'Desmarcar o filme' : 'Um episódio a menos'}"${vistos ? '' : ' disabled'}>${icone('Minus')}</button>
@@ -295,13 +324,14 @@ function animeNoPainelHTML(f) {
           </select>
         </label>
       </div>
-      ${gradeHTML(f, iGrade, sel)}
       ${total && !filme ? `<div class="serie-barra" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${vistos}"><span style="width:${Math.round((vistos / total) * 100)}%"></span></div>` : ''}
       ${!filme && faltaTexto(total - vistos, t ? t.duracao : f.duracao, total) ? `<p class="serie-falta">${esc(faltaTexto(total - vistos, t ? t.duracao : f.duracao, total))}</p>` : ''}
       ${!t && episodiosNovos(f) ? `<p class="serie-novos">${icone('Sparkles')} ${episodiosNovos(f) === 1 ? '1 episódio novo' : `${episodiosNovos(f)} episódios novos`} para ver</p>` : ''}
       ${t && !temporadaLancada(t) ? '<p class="serie-proximo">Ainda não lançada.</p>' : ''}
       ${proximo ? `<p class="serie-proximo">${icone('CalendarClock')} ${esc(proximo)}</p>` : ''}
       ${ts.length ? ondeAssistirAnimeHTML(f, corrente, corrente ? ts.indexOf(corrente) : null) : ondeAssistirAnimeHTML(f)}
+      ${aberturasHTML(f, vista)}
+      ${listaEpisodiosHTML(f, iLista, vista)}
       ${removerAnimeHTML()}
     </div>`;
 }
@@ -382,6 +412,138 @@ const vezEhFilme = (f) => ehFilmeDaOrdem(temporadasDe(f).length ? temporadaCorre
 const rotuloDaVez = (f) => (vezEhFilme(f) ? 'Filme' : `Ep. ${proximoParaVer(f)}`);
 const textoDaVez = (f) => (vezEhFilme(f) ? 'o filme' : `o episódio ${proximoParaVer(f)}`);
 
+// ---- A lista de episódios ----
+//
+// Número, título, sinopse, imagem e duração de cada episódio (TMDB), com o ✓ de
+// visto de cada um. Vem do processo principal (api.episodiosSerie, com cache em
+// disco); aqui só guardamos a resposta enquanto o app está aberto. Sem chave do
+// TMDB, sem a série no TMDB ou sem internet, volta a grade de números (abaixo).
+const episodiosGuardados = new Map(); // "id:temporada:total" → { ok, episodios } ou { ok: false, motivo, em }
+const episodiosPedidos = new Set();
+const paginasEpisodios = new Map(); // "id:temporada" → página (temporadas com muitos episódios)
+const POR_PAGINA = 20;
+
+function carregarEpisodios(f, indice, chave) {
+  if (episodiosPedidos.has(chave)) return;
+  episodiosPedidos.add(chave);
+  api.episodiosSerie(f.id, indice).then((r) => {
+    episodiosGuardados.set(chave, r && r.ok ? r : { ok: false, motivo: (r && r.motivo) || 'rede', em: Date.now() });
+  }).catch(() => {
+    episodiosGuardados.set(chave, { ok: false, motivo: 'rede', em: Date.now() });
+  }).finally(() => {
+    episodiosPedidos.delete(chave);
+    if (estado.painelId === f.id) renderPainel();
+  });
+}
+
+const dataEpisodio = (iso) => {
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\./g, '');
+};
+
+function episodioHTML(e, indice, visto, saiu) {
+  const meta = [e.duracao ? `${e.duracao} min` : '', e.data ? dataEpisodio(e.data) : ''].filter(Boolean).join(' · ');
+  const longa = (e.sinopse || '').length > 130;
+  return `<li class="ep-item${visto ? ' visto' : ''}${saiu ? '' : ' futuro'}">
+    <div class="ep-imagem">${e.imagem ? `<img src="${esc(e.imagem)}" alt="" loading="lazy">` : `<span>${e.n}</span>`}</div>
+    <div class="ep-texto">
+      <b class="ep-titulo">${e.n}. ${esc(e.titulo || `Episódio ${e.n}`)}</b>
+      ${meta ? `<span class="ep-meta">${esc(meta)}</span>` : ''}
+      ${e.sinopse ? `<p class="ep-sinopse">${esc(e.sinopse)}</p>` : ''}
+      ${longa ? '<button class="ep-mais" data-serie="ep-mais" aria-expanded="false">mais</button>' : ''}
+    </div>
+    <button class="ep-check" data-serie="ep" data-t="${indice}" data-n="${e.n}" aria-pressed="${visto}" aria-label="Episódio ${e.n}: ${visto ? 'visto, desmarcar' : 'marcar como visto'}"${saiu || visto ? '' : ' disabled'}>${icone('Check')}</button>
+  </li>`;
+}
+
+function listaEpisodiosHTML(f, indice, vista) {
+  const ts = temporadasDe(f);
+  if (!ts.length) return '';
+  const t = indice === null ? null : ts[indice];
+  // Visão geral, filme ou sem TMDB: a grade de números (ou só o botão para ir à temporada).
+  if (!t || ehFilmeDaOrdem(t) || !estado.config.tmdbKey || !f.tmdbTvId) return gradeHTML(f, indice, vista);
+  const chave = `${f.id}:${indice}:${t.episodios || 0}`;
+  const r = episodiosGuardados.get(chave);
+  if (!r) {
+    carregarEpisodios(f, indice, chave);
+    return '<div class="ep-lista-bloco"><h3 class="ep-titulo-secao">Episódios</h3><p class="ep-carregando">Carregando os episódios…</p></div>';
+  }
+  if (!r.ok) {
+    // Sem internet: tenta de novo na próxima vez (passado meio minuto); os outros motivos não mudam sozinhos.
+    if (r.motivo === 'rede' && Date.now() - r.em > 30000) episodiosGuardados.delete(chave);
+    return gradeHTML(f, indice, vista);
+  }
+  const vistos = new Set(marcadosDe(t));
+  const noAr = episodiosNoAr(t);
+  const saiu = (n) => !['em exibição', 'não lançado'].includes(t.exibicao) || n <= noAr;
+  const eps = r.episodios;
+  let de = 0;
+  let ate = eps.length;
+  let navegacao = '';
+  if (eps.length > POR_PAGINA + 4) {
+    const paginas = Math.ceil(eps.length / POR_PAGINA);
+    const guardada = paginasEpisodios.get(`${f.id}:${indice}`);
+    const pagina = Math.min(paginas - 1, Math.max(0, guardada !== undefined ? guardada : Math.floor((primeiroQueFalta(t) - 1) / POR_PAGINA)));
+    de = pagina * POR_PAGINA;
+    ate = Math.min(eps.length, de + POR_PAGINA);
+    navegacao = `<div class="ep-paginas">
+      <button class="chip" data-serie="ep-pagina" data-d="-1" data-t="${indice}" data-pg="${pagina}"${pagina ? '' : ' disabled'} aria-label="Episódios anteriores">${icone('ChevronLeft')}</button>
+      <span>Episódios ${de + 1}–${ate} de ${eps.length}</span>
+      <button class="chip" data-serie="ep-pagina" data-d="1" data-t="${indice}" data-pg="${pagina}"${pagina < paginas - 1 ? '' : ' disabled'} aria-label="Próximos episódios">${icone('ChevronRight')}</button>
+    </div>`;
+  }
+  return `<div class="ep-lista-bloco">
+    <h3 class="ep-titulo-secao">Episódios</h3>
+    <ul class="ep-lista" aria-label="Episódios de ${esc(rotuloTemporada(f, t, indice))}">${eps.slice(de, ate).map((e) => episodioHTML(e, indice, vistos.has(e.n), saiu(e.n))).join('')}</ul>
+    ${navegacao}
+  </div>`;
+}
+
+// ---- Aberturas ----
+//
+// As aberturas do anime (ou da temporada em vista) vêm do YouTube, achadas como
+// os trailers (lib/trailer.js), e tocam no player embutido, sem sair do app.
+const aberturasAbertas = new Set(); // ids com a seção aberta
+const aberturasGuardadas = new Map(); // "id|título" → { ok, videos }
+const aberturasPedidas = new Set();
+const aberturaTocando = new Map(); // id → código do vídeo
+
+const tempoVideo = (s) => (Number.isFinite(s) ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '');
+
+function aberturasHTML(f, vista) {
+  if (!ehSerie(f)) return '';
+  const aberta = aberturasAbertas.has(f.id);
+  const botao = `<button class="chip serie-grade-abrir${aberta ? ' ativo' : ''}" data-serie="aberturas" aria-expanded="${aberta}">${icone('Music')} ${aberta ? 'Fechar aberturas' : 'Aberturas'}</button>`;
+  if (!aberta) return `<div class="aberturas">${botao}</div>`;
+  const t = vista === null ? null : temporadasDe(f)[vista];
+  const chave = `${f.id}|${(t && t.titulo) || f.titulo}`;
+  const r = aberturasGuardadas.get(chave);
+  let corpo;
+  if (!r) {
+    if (!aberturasPedidas.has(chave)) {
+      aberturasPedidas.add(chave);
+      api.aberturasAnime(f.id, vista).then((x) => aberturasGuardadas.set(chave, x && x.ok ? x : { ok: false, em: Date.now() }))
+        .catch(() => aberturasGuardadas.set(chave, { ok: false, em: Date.now() }))
+        .finally(() => { aberturasPedidas.delete(chave); if (estado.painelId === f.id) renderPainel(); });
+    }
+    corpo = '<p class="ep-carregando">Procurando as aberturas no YouTube…</p>';
+  } else if (!r.ok || !r.videos.length) {
+    if (!r.ok && Date.now() - r.em > 30000) aberturasGuardadas.delete(chave);
+    corpo = `<p class="ep-carregando">${r.ok ? 'Não achei aberturas deste anime.' : 'Sem conexão com o YouTube. Tente de novo em instantes.'}</p>`;
+  } else {
+    const tocando = r.videos.find((v) => v.id === aberturaTocando.get(f.id));
+    const item = (v) => {
+      const ativo = Boolean(tocando && tocando.id === v.id);
+      return `<li><button class="ab-item${ativo ? ' ativa' : ''}" data-serie="abertura" data-v="${esc(v.id)}" aria-pressed="${ativo}">
+        <span class="ab-capa"><img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy">${icone(ativo ? 'Pause' : 'Play', { preenchido: true })}</span>
+        <span class="ab-titulo">${esc(v.titulo)}</span><span class="ab-tempo">${tempoVideo(v.duracao)}</span></button></li>`;
+    };
+    corpo = `${tocando ? `<div class="ab-player"><iframe src="${urlTrailer(tocando.id, { mudo: false, controles: true })}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${esc(tocando.titulo)}"></iframe></div>` : ''}
+      <ul class="ab-lista">${r.videos.map(item).join('')}</ul>`;
+  }
+  return `<div class="aberturas aberta">${botao}<div class="ab-corpo">${corpo}</div></div>`;
+}
+
 // ---- A grade de episódios ----
 //
 // Para marcar um episódio avulso (viu o 7 sem ter visto o 5). Fica fechada:
@@ -391,11 +553,11 @@ const gradesAbertas = new Set();
 function gradeHTML(f, indice, sel) {
   const ts = temporadasDe(f);
   if (!ts.length) return '';
-  // Em "Tudo", com várias temporadas, o botão abre a grade da temporada da vez.
+  // Na visão geral (todas as temporadas) o botão leva à temporada da vez, com a lista.
   if (indice === null) {
     const c = temporadaCorrente(f);
     if (!c || ehFilmeDaOrdem(c)) return '';
-    return `<button class="chip serie-grade-abrir" data-serie="grade-da-vez" data-t="${ts.indexOf(c)}">${icone('LayoutGrid')} Escolher episódios</button>`;
+    return `<button class="chip serie-grade-abrir" data-serie="ver-da-vez" data-t="${ts.indexOf(c)}">${icone('List')} Ver os episódios de ${esc(rotuloTemporada(f, c, ts.indexOf(c)))}</button>`;
   }
   const t = ts[indice];
   if (!t || ehFilmeDaOrdem(t)) return '';
@@ -431,7 +593,7 @@ async function mudarEpisodios(id, delta, indice) {
   const f = porId(id);
   if (!ehSerie(f)) return;
   const antes = f.status;
-  const novo = await api.progressoSerie(id, delta, hoje(), indice === undefined ? indiceTemporada(f) : indice);
+  const novo = await api.progressoSerie(id, delta, hoje(), indice === undefined ? temporadaVista(f) : indice);
   if (!novo) return;
   Object.assign(f, novo);
   if (f.status === 'completo' && antes !== 'completo') aviso(`“${f.titulo}” completo!`, { tipo: 'ok' });
@@ -458,7 +620,7 @@ async function viMaisUm(id) {
 function digitarEpisodios(botao, id) {
   const f = porId(id);
   if (!ehSerie(f)) return;
-  const sel = indiceTemporada(f);
+  const sel = temporadaVista(f);
   const t = sel === null ? null : temporadasDe(f)[sel];
   const total = Number(t ? t.episodios : f.episodios) || 0;
   const campo = document.createElement('input');
@@ -489,9 +651,10 @@ function digitarEpisodios(botao, id) {
 
 // ---- Assistir ----
 
-// O botão Assistir de um anime abre a plataforma oficial (a preferida, se o
-// anime estiver nela) em vez do Stremio. Devolve false para seguir com o Stremio.
-const assistirOficial = () => nandrollLigado() && estado.config.nandrollAssistir !== 'stremio';
+// O botão Assistir de um anime abre sempre o Stremio (abrirStremio, em app.js),
+// como nos filmes: pelo código do IMDb da série (do TMDB) ou, sem ele, pela busca
+// do Stremio. As plataformas oficiais ficam em "Onde assistir", no painel.
+// Aqui, só a plataforma preferida (a última em que a pessoa clicou), usada na agenda.
 function linkParaAssistir(f) {
   const ts = temporadasDe(f);
   const t = ts.length ? temporadaCorrente(f) : null;
@@ -501,17 +664,6 @@ function linkParaAssistir(f) {
   const preferida = String(estado.config.nandrollPlataforma || '').toLowerCase();
   const l = links.find((x) => String(x.site).toLowerCase() === preferida) || links[0];
   return { ...l, temporada: t ? ts.indexOf(t) : null };
-}
-async function assistirAnime(id) {
-  const f = porId(id);
-  if (!ehAnime(f) || !assistirOficial()) return false;
-  const l = linkParaAssistir(f);
-  if (!l) return false;
-  const r = await api.abrirPlataforma(id, l.i, l.temporada);
-  if (!r || !r.ok) return false;
-  aviso(`Abrindo em ${l.site}${ehSerie(f) ? ` · ${textoDaVez(f)}` : ''}`, ehSerie(f) && f.status !== 'completo'
-    ? { acao: { rotulo: 'Vi mais um', fn: () => viMaisUm(id) }, duracao: 8000 } : {});
-  return true;
 }
 
 async function mudarStatusSerie(id, status) {
@@ -544,15 +696,44 @@ function ligarAnimeNoPainel() {
         if (gradesAbertas.has(id)) gradesAbertas.delete(id); else gradesAbertas.add(id);
         renderPainel();
         break;
-      case 'grade-da-vez':
+      case 'ver-da-vez':
         temporadaEscolhida.set(id, t);
-        gradesAbertas.add(id);
+        renderPainel();
+        break;
+      case 'temp-menu': {
+        const menu = $('.temp-menu', b.parentElement);
+        const abrir = menu.hidden;
+        fecharMenusTemporada();
+        menu.hidden = !abrir;
+        b.setAttribute('aria-expanded', String(abrir));
+        if (abrir) ($('.temp-opcao.ativa', menu) || $('.temp-opcao', menu)).focus({ preventScroll: true });
+        break;
+      }
+      case 'ep-mais': {
+        const item = b.closest('.ep-item');
+        const aberta = item.classList.toggle('aberta');
+        b.textContent = aberta ? 'menos' : 'mais';
+        b.setAttribute('aria-expanded', String(aberta));
+        break;
+      }
+      case 'ep-pagina':
+        paginasEpisodios.set(`${id}:${t}`, Number(b.dataset.pg) + Number(b.dataset.d));
+        renderPainel();
+        break;
+      case 'aberturas':
+        if (aberturasAbertas.has(id)) { aberturasAbertas.delete(id); aberturaTocando.delete(id); } else aberturasAbertas.add(id);
+        renderPainel();
+        break;
+      case 'abertura':
+        // Tocar uma abertura silencia o trailer do alto do painel (dois sons ao mesmo tempo atrapalham).
+        if (aberturaTocando.get(id) === b.dataset.v) aberturaTocando.delete(id); else aberturaTocando.set(id, b.dataset.v);
+        comandoTrailer($('#painel .painel-video'), 'pauseVideo');
         renderPainel();
         break;
       case 'ep': alternarEp(id, t, Number(b.dataset.n)); break;
-      case 'stremio': abrirStremio(id, { stremio: true }); break;
+      case 'stremio': abrirStremio(id); break;
       case 'temporada':
-        if (t === null) temporadaEscolhida.delete(id); else temporadaEscolhida.set(id, t);
+        temporadaEscolhida.set(id, t === null ? 'tudo' : t);
         renderPainel();
         break;
       case 'plataforma':
@@ -568,6 +749,23 @@ function ligarAnimeNoPainel() {
     if (e.target.matches('[data-serie-status]') && estado.painelId) mudarStatusSerie(estado.painelId, e.target.value);
   });
 }
+
+// O menu de temporadas fecha ao clicar fora ou com Esc (o Esc não fecha o painel junto).
+function fecharMenusTemporada() {
+  for (const m of $$('.temp-menu:not([hidden])')) {
+    m.hidden = true;
+    $('.temp-botao', m.parentElement)?.setAttribute('aria-expanded', 'false');
+  }
+}
+document.addEventListener('click', (e) => { if (!e.target.closest('[data-temp-seletor]')) fecharMenusTemporada(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !$('.temp-menu:not([hidden])')) return;
+  e.stopPropagation();
+  e.preventDefault();
+  const botao = $('.temp-menu:not([hidden])').parentElement.querySelector('.temp-botao');
+  fecharMenusTemporada();
+  if (botao) botao.focus({ preventScroll: true });
+}, true);
 
 // ---- Adicionar: buscar entre filmes (TMDB) ou animes (AniList) ----
 

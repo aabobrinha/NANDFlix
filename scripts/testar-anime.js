@@ -407,3 +407,47 @@ test('importar: o filme ligado à série entra na série, na ordem', () => {
   assert.strictEqual(filmes.length, 0);
   assert.deepStrictEqual(series[0].temporadas.map((t) => [t.anilistId, t.vistos]), [[1, 12], [50, 1]]);
 });
+
+// ---- Episódios: mapa entre as temporadas da AniList e as do TMDB ----
+const tmdbLib = require('../lib/tmdb');
+const { Episodios } = require('../lib/episodios');
+
+test('mapa de temporadas: uma a uma quando as contagens batem', () => {
+  const tmdb = [{ numero: 1, episodios: 12 }, { numero: 2, episodios: 12 }];
+  assert.deepStrictEqual(tmdbLib.mapearTemporadas(tmdb, [12, 12]), [{ de: 1, ate: 12 }, { de: 13, ate: 24 }]);
+});
+test('mapa de temporadas: duas partes da AniList dentro de uma temporada do TMDB', () => {
+  const tmdb = [{ numero: 1, episodios: 25 }, { numero: 2, episodios: 12 }, { numero: 3, episodios: 22 }];
+  const m = tmdbLib.mapearTemporadas(tmdb, [25, 12, 12, 10]);
+  assert.deepStrictEqual(m[2], { de: 38, ate: 49 });
+  assert.deepStrictEqual(m[3], { de: 50, ate: 59 });
+});
+test('mapa de temporadas: encosta no começo da temporada do TMDB (resumo contado de um lado só)', () => {
+  const tmdb = [{ numero: 1, episodios: 13 }, { numero: 2, episodios: 12 }];
+  assert.deepStrictEqual(tmdbLib.mapearTemporadas(tmdb, [12, 12])[1], { de: 14, ate: 25 });
+});
+test('mapa de temporadas: última sem total pega o resto; além do TMDB vira null', () => {
+  const tmdb = [{ numero: 1, episodios: 12 }, { numero: 2, episodios: 10 }];
+  assert.deepStrictEqual(tmdbLib.mapearTemporadas(tmdb, [12, 0])[1], { de: 13, ate: 22 });
+  assert.strictEqual(tmdbLib.mapearTemporadas(tmdb, [12, 10, 8])[2], null);
+});
+test('localizar episódio corrido na temporada do TMDB', () => {
+  const tmdb = [{ numero: 1, episodios: 25 }, { numero: 2, episodios: 12 }];
+  assert.deepStrictEqual(tmdbLib.localizarEpisodio(tmdb, 26), { temporada: 2, episodio: 1 });
+  assert.strictEqual(tmdbLib.localizarEpisodio(tmdb, 38), null);
+});
+test('episódios: sem chave, sem série no TMDB ou filme, degrada com o motivo', async () => {
+  const sem = (chave) => new Episodios({ chave: () => chave, lerCache: () => null, gravarCache: () => {} });
+  const f = { tmdbTvId: 5, temporadas: [{ formato: 'TV', episodios: 12 }, { formato: 'MOVIE', episodios: 1 }] };
+  assert.strictEqual((await sem('').daTemporada(f, 0)).motivo, 'chave');
+  assert.strictEqual((await sem('x').daTemporada({ ...f, tmdbTvId: '' }, 0)).motivo, 'serie');
+  assert.strictEqual((await sem('x').daTemporada(f, 1)).motivo, 'filme');
+});
+test('episódios: usa o cache em disco sem internet', async () => {
+  const eps = [{ n: 1, titulo: 'A', sinopse: 's', imagem: '', duracao: 24, data: '2020-01-01' }, { n: 2, titulo: 'B', sinopse: '', imagem: '', duracao: 24, data: '2020-01-08' }];
+  const cache = { 7: { estrutura: { em: Date.now(), dados: [{ numero: 1, episodios: 2 }] }, 1: { em: Date.now(), dados: eps } } };
+  const e = new Episodios({ chave: () => 'x', lerCache: () => cache, gravarCache: () => {} });
+  const r = await e.daTemporada({ tmdbTvId: 7, temporadas: [{ formato: 'TV', episodios: 2 }] }, 0);
+  assert.ok(r.ok);
+  assert.deepStrictEqual(r.episodios.map((x) => [x.n, x.titulo]), [[1, 'A'], [2, 'B']]);
+});

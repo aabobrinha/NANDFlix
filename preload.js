@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('api', {
   aoProgressoInfos: ouvir('infos:progresso'),
   aoFimInfos: ouvir('infos:fim'),
   abrirStremio: chamar('abrir:stremio'),
+  episodiosSerie: chamar('anime:episodios'),
+  aberturasAnime: chamar('anime:aberturas'),
   abrirLetterboxd: chamar('abrir:letterboxd'),
   abrirLink: chamar('abrir:link'),
   extrasAgora: chamar('extras:agora'),

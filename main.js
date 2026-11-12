@@ -18,6 +18,7 @@ const stremio = require('./lib/stremio');
 const { Marcas } = require('./lib/marcas');
 const { Nuvem } = require('./lib/nuvem');
 const { Extras } = require('./lib/extras');
+const { Episodios } = require('./lib/episodios');
 const { Acervo, listaPremios } = require('./lib/premios');
 
 app.setName(armazem.NOME_APP);
@@ -728,7 +729,7 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
   // (watchlistHoje é o formato antigo, de um dia só; o app o apaga ao salvar o novo).
   // filmesDoMes: { 'AAAA-MM': id }, o filme favorito de cada mês (só aparece no calendário).
   // tierlist: [{ id, nome, cor, filmes: [ids] }], as tiers de cima para baixo.
-  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
+  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
   for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
   if ('nandroll' in mudancas) { config.nandroll = Boolean(mudancas.nandroll); if (config.nandroll) atualizarSeriesEmExibicao(); }
   if ('omdbKey' in mudancas) config.limiteAtingidoEm = null;
@@ -979,6 +980,11 @@ function trazerStremioParaFrente() {
 ipcMain.handle('abrir:stremio', async (_e, id, forcarWeb) => {
   const filme = filmes.find((f) => f.id === id);
   if (!filme) return { ok: false };
+  // Série de anime sem o código do IMDb (a capa do TMDB não veio): pede ao TMDB, para o Stremio abrir direto nela.
+  if (ehSerie(filme) && !filme.imdbID && filme.tmdbTvId && config.tmdbKey) {
+    const imdb = await tmdb.imdbDaSerie(config.tmdbKey, filme.tmdbTvId).catch(() => '');
+    if (imdb) atualizarFilme(id, { imdbID: imdb });
+  }
   const links = linksStremio(filme);
   if (forcarWeb || config.stremio === 'web') {
     await shell.openExternal(links.web);
@@ -1197,6 +1203,26 @@ ipcMain.handle('capa:usarArquivo', async (_e, id, caminho) => {
   });
   gravarAgora();
   return { filme: atualizado };
+});
+
+// ---------- Episódios e aberturas dos animes ----------
+
+// Título, sinopse e imagem de cada episódio (TMDB), num cache à parte (lib/episodios.js).
+const episodios = new Episodios({
+  chave: () => config.tmdbKey,
+  lerCache: () => armazem.lerJSON(path.join(PASTA, 'episodios.json'), null),
+  gravarCache: (d) => armazem.gravarJSON(path.join(PASTA, 'episodios.json'), d),
+});
+ipcMain.handle('anime:episodios', async (_e, id, indice) => {
+  const f = filmes.find((x) => x.id === id);
+  if (!ehSerie(f)) return { ok: false, motivo: 'serie' };
+  try { return await episodios.daTemporada(f, indice); } catch { return { ok: false, motivo: 'rede' }; }
+});
+// As aberturas no YouTube (como os trailers); a pessoa toca no player embutido.
+ipcMain.handle('anime:aberturas', async (_e, id, indice) => {
+  const f = filmes.find((x) => x.id === id);
+  if (!f) return { ok: false, motivo: 'serie' };
+  try { return { ok: true, videos: await trailer.aberturasDe(f, Number.isInteger(indice) ? indice : null) }; } catch { return { ok: false, motivo: 'rede' }; }
 });
 
 // ---------- Trailer e detalhes ----------
