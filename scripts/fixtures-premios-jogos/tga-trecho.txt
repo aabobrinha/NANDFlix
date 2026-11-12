@@ -1,0 +1,89 @@
+{{Infobox award|name=The Game Awards 2024}}
+== Background ==
+{| class=wikitable
+! Nome
+! Ano
+|-
+| Fora da seção
+| 2024
+|}
+== Winners and nominees ==
+Texto solto <ref name="x"/> da seção.
+
+=== Awards ===
+Winners are listed first, highlighted in '''boldface''', and indicated with a double dagger ({{double-dagger}}).
+
+==== Media ====
+{| class=wikitable
+|-
+! style="background:#eedd82; width:50em;" | [[The Game Award for Game of the Year|Game of the Year]]
+! style="background:#eedd82; width:50em;" | {{color|black|Best Game Direction}}
+|-
+| valign="top" |
+* '''''[[Astro Bot]]'' – [[Team Asobi]] / [[Sony Interactive Entertainment]]'''{{hsp}}{{double-dagger}}
+** ''[[Balatro]]'' – LocalThunk / Playstack
+** ''[[Silent Hill 2 (2024 video game)|Silent Hill 2]]'' – [[Bloober Team]] / [[Konami]]
+| valign="top" |
+* '''''[[Black Myth: Wukong]]'' – [[Game Science]]'''{{hsp}}{{double-dagger}}
+** ''[[Astro Bot]]'' – [[Team Asobi]]
+|-
+! style="background:#eedd82" | {{color|black|Best Score and Music{{efn|Antes: [[Best Score/Soundtrack]]<ref name="y">{{cite web|title=Nota}}</ref>}}}}
+! style="background:#eedd82" | {{color|black|Best Performance}}
+|-
+| valign="top" |
+* '''''[[Final Fantasy VII Rebirth]]'' – [[Square Enix]]'''{{hsp}}{{double-dagger}}
+** ''[[Astro Bot]]'' – [[Team Asobi]]
+| valign="top" |
+* '''[[Melina Juergens]] as [[Senua (Hellblade)|Senua]]'''&nbsp;– '''''[[Senua's Saga: Hellblade II]]'''''{{double-dagger}}
+** [[Troy Baker]] as Joel&nbsp;– ''[[The Last of Us]]''
+|-
+! style="background:#eedd82" | {{color|black|Most Anticipated Game}}
+! style="background:#eedd82" | {{color|black|Best Adaptation}}
+|-
+| valign="top" |
+* '''''[[Grand Theft Auto VI]]'' – [[Rockstar Games]]'''{{hsp}}{{double-dagger}}
+** ''[[Marvel 1943]]'' – Skydance
+| valign="top" |
+* '''''[[Fallout (American TV series)|Fallout]]'' – [[Amazon MGM Studios]]'''{{hsp}}{{double-dagger}}
+** ''[[Arcane (TV series)|Arcane]]'' – Netflix
+|}
+
+==== Esports and creators ====
+{| class=wikitable
+|-
+! style="background:#eedd82" | {{color|black|Best Esports Athlete}}
+! style="background:#eedd82" | {{color|black|Best Esports Team}}
+|-
+| valign="top" |
+* '''[[Lee "Faker" Sang-hyeok]]'''{{hsp}}{{double-dagger}}
+** Neta "33" Shapira
+| valign="top" |
+* '''[[T1 (esports)|T1]] (''League of Legends''{{--)}}'''{{hsp}}{{double-dagger}}
+** [[Gen.G]] (''League of Legends''{{--)}}
+|-
+! style="background:#eedd82" colspan="2" | {{color|black|Player's Voice{{efn|Voto 100% do público}}}}
+|-
+| valign="top" colspan="2" |
+* '''''[[Black Myth: Wukong]]'' – [[Game Science]]'''{{hsp}}{{double-dagger}}
+** ''[[Balatro]]'' – LocalThunk
+|}
+
+==== Honorary awards ====
+{| class=wikitable
+|-
+! Global Gaming Citizens
+|-
+| valign="top" |
+* Laura Carter
+* Fulano de Tal
+|}
+
+== Presenters and performers ==
+{| class=wikitable
+|-
+! Game(s)
+! Performer
+|-
+| valign="top" |
+* ''[[Música Qualquer]]'' – ''Alguém''
+|}

@@ -15,10 +15,48 @@
 
 // A lista dos prêmios (lib/premios.js → listaPremios): Oscar, Globo de Ouro,
 // Critics Choice, BAFTA, SAG, Spirit, Gotham, Cannes, Veneza e Berlim.
-let PREMIOS_INFO = []; // [{ id, nome, indicado, venceu, quando, festival }]
+// E os de jogos (The Game Awards, BAFTA Games; tipo 'jogo'), que só aparecem onde há jogos
+// (nandplay e nandhub) e ligam o indicado ao jogo da lista por igdb / igdbSlug / steam.
+let PREMIOS_INFO = []; // [{ id, nome, indicado, venceu, quando, festival, tipo }]
 const LISTA_PREMIOS = []; // os ids, na ordem
 const NOMES_PREMIOS = {};
-const infoPremio = (id) => PREMIOS_INFO.find((p) => p.id === id) || { id, nome: id, indicado: `Indicado: ${id}`, venceu: `Venceu: ${id}`, quando: '', festival: false };
+const infoPremio = (id) => PREMIOS_INFO.find((p) => p.id === id) || { id, nome: id, indicado: `Indicado: ${id}`, venceu: `Venceu: ${id}`, quando: '', festival: false, tipo: 'filme' };
+
+// ---- Filmes e jogos ----
+
+// Um item de jogo (contrato do nandplay: tipo 'jogo'). Usa o ehJogo() global quando o registro das
+// plataformas o declara; sem ele, olha o tipo.
+const itemEhJogo = (f) => (typeof ehJogo === 'function' ? ehJogo(f) : Boolean(f) && f.tipo === 'jogo');
+const premioEhDeJogo = (id) => infoPremio(id).tipo === 'jogo';
+// "Já jogou": começou o jogo (jogando, pausado, zerado, 100% ou largou). "Quero jogar" ainda não é jogar.
+const jogoJogado = (f) => Boolean(f) && ['jogando', 'pausado', 'zerado', 'cem', 'larguei'].includes(f.status);
+const STATUS_DO_JOGO = { quero: 'Quero jogar', jogando: 'Jogando', pausado: 'Pausado', zerado: 'Zerado', cem: '100%', larguei: 'Larguei' };
+// "Já viu" (filme) ou "já jogou" (jogo): o que conta na cédula.
+const itemFeito = (premio, f) => Boolean(f) && (premioEhDeJogo(premio) ? jogoJogado(f) : Boolean(f.visto));
+
+// Os tipos de prêmio da plataforma em uso: filmes no nandflix, jogos no nandplay, os dois no
+// nandhub (as das plataformas habilitadas); no nandchan não há prêmios.
+function tiposDePremioDaPlataforma() {
+  const p = plataformaAtual();
+  const ids = p.hub ? plataformasHabilitadas() : [p.id];
+  const tipos = new Set();
+  if (ids.includes('nandflix')) tipos.add('filme');
+  if (ids.includes('nandplay')) tipos.add('jogo');
+  return tipos;
+}
+// Os prêmios que aparecem agora (a lista, o filtro, o sorteio e a tela).
+const premiosVisiveis = () => { const t = tiposDePremioDaPlataforma(); return LISTA_PREMIOS.filter((id) => t.has(infoPremio(id).tipo || 'filme')); };
+
+// O vocabulário do prêmio: filmes pelo registro do nandflix, jogos pelo do nandplay (no hub, o
+// da plataforma de verdade, não "títulos"), com o verbo que combina: ver / jogar.
+function vocPremio(premio) {
+  const jogo = premioEhDeJogo(premio);
+  const p = plataformaPorId(jogo ? 'nandplay' : 'nandflix');
+  const itens = p ? voc('itens', undefined, p) : (jogo ? 'jogos' : 'filmes');
+  return jogo
+    ? { itens, ver: 'jogar', viu: 'jogou', feito: 'Joguei', qtd: (n) => (p ? voc('qtd', n, p) : `${n} ${n === 1 ? 'jogo' : 'jogos'}`) }
+    : { itens, ver: 'ver', viu: 'viu', feito: 'Visto', qtd: (n) => (p ? voc('qtd', n, p) : `${n} ${n === 1 ? 'filme' : 'filmes'}`) };
+}
 const premiosDados = {}; // id → { nome, cerimonias, filmes }
 let indicePremios = null;
 const cachePremiosFilme = new Map();
@@ -61,23 +99,42 @@ async function atualizarPremios({ forcar = false, so = null } = {}) {
   if (forcar && erros.length) aviso(`Não deu para atualizar. ${erros.join(' · ')}`, { tipo: 'erro', duracao: 7000 });
 }
 
+// Os ids do indicado: { imdb, tmdb } (filmes) ou { igdbSlug, igdb, steam } (jogos).
 const idsDoIndicado = (premio, x) => (x.wiki && premiosDados[premio] && premiosDados[premio].filmes[x.wiki]) || {};
+const temIdsDeJogo = (ids) => Boolean(ids.igdb || ids.igdbSlug || ids.steam);
+// O item da lista é este jogo? (pelo número ou slug do IGDB, ou pela Steam)
+const mesmoJogo = (f, ids) => Boolean(f) && ((ids.igdb && String(f.igdb) === String(ids.igdb)) || (ids.igdbSlug && f.igdbSlug === ids.igdbSlug) || (ids.steam && String(f.steam) === String(ids.steam)));
 
-// Cada indicação, achável pelo IMDb, pelo TMDB ou (sem nenhum dos dois) pelo título.
+// Cada indicação, achável pelo IMDb, pelo TMDB (filmes), pelo IGDB ou pela Steam (jogos) ou
+// (sem nenhum id) pelo título. Os jogos "não lançados" (Most Anticipated Game) não entram: ainda
+// não são jogo indicado/premiado para o selo do jogo.
 function indice() {
   if (indicePremios) return indicePremios;
   const porImdb = new Map();
   const porTmdb = new Map();
   const porTitulo = new Map();
+  const porIgdb = new Map();
+  const porSlug = new Map();
+  const porSteam = new Map();
   const add = (m, k, r) => { if (!k) return; const l = m.get(k); if (l) l.push(r); else m.set(k, [r]); };
   for (const premio of LISTA_PREMIOS) {
     const d = premiosDados[premio];
     if (!d) continue;
+    const jogo = premioEhDeJogo(premio);
     for (const c of d.cerimonias) {
       for (const k of c.categorias) {
+        if (k.naoLancado) continue;
         for (const x of k.indicados) {
+          if (!x.titulo) continue; // pessoa/time: não é um jogo
           const ids = idsDoIndicado(premio, x);
           const r = { premio, numero: c.numero, ano: c.ano, chave: k.chave, nome: k.nome, pessoa: x.pessoa, venceu: x.venceu };
+          if (jogo) {
+            add(porIgdb, ids.igdb && String(ids.igdb), r);
+            add(porSlug, ids.igdbSlug, r);
+            add(porSteam, ids.steam && String(ids.steam), r);
+            if (!temIdsDeJogo(ids)) add(porTitulo, `jogo|${normalizar(x.titulo)}`, r);
+            continue;
+          }
           add(porImdb, ids.imdb, r);
           add(porTmdb, ids.tmdb && String(ids.tmdb), r);
           if (!ids.imdb && !ids.tmdb) add(porTitulo, normalizar(x.titulo), r);
@@ -85,32 +142,55 @@ function indice() {
       }
     }
   }
-  indicePremios = { porImdb, porTmdb, porTitulo };
+  indicePremios = { porImdb, porTmdb, porTitulo, porIgdb, porSlug, porSteam };
   return indicePremios;
 }
 
-// As indicações de um filme (da lista ou de fora): [{ premio, numero, ano, chave, nome, pessoa, venceu }].
+// As indicações de um filme ou jogo (da lista ou de fora): [{ premio, numero, ano, chave, nome, pessoa, venceu }].
 function premiosDoFilme(f) {
   if (!f) return [];
-  const chave = `${f.id}|${f.imdbID}|${f.tmdbId}|${f.titulo}|${f.ano}`;
+  const jogo = itemEhJogo(f);
+  const chave = jogo ? `${f.id}|${f.igdb}|${f.igdbSlug}|${f.steam}|${f.titulo}|${f.ano}` : `${f.id}|${f.imdbID}|${f.tmdbId}|${f.titulo}|${f.ano}`;
   if (cachePremiosFilme.has(chave)) return cachePremiosFilme.get(chave);
-  const { porImdb, porTmdb, porTitulo } = indice();
-  const achados = new Set([...(porImdb.get(f.imdbID) || []), ...(porTmdb.get(String(f.tmdbId || '')) || [])]);
-  // Sem código: pelo título, se o ano bate (a cerimônia é no ano seguinte ao do filme).
+  const { porImdb, porTmdb, porTitulo, porIgdb, porSlug, porSteam } = indice();
   const ano = anoNumero(f.ano);
-  // (Num festival, o filme é do mesmo ano do festival.)
-  for (const r of porTitulo.get(normalizar(f.titulo)) || []) if (Number.isFinite(ano) && Math.abs(r.ano - (infoPremio(r.premio).festival ? 0 : 1) - ano) <= 1) achados.add(r);
+  let achados;
+  if (jogo) {
+    achados = new Set([...(porIgdb.get(String(f.igdb || '')) || []), ...(porSlug.get(f.igdbSlug || '') || []), ...(porSteam.get(String(f.steam || '')) || [])]);
+    // Sem id: pelo título, com o ano a um de distância (o TGA é no ano do jogo; o BAFTA, no seguinte).
+    for (const r of porTitulo.get(`jogo|${normalizar(f.titulo)}`) || []) if (Number.isFinite(ano) && Math.abs(r.ano - ano) <= 1) achados.add(r);
+  } else {
+    achados = new Set([...(porImdb.get(f.imdbID) || []), ...(porTmdb.get(String(f.tmdbId || '')) || [])]);
+    // Sem código: pelo título, se o ano bate (a cerimônia é no ano seguinte ao do filme).
+    // (Num festival, o filme é do mesmo ano do festival.)
+    for (const r of porTitulo.get(normalizar(f.titulo)) || []) if (Number.isFinite(ano) && Math.abs(r.ano - (infoPremio(r.premio).festival ? 0 : 1) - ano) <= 1) achados.add(r);
+  }
   const lista = [...achados].sort((a, b) => b.numero - a.numero || Number(b.venceu) - Number(a.venceu));
   cachePremiosFilme.set(chave, lista);
   return lista;
 }
 
-// O filme da sua lista que é este indicado (ou null).
+// O filme ou jogo da sua lista que é este indicado (ou null). Indicado sem jogo (pessoa/time) não tem item.
 function filmeDoIndicado(premio, x, cerimonia) {
+  if (!x.titulo) return null;
   const ids = idsDoIndicado(premio, x);
-  return estado.filmes.find((f) => (ids.imdb && f.imdbID === ids.imdb) || (ids.tmdb && String(f.tmdbId) === String(ids.tmdb)))
-    || (!ids.imdb && !ids.tmdb ? estado.filmes.find((f) => normalizar(f.titulo) === normalizar(x.titulo) && Math.abs(anoNumero(f.ano) - (cerimonia.ano - (infoPremio(premio).festival ? 0 : 1))) <= 1) : null)
+  if (premioEhDeJogo(premio)) {
+    const jogos = estado.filmes.filter(itemEhJogo);
+    return jogos.find((f) => mesmoJogo(f, ids))
+      || (!temIdsDeJogo(ids) ? jogos.find((f) => normalizar(f.titulo) === normalizar(x.titulo) && Math.abs(anoNumero(f.ano) - cerimonia.ano) <= 1) : null)
+      || null;
+  }
+  return estado.filmes.find((f) => !itemEhJogo(f) && ((ids.imdb && f.imdbID === ids.imdb) || (ids.tmdb && String(f.tmdbId) === String(ids.tmdb))))
+    || (!ids.imdb && !ids.tmdb ? estado.filmes.find((f) => !itemEhJogo(f) && normalizar(f.titulo) === normalizar(x.titulo) && Math.abs(anoNumero(f.ano) - (cerimonia.ano - (infoPremio(premio).festival ? 0 : 1))) <= 1) : null)
     || null;
+}
+
+// A página de um jogo indicado que não está na sua lista. Ponto de ligação: outro lote (a página
+// de jogo fora da lista) define abrirJogoExterno(ids, indicado); sem ele, não faz nada (a cédula
+// só mostra o nome). `ids` = { igdb, igdbSlug, steam }. Devolve se abriu algo.
+function abrirIndicadoJogo(ids, x) {
+  if (typeof abrirJogoExterno === 'function' && temIdsDeJogo(ids)) { abrirJogoExterno(ids, x); return true; }
+  return false;
 }
 
 // ---- Filtros (barra da lista, sorteio, tierlist) ----
@@ -157,8 +237,9 @@ function categoriasNaLista(premio) {
 // Escolher um prêmio, indicados ou vencedores, e (opcional) uma categoria.
 function escolherCategoriaPremio(premioInicial = null) {
   const qtd = (filtro) => itensDaPlataforma().filter((f) => passaPremio(f, filtro)).length;
-  const comFilmes = LISTA_PREMIOS.filter((p) => qtd(`${p}:indicado`));
-  let [premio, tipo] = estado.premio && !estado.premio.startsWith('*') ? estado.premio.split(':') : [premioInicial || comFilmes[0] || 'oscar', 'indicado'];
+  const visiveis = premiosVisiveis();
+  const comFilmes = visiveis.filter((p) => qtd(`${p}:indicado`));
+  let [premio, tipo] = estado.premio && !estado.premio.startsWith('*') ? estado.premio.split(':') : [premioInicial || comFilmes[0] || visiveis[0] || 'oscar', 'indicado'];
   abrirModal(`${cabecalhoModal('Filtrar por prêmio')}
     <div class="modal-corpo filtros-sorteio">
       <div class="secao"><h3>Prêmio</h3><div class="chips-linha" data-secao="premio"></div></div>
@@ -168,7 +249,7 @@ function escolherCategoriaPremio(premioInicial = null) {
     <div class="modal-rodape"><span class="filtros-contagem" id="premio-contagem"></span><button class="btn btn-primario" id="premio-aplicar">Mostrar</button></div>`, 'modal-filtros');
   const desenhar = () => {
     const info = infoPremio(premio);
-    $('[data-secao="premio"]', modal).innerHTML = (comFilmes.length ? comFilmes : LISTA_PREMIOS)
+    $('[data-secao="premio"]', modal).innerHTML = (comFilmes.length ? comFilmes : visiveis)
       .map((p) => `<button class="chip${p === premio ? ' ativo' : ''}" data-premio-escolha="${p}" aria-pressed="${p === premio}">${esc(NOMES_PREMIOS[p])}<span class="chip-qtd">${qtd(`${p}:indicado`) || ''}</span></button>`).join('');
     $('[data-secao="tipo"]', modal).innerHTML = [['indicado', info.festival ? 'Na competição' : 'Indicados'], ['venceu', info.festival ? 'Premiados' : 'Vencedores']]
       .map(([v, r]) => `<button class="chip${tipo === v ? ' ativo' : ''}" data-tipo="${v}" aria-pressed="${tipo === v}">${r}</button>`).join('');
@@ -176,9 +257,9 @@ function escolherCategoriaPremio(premioInicial = null) {
     $('[data-secao="cats"]', modal).innerHTML = cats.length ? cats.map((c) => {
       const n = qtd(`${premio}:${tipo}:${c.chave}`);
       return `<button class="chip" data-cat="${esc(c.chave)}"${n ? '' : ' disabled'}>${esc(c.nome)}<span class="chip-qtd">${n}</span></button>`;
-    }).join('') : '<p>Nenhum filme da sua lista foi indicado a este prêmio.</p>';
+    }).join('') : `<p>Nenhum ${esc(vocPremio(premio).itens.replace(/s$/, ''))} da sua lista foi indicado a este prêmio.</p>`;
     const n = qtd(`${premio}:${tipo}`);
-    $('#premio-contagem', modal).textContent = n === 1 ? '1 filme' : `${n} filmes`;
+    $('#premio-contagem', modal).textContent = vocPremio(premio).qtd(n);
     $('#premio-aplicar', modal).disabled = !n;
   };
   $('.filtros-sorteio', modal).addEventListener('click', (e) => {
@@ -224,8 +305,8 @@ $('#chip-premio').addEventListener('click', () => filtrarPremio(''));
 // Sorteio: "Indicado a algum prêmio", "Venceu algum prêmio" e um por prêmio
 // (os que têm algum filme não visto da lista).
 function filtrosPremioSorteio() {
-  const naoVistos = itensDaPlataforma().filter((f) => !f.visto);
-  return ['*:indicado', '*:venceu', ...LISTA_PREMIOS.map((p) => `${p}:indicado`).filter((x) => naoVistos.some((f) => passaPremio(f, x)))];
+  const naoVistos = itensDaPlataforma().filter((f) => !(itemEhJogo(f) ? jogoJogado(f) : f.visto));
+  return ['*:indicado', '*:venceu', ...premiosVisiveis().map((p) => `${p}:indicado`).filter((x) => naoVistos.some((f) => passaPremio(f, x)))];
 }
 
 // Tierlist: "Indicado ao Oscar", "Venceu o Oscar", "Na competição de Cannes"…
@@ -295,7 +376,12 @@ function cerimoniaPadrao(premio) {
   return (d.cerimonias.find((c) => c.indicados) || d.cerimonias[0]).numero;
 }
 
-async function abrirPremios({ premio = vista.premio, numero = null } = {}) {
+async function abrirPremios({ premio = null, numero = null } = {}) {
+  // Sem prêmio pedido: o último aberto, se a plataforma atual o mostra (senão, o primeiro que ela mostra).
+  if (!premio) {
+    const visiveis = premiosVisiveis();
+    premio = visiveis.includes(vista.premio) || !visiveis.length ? vista.premio : visiveis[0];
+  }
   fecharPrevia(false);
   fecharPainel();
   premiosTela.hidden = false;
@@ -318,10 +404,14 @@ function fecharPremios() {
   $('#premios-caixa').innerHTML = '';
 }
 
-// A capa de um indicado: a sua (se o filme está na lista) ou a do Stremio (Cinemeta), pelo IMDb.
-function capaIndicadoHTML(f, ids, titulo) {
+// A capa de um indicado: a sua (se o filme está na lista) ou a do Stremio (Cinemeta), pelo IMDb;
+// jogo: a da lista ou a capa em pé da Steam (pelo appid), senão só o nome.
+function capaIndicadoHTML(f, ids, titulo, jogo = false) {
   const imdb = ids.imdb || (f && f.imdbID);
-  const src = (f && srcCapa(f)) || (imdb ? `https://images.metahub.space/poster/small/${imdb}/img` : '');
+  const steam = ids.steam && Number.isInteger(Number(ids.steam)) ? Number(ids.steam) : 0;
+  const src = (f && srcCapa(f)) || (jogo
+    ? (steam ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${steam}/library_600x900.jpg` : '')
+    : (imdb ? `https://images.metahub.space/poster/small/${imdb}/img` : ''));
   return src
     ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async" data-titulo-capa="${esc(titulo)}">`
     : `<span class="pr-capa-vazia">${esc(titulo)}</span>`;
@@ -361,13 +451,17 @@ function renderPremios() {
     </section>`;
   } else {
     const ced = cedula(premio, c.numero);
-    // Os filmes indicados (cada um uma vez) e quantos você viu.
+    const jogo = premioEhDeJogo(premio);
+    const v = vocPremio(premio); // filmes: "viu" / "ver"; jogos: "jogou" / "jogar"
+    // Os filmes (ou jogos) indicados, cada um uma vez, e quantos você viu (jogou). Pessoas e times não
+    // contam, nem os jogos ainda não lançados (Most Anticipated Game).
     const filmes = new Map();
     for (const k of c.categorias) for (const x of k.indicados) {
+      if (!x.titulo || k.naoLancado) continue;
       const chave = x.wiki || normalizar(x.titulo);
       if (!filmes.has(chave)) filmes.set(chave, filmeDoIndicado(premio, x, c));
     }
-    const vistos = [...filmes.values()].filter((f) => f && f.visto).length;
+    const vistos = [...filmes.values()].filter((f) => itemFeito(premio, f)).length;
     const naLista = [...filmes.values()].filter(Boolean).length;
     const palpitados = c.categorias.filter((k) => ced.palpites[k.chave]).length;
     const acertos = c.vencedores ? c.categorias.filter((k) => k.indicados.some((x) => x.venceu && chaveIndicado(x) === ced.palpites[k.chave])).length : 0;
@@ -377,7 +471,8 @@ function renderPremios() {
     const cards = c.categorias.map((k) => {
       const palpite = ced.palpites[k.chave];
       const indicados = k.indicados.map((x, i) => ({ x, i, f: filmeDoIndicado(premio, x, c) }))
-        .filter(({ f }) => !vista.soFalta || !(f && f.visto));
+        // "Só o que falta ver/jogar": sem pessoas, times e jogos que ainda não saíram, e sem o que você já fez.
+        .filter(({ x, f }) => !vista.soFalta || (x.titulo && !k.naoLancado && !itemFeito(premio, f)));
       if (vista.soFalta && !indicados.length) return '';
       let status = '';
       if (c.vencedores && palpite) status = k.indicados.some((x) => x.venceu && chaveIndicado(x) === palpite) ? `<span class="pr-status certo">${icone('Check')} Acertou</span>` : `<span class="pr-status errado">${icone('X')} Errou</span>`;
@@ -390,17 +485,23 @@ function renderPremios() {
         <ol class="pr-indicados">${indicados.map(({ x, i, f }) => {
           const ids = idsDoIndicado(premio, x);
           const eu = palpite === chaveIndicado(x);
-          const visto = Boolean(f && f.visto);
-          const pessoa = x.pessoa && x.pessoa !== x.titulo ? x.pessoa : '';
-          return `<li class="pr-ind${x.venceu ? ' venceu' : ''}${eu ? ' palpite' : ''}${visto ? ' visto' : ''}" data-i="${i}">
-            <button class="pr-capa" data-pr="abrir" title="Ver os detalhes de ${esc(x.titulo)}">${capaIndicadoHTML(f, ids, x.titulo)}</button>
+          const visto = itemFeito(premio, f);
+          // Sem jogo (pessoa ou time): o próprio nome é o título.
+          const semTitulo = !x.titulo;
+          const nomeInd = semTitulo ? x.pessoa : (f ? f.titulo : x.titulo);
+          const pessoa = !semTitulo && x.pessoa && x.pessoa !== x.titulo ? x.pessoa : '';
+          // Jogo da sua lista: o estado dele (Zerado, Jogando…). Os de filme não têm selo.
+          const seloLista = jogo && f ? `<span class="pr-na-lista">Na sua lista${STATUS_DO_JOGO[f.status] ? ` · ${STATUS_DO_JOGO[f.status]}` : ''}</span>` : '';
+          return `<li class="pr-ind${x.venceu ? ' venceu' : ''}${eu ? ' palpite' : ''}${visto ? ' visto' : ''}${semTitulo ? ' sem-jogo' : ''}" data-i="${i}">
+            <button class="pr-capa" data-pr="abrir" ${semTitulo ? 'tabindex="-1" aria-hidden="true"' : `title="Ver os detalhes de ${esc(x.titulo)}"`}>${capaIndicadoHTML(f, ids, nomeInd, jogo)}</button>
             <div class="pr-ind-texto">
-              <b title="${esc(x.titulo)}">${esc(f ? f.titulo : x.titulo)}</b>
+              <b title="${esc(nomeInd)}">${esc(nomeInd)}</b>
               ${pessoa ? `<span>${esc(pessoa)}</span>` : ''}
+              ${seloLista}
               ${x.venceu ? `<em class="selo-venceu">${icone('Trophy')} Venceu</em>` : ''}
             </div>
             <div class="pr-ind-acoes">
-              <button class="pr-botao pr-visto${visto ? ' on' : ''}" data-pr="visto" aria-pressed="${visto}" title="${visto ? 'Você já viu (clique para desmarcar)' : f ? 'Marcar como visto' : 'Adicionar à sua lista como visto'}">${icone('Check')}<span>Visto</span></button>
+              ${semTitulo || jogo ? '' : `<button class="pr-botao pr-visto${visto ? ' on' : ''}" data-pr="visto" aria-pressed="${visto}" title="${visto ? 'Você já viu (clique para desmarcar)' : f ? 'Marcar como visto' : 'Adicionar à sua lista como visto'}">${icone('Check')}<span>Visto</span></button>`}
               <button class="pr-botao pr-palpite${eu ? ' on' : ''}" data-pr="palpite" aria-pressed="${eu}" title="${eu ? 'Tirar o palpite' : 'Acho que este vence'}">${icone('Trophy')}<span>Palpite</span></button>
             </div>
           </li>`;
@@ -411,27 +512,27 @@ function renderPremios() {
     corpo = `<section class="pr-resumo">
         <div class="pr-resumo-titulo">
           <span class="est-kicker">${icone('Trophy')} ${esc(nomeEdicao(c))}</span>
-          <h3>Você viu ${vistos} de ${filmes.size} filmes ${info.festival ? 'da competição' : 'indicados'}</h3>
+          <h3>Você ${v.viu} ${vistos} de ${filmes.size} ${v.itens} ${info.festival ? 'da competição' : 'indicados'}</h3>
           <div class="pr-barra" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>
-          <p>${naLista - vistos > 0 ? `${naLista - vistos} ${naLista - vistos === 1 ? 'está' : 'estão'} na sua lista para ver. ` : ''}${c.vencedores ? (info.festival ? 'Os prêmios do júri já saíram.' : 'Os vencedores já saíram.') : (info.festival ? 'O júri anuncia os prêmios no fim do festival; faça seus palpites.' : 'Os vencedores saem na cerimônia; faça seus palpites.')}</p>
+          <p>${naLista - vistos > 0 ? `${naLista - vistos} ${naLista - vistos === 1 ? 'está' : 'estão'} na sua lista para ${v.ver}. ` : ''}${c.vencedores ? (info.festival ? 'Os prêmios do júri já saíram.' : 'Os vencedores já saíram.') : (info.festival ? 'O júri anuncia os prêmios no fim do festival; faça seus palpites.' : 'Os vencedores saem na cerimônia; faça seus palpites.')}</p>
         </div>
         <div class="pr-numeros">
           <div><b>${palpitados}<small>/${c.categorias.length}</small></b><span>palpites</span></div>
           ${c.vencedores && palpitados ? `<div class="ouro"><b>${acertos}<small>/${palpitados}</small></b><span>acertos</span></div>` : ''}
         </div>
         <div class="pr-acoes">
-          <button class="chip${vista.soFalta ? ' ativo' : ''}" data-pr="so-falta" aria-pressed="${vista.soFalta}">${icone('EyeOff')} Só o que falta ver</button>
+          <button class="chip${vista.soFalta ? ' ativo' : ''}" data-pr="so-falta" aria-pressed="${vista.soFalta}">${icone('EyeOff')} Só o que falta ${v.ver}</button>
           ${palpitados ? `<button class="chip" data-pr="limpar-palpites">${icone('Eraser')} Limpar palpites</button>` : ''}
         </div>
       </section>
-      <div class="pr-categorias">${cards || `<p class="mensagem">Você já viu todos os ${info.festival ? 'filmes da competição' : 'indicados'}. 🎉</p>`}</div>`;
+      <div class="pr-categorias">${cards || `<p class="mensagem">Você já ${v.viu} todos os ${info.festival ? `${v.itens} da competição` : 'indicados'}. 🎉</p>`}</div>`;
   }
 
   caixa.innerHTML = `
     <div class="tl-topo pr-topo">
       <h2>Prêmios</h2>
       <div class="chips-linha pr-lista" role="radiogroup" aria-label="Prêmio">
-        ${LISTA_PREMIOS.map((p) => `<button class="chip${p === premio ? ' ativo' : ''}" data-pr="premio" data-premio="${p}" role="radio" aria-checked="${p === premio}">${icone('Trophy')} ${esc(NOMES_PREMIOS[p])}</button>`).join('')}
+        ${premiosVisiveis().map((p) => `<button class="chip${p === premio ? ' ativo' : ''}" data-pr="premio" data-premio="${p}" role="radio" aria-checked="${p === premio}">${icone('Trophy')} ${esc(NOMES_PREMIOS[p])}</button>`).join('')}
       </div>
       <button class="redondo tl-fechar" data-pr="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
     </div>
@@ -500,10 +601,11 @@ premiosTela.addEventListener('click', async (e) => {
     }
     case 'visto': if (x) { b.disabled = true; await alternarVistoIndicado(vista.premio, c, x); } break;
     case 'abrir': {
-      if (!x) return;
+      if (!x || !x.titulo) return; // pessoa ou time: não há página
       const f = filmeDoIndicado(vista.premio, x, c);
       const ids = idsDoIndicado(vista.premio, x);
       if (f) abrirPainel(f.id);
+      else if (premioEhDeJogo(vista.premio)) abrirIndicadoJogo(ids, x); // fora da lista: só se houver página de jogo
       else if (ids.tmdb) abrirFilmeExterno(ids.tmdb);
       else aviso('Não achei esse filme no TMDB.');
       break;

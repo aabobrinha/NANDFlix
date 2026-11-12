@@ -1,0 +1,31 @@
+{{Infobox award|name=21st British Academy Games Awards|date=8 April 2025}}
+== Winners and nominees ==
+{| class="wikitable"
+| width="50%" valign="top" colspan=2 |
+{{Award category|#EEDD82|[[British Academy Games Award for Best Game|Best Game]] <br> <small>(presented by [[Leslie Benzies]])</small>}} 
+* '''''[[Astro Bot]]'' – [[Team Asobi]]/[[Sony Interactive Entertainment]]'''
+** ''[[Balatro]]'' – LocalThunk
+** ''[[Thank Goodness You're Here!]]'' – Coal Supper/[[Panic Inc.|Panic]]
+|-
+| valign="top" |
+{{Award category|#EEDD82|[[British Academy Games Award for Artistic Achievement|Artistic Achievement]] <br> <small>(presented by [[Ashly Burch]])</small>}} 
+* '''''[[Neva (video game)|Neva]]'' – Nomada Studio/[[Devolver Digital]]'''
+** ''[[Astro Bot]]'' – [[Team Asobi]]
+| valign="top" |
+{{Award category|#EEDD82|[[British Academy Games Award for Performer in a Leading Role|Performer in a Leading Role]] <br> <small>(presented by [[Adjoa Andoh]])</small>}}
+* '''[[Alec Newman]] as Cameron "Caz" McLeary in ''[[Still Wakes the Deep]]'''''
+** [[Humberly González]] as Kay Vess in ''[[Star Wars Outlaws]]''
+** Isabella Inchbald as Indika in ''[[Indika (video game)|Indika]]''
+|-
+| valign="top" colspan=2|
+{{Award category|#EEDD82|[[BAFTA Fellowship]] <br> <small>(presented by [[Jessica Curry]])</small>}}
+* [[Yoko Shimomura]]
+|}
+
+==Games with multiple wins==
+{| class="wikitable sortable"
+|-
+! Game !! Wins
+|-
+| ''[[Astro Bot]]'' || 5
+|}
