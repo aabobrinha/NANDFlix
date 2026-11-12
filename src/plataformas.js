@@ -46,10 +46,12 @@ const PLATAFORMAS = [
     tema: 'laranja',
   },
   {
-    id: 'nandhub', nome: 'nandhub', emoji: '🍿', hub: true,
-    descricao: 'Tudo junto, numa lista só.',
+    // O ícone do hub não é um desenho próprio: é feito dos ícones das plataformas que ele junta
+    // (iconePlataformaHTML), para ficar claro que é a soma, não uma terceira opção.
+    id: 'nandhub', nome: 'nandhub', hub: true,
+    descricao: 'Tudo junto, numa lista só.', // o texto de verdade vem de descricaoPlataforma()
     rotulos: { item: 'título', itens: 'títulos', todos: 'Todos', nenhum: 'Nada', artigo: 'o', genero: 'm', de: 'do título', deste: 'deste título', um: 'um título', este: 'este título', adicionar: 'Adicionar à lista', sortear: 'Sortear um título' },
-    tema: 'roxo',
+    tema: 'mistura', // roxo + laranja: o acento é a mistura das cores das plataformas que junta
   },
 ];
 
@@ -153,8 +155,28 @@ function aplicarVocabularioEstatico(raiz = document) {
   for (const el of raiz.querySelectorAll('[data-recurso]')) el.hidden = !plataformaTem(el.dataset.recurso);
 }
 
-// O ícone de uma plataforma: a imagem dela ou o emoji.
+// As plataformas que o hub junta (as habilitadas, na ordem do registro).
+const plataformasDoHub = () => plataformasHabilitadas().map(plataformaPorId);
+// "nandflix + nandchan": os nomes das incluídas, para o texto miúdo do hub.
+const nomesDoHub = (sep = ' + ') => plataformasDoHub().map((q) => q.nome).join(sep);
+// "filmes e animes", "filmes, animes e jogos".
+function listaComE(textos) {
+  return textos.length < 2 ? (textos[0] || '') : `${textos.slice(0, -1).join(', ')} e ${textos.at(-1)}`;
+}
+// A descrição de uma plataforma. A do hub diz o que ele inclui: "Filmes e animes juntos".
+function descricaoPlataforma(p) {
+  if (!p.hub) return p.descricao;
+  const t = listaComE(plataformasDoHub().map((q) => voc('itens', undefined, q)));
+  return `${t.charAt(0).toUpperCase()}${t.slice(1)} juntos, numa lista só.`;
+}
+// Muda quando o ícone muda (o do hub depende das habilitadas): para não redesenhar à toa.
+const chaveIconePlataforma = (p) => (p.hub ? `${p.id}:${plataformasHabilitadas().join()}` : p.id);
+
+// O ícone de uma plataforma: a imagem dela ou o emoji. O do hub é a junção dos
+// ícones das que ele inclui, em selos redondos sobrepostos (cada plataforma
+// nova entra sozinha); o tamanho vem da classe do lugar (CSS: .plat-junta).
 function iconePlataformaHTML(p, classe = 'marca-icone') {
+  if (p.hub) return `<span class="${classe} plat-junta" aria-hidden="true">${plataformasDoHub().map((q) => iconePlataformaHTML(q, 'plat-junta-i')).join('')}</span>`;
   return p.imagem ? `<img class="${classe}" src="${p.imagem}" alt="">` : `<span class="${classe} plat-emoji" aria-hidden="true">${p.emoji}</span>`;
 }
 
@@ -168,7 +190,8 @@ function aplicarPlataforma({ noHtml = true } = {}) {
   document.title = p.nome;
   aplicarVocabularioEstatico();
   const icone = $('#marca-icone');
-  if (icone && icone.dataset.p !== p.id) { icone.innerHTML = iconePlataformaHTML(p); icone.dataset.p = p.id; }
+  const chaveIcone = chaveIconePlataforma(p);
+  if (icone && icone.dataset.p !== chaveIcone) { icone.innerHTML = iconePlataformaHTML(p); icone.dataset.p = chaveIcone; }
   const nome = $('#marca-nome');
   if (nome) nome.textContent = p.nome;
   const botao = $('#btn-marca');
@@ -310,10 +333,15 @@ function ligarMenuMarca() {
   const abrir = (sim) => {
     if (sim) {
       const atual = plataformaAtual().id;
-      menu.innerHTML = plataformasDisponiveis().map((p) => `
-        <button class="menu-topo-item marca-menu-item" role="menuitemradio" aria-checked="${p.id === atual}" data-plataforma="${p.id}">
-          ${iconePlataformaHTML(p, 'marca-menu-icone')}<span>${p.nome}</span>${p.id === atual ? icone('Check') : ''}
-        </button>`).join('');
+      // As plataformas em cima; o hub embaixo, separado, como "Tudo junto" com os nomes das incluídas.
+      const item = (p) => `
+        <button class="menu-topo-item marca-menu-item${p.hub ? ' marca-menu-hub' : ''}" role="menuitemradio" aria-checked="${p.id === atual}" data-plataforma="${p.id}">
+          ${iconePlataformaHTML(p, 'marca-menu-icone')}<span class="marca-menu-texto"><b>${p.nome}</b>${p.hub ? `<small>${nomesDoHub()}</small>` : ''}</span>${p.id === atual ? icone('Check') : ''}
+        </button>`;
+      const disp = plataformasDisponiveis();
+      const hub = disp.find((p) => p.hub);
+      menu.innerHTML = disp.filter((p) => !p.hub).map(item).join('')
+        + (hub ? `<span class="menu-topo-sep" role="separator"></span><span class="marca-menu-rotulo">Tudo junto</span>${item(hub)}` : '');
     }
     caixa.classList.toggle('aberta', sim);
     botao.setAttribute('aria-expanded', String(sim));
@@ -370,9 +398,11 @@ function cartaoPlataformaHTML(p, { alternar = false, ligado = false } = {}) {
   const n = itensDaPlataforma(estado.filmes, p).length;
   const conta = estado.filmes.length ? `<small class="plat-conta">${voc('qtd', n, p)}</small>` : '';
   const atributos = alternar ? `aria-pressed="${ligado}"` : '';
-  return `<button class="plat-opcao" data-plataforma="${p.id}" data-tema="${p.tema}"${p.hub ? ' data-hub' : ''} ${atributos}>
+  // O hub é um cartão largo, "Tudo junto", dizendo o que inclui.
+  const inclui = p.hub ? `<small class="plat-inclui">Inclui ${nomesDoHub()}</small>` : '';
+  return `<button class="plat-opcao${p.hub ? ' plat-hub' : ''}" data-plataforma="${p.id}" data-tema="${p.tema}"${p.hub ? ' data-hub' : ''} ${atributos}>
     ${iconePlataformaHTML(p, 'plat-opcao-icone')}
-    <span class="plat-opcao-texto"><b>${p.nome}</b><small>${esc(p.descricao)}</small>${alternar ? '' : conta}</span>
+    <span class="plat-opcao-texto">${p.hub ? '<em class="plat-kicker">Tudo junto</em>' : ''}<b>${p.nome}</b><small>${esc(descricaoPlataforma(p))}</small>${inclui}${alternar ? '' : conta}</span>
     ${alternar ? `<span class="plat-check" aria-hidden="true">${icone('Check')}</span>` : ''}
   </button>`;
 }
@@ -401,6 +431,7 @@ function abrirTelaPlataformas({ perguntarSistemas, precisaEscolher }, aoTerminar
         <h2>Onde você quer entrar?</h2>
         <p class="entrada-sub">Dá para trocar a qualquer hora pela marca, no alto da tela.</p>
         <div class="plat-opcoes" data-e="opcoes"></div>
+        <div class="plat-hub-faixa" data-e="hub"></div>
         <label class="plat-sempre"><input type="checkbox" data-e="sempre"> Sempre abrir direto na que eu escolher <small>(muda nas Configurações)</small></label>
       </div>
     </section>`;
@@ -413,7 +444,13 @@ function abrirTelaPlataformas({ perguntarSistemas, precisaEscolher }, aoTerminar
     const visivel = $(`[data-passo="${passo}"]`, el);
     $('h2', visivel).id = 'plat-titulo';
     for (const h of $$('.entrada-passo[hidden] h2', el)) h.removeAttribute('id');
-    if (passo === 'escolher') $('[data-e="opcoes"]', el).innerHTML = plataformasDisponiveis().map((p) => cartaoPlataformaHTML(p)).join('');
+    if (passo === 'escolher') {
+      // As plataformas lado a lado e, embaixo, o hub largo: ele é a soma delas, não um terceiro cartão.
+      const disp = plataformasDisponiveis();
+      const hubDisp = disp.find((p) => p.hub);
+      $('[data-e="opcoes"]', el).innerHTML = disp.filter((p) => !p.hub).map((p) => cartaoPlataformaHTML(p)).join('');
+      $('[data-e="hub"]', el).innerHTML = hubDisp ? `<div class="plat-ou" aria-hidden="true"><span>ou, tudo junto</span></div>${cartaoPlataformaHTML(hubDisp)}` : '';
+    }
     Movimento.animar(visivel, [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 260 });
     if (passo === 'escolher') Movimento.sequencia($$('.plat-opcao', visivel), { y: 12, duracao: 380, passo: 60 });
     ($('.plat-opcao', visivel) || visivel).focus({ preventScroll: true });
@@ -475,6 +512,7 @@ function abrirTelaPlataformas({ perguntarSistemas, precisaEscolher }, aoTerminar
 // ---- Configurações ----
 
 function plataformasConfigHTML() {
+  const hub = PLATAFORMAS.find((p) => p.hub);
   const inicial = estado.config.plataformaInicial || '';
   return `
       <div class="secao" id="cfg-plataformas">
@@ -482,12 +520,15 @@ function plataformasConfigHTML() {
         <div class="chips-linha cfg-plat-lista" role="group" aria-label="Plataformas habilitadas">
           ${sistemasPlataforma().map((p) => `<button class="chip cfg-plat${plataformaHabilitada(p.id) ? ' ativo' : ''}" data-plataforma="${p.id}" aria-pressed="${plataformaHabilitada(p.id)}">${iconePlataformaHTML(p, 'cfg-plat-icone')} ${p.nome}</button>`).join('')}
         </div>
-        <p>O que você acompanha. Com mais de uma, o ${plataformaPorId('nandhub').nome} junta tudo; troque de plataforma pela marca, no alto da tela.</p>
+        <p>O que você acompanha. Troque de plataforma pela marca, no alto da tela.</p>
+        ${plataformasHabilitadas().length > 1
+    ? `<p class="cfg-plat-hub">${iconePlataformaHTML(hub, 'cfg-plat-icone')}<span><b>${hub.nome}</b> junta tudo: ${nomesDoHub()} numa lista só.</span></p>`
+    : `<p class="cfg-plat-hub cfg-plat-hub-off"><span>Com mais de uma plataforma, o <b>${hub.nome}</b> junta tudo numa lista só.</span></p>`}
         <label class="ordenar cfg-plat-inicial"><span class="cfg-plat-rotulo">Ao abrir o app</span>
           <span class="ordenar-caixa">
             <select id="cfg-plat-inicial">
               <option value="">Perguntar onde entrar</option>
-              ${plataformasDisponiveis().map((p) => `<option value="${p.id}"${p.id === inicial ? ' selected' : ''}>Abrir no ${p.nome}</option>`).join('')}
+              ${plataformasDisponiveis().map((p) => `<option value="${p.id}"${p.id === inicial ? ' selected' : ''}>Abrir no ${p.nome}${p.hub ? ` (tudo junto: ${nomesDoHub()})` : ''}</option>`).join('')}
             </select>
             <span class="ordenar-seta">${icone('ChevronDown')}</span>
           </span>

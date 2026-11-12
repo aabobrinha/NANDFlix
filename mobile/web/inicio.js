@@ -185,7 +185,8 @@ function renderCelular() {
   titulo.textContent = naMarca ? plat.nome : tituloDoModo();
   if (naMarca) titulo.dataset.cel = 'plataformas'; else delete titulo.dataset.cel;
   const marca = $('#cel-marca');
-  if (marca.dataset.p !== plat.id) { marca.innerHTML = iconePlataformaHTML(plat, 'cel-marca-icone'); marca.dataset.p = plat.id; }
+  const chaveMarca = chaveIconePlataforma(plat);
+  if (marca.dataset.p !== chaveMarca) { marca.innerHTML = iconePlataformaHTML(plat, 'cel-marca-icone'); marca.dataset.p = chaveMarca; }
   document.documentElement.classList.toggle('cel-modo-todos', cel.modo.tipo === 'todos');
   for (const b of $$('.cel-nav-item')) b.classList.toggle('ativo', b.dataset.cel === 'inicio');
   if (!estado.filmes.length) { el.innerHTML = pilulasHTML(); return; }
@@ -253,8 +254,12 @@ function abrirPlataformasCelular() {
   const disponiveis = plataformasDisponiveis();
   if (disponiveis.length < 2) { irPara({ tipo: 'inicio' }); return; }
   const atual = plataformaAtual().id;
+  // Como no PC: as plataformas em cima e, separado, o hub como "Tudo junto" com os nomes das incluídas.
+  const botao = (p) => `<button data-cel="plataforma" data-plataforma="${p.id}" class="${p.hub ? 'cel-plat-hub' : ''}${p.id === atual ? ' ativo' : ''}"${p.id === atual ? ' aria-current="true"' : ''}>${iconePlataformaHTML(p, 'cel-plat-icone')}<span class="cel-plat-texto"><span>${p.nome}</span>${p.hub ? `<small>${nomesDoHub()}</small>` : ''}</span>${p.id === atual ? icone('Check') : ''}</button>`;
+  const hub = disponiveis.find((p) => p.hub);
   abrirFolha(`<h2 class="cel-folha-titulo">Plataformas</h2><div class="cel-mais cel-plataformas">
-    ${disponiveis.map((p) => `<button data-cel="plataforma" data-plataforma="${p.id}"${p.id === atual ? ' class="ativo" aria-current="true"' : ''}>${iconePlataformaHTML(p, 'cel-plat-icone')}<span>${p.nome}</span>${p.id === atual ? icone('Check') : ''}</button>`).join('')}
+    ${disponiveis.filter((p) => !p.hub).map(botao).join('')}
+    ${hub ? `<span class="cel-plat-rotulo">Tudo junto</span>${botao(hub)}` : ''}
   </div>`, 'cel-folha-plataformas');
 }
 

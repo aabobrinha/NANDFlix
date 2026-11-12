@@ -182,10 +182,17 @@ html.cel-coberto .cel-nav, html.cel-coberto .cel-topo { opacity: 0; pointer-even
 
 /* Plataformas: a marca do topo (ícone + nome) abre a escolha de plataforma. */
 .cel-marca { display: grid; place-items: center; }
+.cel-marca:has(.plat-junta) { width: auto; }
 .cel-marca .plat-emoji { font-size: 27px; }
+.cel-marca-icone.plat-junta { --ic: 36px; }
+.cel-plat-icone.plat-junta { --ic: 34px; }
 .cel-titulo[data-cel] { cursor: pointer; }
 html[data-tema="laranja"] .cel-titulo.marca-nandflix {
   background-image: linear-gradient(90deg, #FFF5EC 0%, #FFC59A 60%, #F08E45 100%);
+}
+/* O título do nandhub: degradê do roxo ao laranja, as duas plataformas que ele junta */
+html[data-tema="mistura"] .cel-titulo.marca-nandflix {
+  background-image: linear-gradient(90deg, #CDB6FF 0%, #E9B7C9 50%, #FFB27A 100%);
 }
 .cel-topo { view-transition-name: cel-topo; }
 .cel-folha-plataformas .cel-folha-caixa {
@@ -200,5 +207,13 @@ html[data-tema="laranja"] .cel-titulo.marca-nandflix {
 .cel-plataformas button { min-height: 62px; font: 700 20px/1 var(--display); text-transform: lowercase; }
 .cel-plataformas button.ativo { background: rgba(var(--acento-rgb), .22); }
 .cel-plataformas button .ico { margin-left: auto; }
+.cel-plataformas button { text-align: left; }
+.cel-plat-texto { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cel-plat-texto small { font: 500 13px/1.1 var(--ui); text-transform: none; color: var(--texto-2); }
+/* O hub embaixo, separado e rotulado: a soma das plataformas de cima */
+.cel-plat-rotulo { display: flex; align-items: center; gap: 12px; margin: 6px 4px 0; font: 700 11px/1 var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--texto-2); }
+.cel-plat-rotulo::after { content: ''; flex: 1; height: 1px; background: var(--divisor); }
+.cel-plataformas button.cel-plat-hub { min-height: 72px; background: linear-gradient(100deg, rgba(109, 74, 168, .3), rgba(194, 94, 28, .26)); }
+.cel-plataformas button.cel-plat-hub.ativo { background: linear-gradient(100deg, rgba(109, 74, 168, .5), rgba(194, 94, 28, .45)); }
 .cel-plat-icone { width: 30px; height: 30px; flex: none; }
 .plat-emoji.cel-plat-icone { font-size: 26px; }
