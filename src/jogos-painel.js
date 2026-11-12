@@ -33,9 +33,10 @@ const BOTAO_STEAM_JOGO = {
   web: { rotulo: 'Ver na loja da Steam', icone: 'ExternalLink', dica: 'Abre a página do jogo na loja da Steam' },
 };
 
-// A marca oficial da Steam (a da página de marca da Valve, partner.steamgames.com/doc/marketing/branding,
-// no desenho do Simple Icons), para o botão e o destaque de "Onde jogar". Uma cor só (currentColor).
-const MARCA_STEAM_JOGO = `<svg class="steam-marca" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z"/></svg>`;
+// A marca oficial da Steam (página de marca da Valve, partner.steamgames.com/doc/marketing/branding;
+// o contorno vem do Simple Icons): o círculo azul da Steam com o braço branco. O contorno é o
+// círculo com o braço vazado; por baixo, um círculo branco preenche o braço.
+const MARCA_STEAM_JOGO = `<svg class="steam-marca" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><defs><linearGradient id="steam-marca-azul" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#111D2E"/><stop offset=".5" stop-color="#144B7E"/><stop offset="1" stop-color="#1387B8"/></linearGradient></defs><circle cx="12" cy="12" r="11.6" fill="#FFFFFF"/><path fill="url(#steam-marca-azul)" d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z"/></svg>`;
 
 // ---------- Lógica pura (testada em scripts/testar-jogos.js) ----------
 
@@ -82,7 +83,7 @@ function estadoBotaoSteam(f, { local = null, biblioteca = null, celular = false 
   }
   const bib = bibliotecaConhecida(biblioteca);
   const daConta = bib ? bib.jogos.find((j) => Number(j && j.appid) === appid) || null : null;
-  const base = { tipo: 'steam', appid, naBiblioteca: bib ? Boolean(daConta) : null, minutos: daConta ? Number(daConta.minutos) || 0 : null, instalado: false };
+  const base = { tipo: 'steam', appid, naBiblioteca: bib ? Boolean(daConta) : null, minutos: daConta ? Number(daConta.minutos) || 0 : null, ultimaVez: daConta ? daConta.ultimaVez || '' : '', instalado: false };
   const com = (acao, extra = {}) => ({ ...base, ...extra, acao, ...BOTAO_STEAM_JOGO[acao] });
   if (celular || (local && !local.steamNoPc)) return com('web');
   // A pasta da Steam ainda não foi lida: só "não tem" é certo; o resto a Steam decide.
@@ -100,15 +101,31 @@ function horasJogadas(minutos) {
   if (m < 60) return 'menos de 1 h';
   return `${Math.round(m / 60).toLocaleString('pt-BR')} h`;
 }
-// A linha embaixo do botão: "Instalado · 42 h jogadas", "Na sua biblioteca", "Você ainda não tem".
-function linhaSteamJogo(e) {
-  if (!e || e.tipo !== 'steam') return '';
-  const jogadas = horasJogadas(e.minutos);
-  const horas = jogadas ? ` · ${jogadas} jogadas` : '';
-  if (e.instalado) return `Instalado${e.naBiblioteca ? horas : ''}`;
-  if (e.naBiblioteca === true) return `Na sua biblioteca${horas}`;
-  if (e.naBiblioteca === false) return 'Ainda não está na sua biblioteca da Steam';
-  return '';
+// Tempo de jogo como na biblioteca da Steam: "108,3 h", "45 min".
+function tempoDeJogoSteam(minutos) {
+  const m = Number(minutos) || 0;
+  if (m <= 0) return '';
+  if (m < 60) return `${m} min`;
+  return `${(m / 60).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h`;
+}
+// "Hoje", "Ontem", "3 de nov.", "3 de nov. de 2024".
+function ultimaVezSteam(iso, agora = new Date()) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return '';
+  const dia = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const dif = Math.round((dia(agora) - dia(d)) / 86400000);
+  if (dif === 0) return 'Hoje';
+  if (dif === 1) return 'Ontem';
+  const opcoes = { day: 'numeric', month: 'short', ...(d.getFullYear() !== agora.getFullYear() ? { year: 'numeric' } : {}) };
+  return d.toLocaleDateString('pt-BR', opcoes);
+}
+// Ao lado do botão: "TEMPO DE JOGO 108,3 h · JOGADO POR ÚLTIMO 3 de nov." (só com a biblioteca da Steam).
+function tempoSteamJogoHTML(e) {
+  if (!e || e.tipo !== 'steam' || !e.naBiblioteca) return '';
+  const tempo = tempoDeJogoSteam(e.minutos);
+  const ultima = ultimaVezSteam(e.ultimaVez);
+  const bloco = (rotulo, valor) => `<div class="jogo-tempo-item"><span>${rotulo}</span><b>${esc(valor)}</b></div>`;
+  return [tempo ? bloco('Tempo de jogo', tempo) : '', ultima ? bloco('Jogado por último', ultima) : ''].join('');
 }
 
 // Tempo de jogo como no HowLongToBeat: 12.5 → "12½ h".
@@ -235,8 +252,8 @@ function atualizarBotaoSteamJogo(f) {
     b.title = e.dica;
     b.dataset.acao = e.tipo === 'steam' ? e.acao : 'link';
   }
-  const linha = document.querySelector('#painel [data-j-steam-linha]');
-  if (linha) { const t = linhaSteamJogo(e); linha.textContent = t; linha.hidden = !t; }
+  const tempo = document.querySelector('#painel [data-j-steam-tempo]');
+  if (tempo) { const t = tempoSteamJogoHTML(e); tempo.innerHTML = t; tempo.hidden = !t; }
   const sub = document.querySelector('#painel .jogo-loja-steam small');
   if (sub) sub.textContent = subtituloSteamJogo(e);
 }
@@ -380,8 +397,8 @@ function renderPainelJogo(f) {
             ${f.externo ? `<button class="btn jogo-adicionar" data-j="adicionar">${icone('Plus')} Adicionar à lista</button>` : ''}
             ${f.externo ? '' : `<button class="redondo" data-p="story" title="Criar story para o Instagram" aria-label="Criar story para o Instagram">${icone('ImagePlus')}</button>`}
             ${f.trailer ? `<button class="redondo" data-p="trailer" data-rotulo="Trailer" title="Ver o trailer em tela cheia" aria-label="Ver o trailer em tela cheia">${icone('Maximize')}</button>` : ''}
+            <div class="jogo-tempo-steam" data-j-steam-tempo${tempoSteamJogoHTML(e) ? '' : ' hidden'}>${tempoSteamJogoHTML(e)}</div>
           </div>
-          <p class="jogo-steam-linha" data-j-steam-linha${linhaSteamJogo(e) ? '' : ' hidden'}>${esc(linhaSteamJogo(e))}</p>
         </div>
       </div>
       <div id="painel-resto"></div>`;

@@ -12,6 +12,7 @@
 const PILULAS_JOGO = [
   ['status:jogando', 'Jogando'], ['status:quero', 'Quero jogar'], ['zerados', 'Zerados'], ['status:pausado', 'Pausados'],
   ['status:cem', '100%'], ['status:larguei', 'Largados'], ['favoritos', 'Favoritos'], ['steam', 'Na Steam'], ['biblioteca', 'Na biblioteca'],
+  ['recentes', 'Jogados recentemente'],
 ];
 
 function passaModoJogo(f, chave) {
@@ -22,6 +23,7 @@ function passaModoJogo(f, chave) {
   if (chave === 'zerados') return Boolean(f.visto);
   if (chave === 'favoritos') return Boolean(f.favorito);
   if (chave === 'steam') return Boolean(f.steam);
+  if (chave === 'recentes') return jogadoRecentemente(f);
   if (chave === 'biblioteca') { const bib = appidsNaBiblioteca(); return Boolean(bib) && bib.has(Number(f.steam)); }
   return true;
 }
@@ -38,7 +40,7 @@ pilulasHTML = () => {
   const jogos = itensDaPlataforma();
   const consoles = contagens(consolesDoJogo);
   const tags = contagens(tagsDoJogo);
-  const visivel = ([k]) => (k === 'steam' ? jogos.some((f) => f.steam) : k === 'biblioteca' ? temBibliotecaSteam() : true);
+  const visivel = ([k]) => (k === 'steam' ? jogos.some((f) => f.steam) : k === 'biblioteca' || k === 'recentes' ? temBibliotecaSteam() : true);
   const pilula = ([k, r]) => `<button class="cel-pilula${m.jogos === k ? ' ativa' : ''}" data-cel="jogo-pilula" data-jogo="${esc(k)}" data-rotulo="${esc(r)}">${esc(r)}</button>`;
   const aberta = (prefixo) => (m.jogos && m.jogos.startsWith(prefixo) ? ' ativa' : '');
   const fechar = m.tipo !== 'inicio' ? `<button class="cel-pilula cel-pilula-x" data-cel="inicio" aria-label="Voltar ao início">${icone('X')}</button>` : '';

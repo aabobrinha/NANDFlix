@@ -55,6 +55,23 @@ function appidsNaBiblioteca() {
   return steamDaLista.biblioteca ? new Set(steamDaLista.biblioteca.jogos.map((j) => Number(j.appid))) : null;
 }
 const temBibliotecaSteam = () => Boolean(steamDaLista.biblioteca);
+// O jogo na conta da Steam ({ appid, minutos, minutos2Semanas, ultimaVez }), se a biblioteca veio.
+function contaSteamDoJogo(f) {
+  const b = steamDaLista.biblioteca;
+  if (!b || !f || !f.steam) return null;
+  return b.jogos.find((j) => Number(j.appid) === Number(f.steam)) || null;
+}
+// "Jogados recentemente", como na Steam: jogado nas últimas 2 semanas.
+const DIAS_JOGADO_RECENTE = 14;
+function jogadoRecentemente(f, agora = Date.now()) {
+  const c = contaSteamDoJogo(f);
+  if (!c) return false;
+  if (Number(c.minutos2Semanas) > 0) return true;
+  const t = Date.parse(c.ultimaVez || '');
+  return Number.isFinite(t) && agora - t <= DIAS_JOGADO_RECENTE * 86400000;
+}
+// O mais recente primeiro (para o filtro "Jogados recentemente").
+const ultimaVezDoJogo = (f) => Date.parse((contaSteamDoJogo(f) || {}).ultimaVez || '') || 0;
 
 let carregandoSteamLista = null;
 function carregarSteamDaLista({ forcar = false } = {}) {
@@ -390,10 +407,14 @@ Object.assign(estado, { consoleJogo: '', tagJogo: '', steamJogo: '' });
 
 function passaFiltrosJogo(f, filtro) {
   const status = typeof filtro === 'string' && filtro.startsWith('status:') ? filtro.slice(7) : '';
-  const ligado = status || estado.consoleJogo || estado.tagJogo || estado.steamJogo;
+  // Os chips "Instalados" e "Jogados recentemente" ('jogo:instalados', 'jogo:recentes').
+  const daSteam = typeof filtro === 'string' && filtro.startsWith('jogo:') ? filtro.slice(5) : '';
+  const ligado = status || daSteam || estado.consoleJogo || estado.tagJogo || estado.steamJogo;
   if (!ligado) return true;
   if (!ehJogo(f)) return false;
   if (status && statusDoJogo(f) !== status) return false;
+  if (daSteam === 'instalados' && !appidsInstalados().has(Number(f.steam))) return false;
+  if (daSteam === 'recentes' && !jogadoRecentemente(f)) return false;
   if (estado.consoleJogo && !consolesDoJogo(f).includes(estado.consoleJogo)) return false;
   if (estado.tagJogo && !tagsDoJogo(f).includes(estado.tagJogo)) return false;
   if (estado.steamJogo === 'steam' && !f.steam) return false;
@@ -415,7 +436,9 @@ const OPCOES_ORDEM_JOGO = [['ordem', 'Ordem original'], ['titulo', 'Nome'], ['an
 const filtradosFilme = filtrados;
 filtrados = () => {
   const lista = filtradosFilme();
-  return ehPlataformaJogos() && ORDENS_JOGO[estado.ordenacao] ? lista.sort(ORDENS_JOGO[estado.ordenacao]) : lista;
+  if (!ehPlataformaJogos()) return lista;
+  if (estado.filtro === 'jogo:recentes') return lista.sort((a, b) => ultimaVezDoJogo(b) - ultimaVezDoJogo(a)); // o último jogado primeiro
+  return ORDENS_JOGO[estado.ordenacao] ? lista.sort(ORDENS_JOGO[estado.ordenacao]) : lista;
 };
 
 // Seções do menu "Filtros": console, tags e Steam (só onde há jogos: o nandplay e o hub com ele).
@@ -510,14 +533,17 @@ function aplicarJogosLista() {
   // Chips do filtro: no nandplay, "Zerados" e os status; sem os de filme e anime.
   for (const c of $$('.chip[data-filtro]')) {
     const f = c.dataset.filtro;
-    if (c.dataset.soJogos !== undefined) c.hidden = !jogos;
+    // Instalados só com a Steam no PC; jogados recentemente só com a biblioteca da conta.
+    if (f === 'jogo:instalados') c.hidden = !(jogos && steamDaLista.local && steamDaLista.local.steamNoPc);
+    else if (f === 'jogo:recentes') c.hidden = !(jogos && temBibliotecaSteam());
+    else if (c.dataset.soJogos !== undefined) c.hidden = !jogos;
     else if (jogos && (f === 'animes' || f === 'assistindo')) c.hidden = true;
     if (f === 'vistos' || f === 'nao-vistos') {
       if (c.dataset.rotuloPadrao === undefined) c.dataset.rotuloPadrao = c.textContent;
       c.textContent = jogos ? (f === 'vistos' ? 'Zerados' : 'Não zerados') : c.dataset.rotuloPadrao;
     }
   }
-  if (!jogos && String(estado.filtro).startsWith('status:')) {
+  if (!jogos && /^(status|jogo):/.test(String(estado.filtro))) {
     estado.filtro = 'todos';
     for (const c of $$('.chip[data-filtro]')) { c.classList.toggle('ativo', c.dataset.filtro === 'todos'); c.setAttribute('aria-checked', String(c.dataset.filtro === 'todos')); }
   }
@@ -608,13 +634,13 @@ let steamDaListaPedida = false;
 function pedirSteamDaLista() {
   if (steamDaListaPedida || !plataformaTem('jogos')) return;
   steamDaListaPedida = true;
-  carregarSteamDaLista().then(() => render());
-  if (api.aoBibliotecaSteam) api.aoBibliotecaSteam(() => carregarSteamDaLista().then(() => render()));
+  carregarSteamDaLista().then(() => { aplicarJogosLista(); render(); });
+  if (api.aoBibliotecaSteam) api.aoBibliotecaSteam(() => carregarSteamDaLista().then(() => { aplicarJogosLista(); render(); }));
   let ultimoFoco = Date.now();
   window.addEventListener('focus', () => {
     if (!plataformaTem('jogos') || Date.now() - ultimoFoco < 20000) return;
     ultimoFoco = Date.now();
-    carregarSteamDaLista({ forcar: true }).then(() => render());
+    carregarSteamDaLista({ forcar: true }).then(() => { aplicarJogosLista(); render(); });
   });
 }
 

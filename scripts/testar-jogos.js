@@ -434,13 +434,24 @@ test('botão da Steam: rótulos, biblioteca e horas', () => {
   assert.strictEqual(p.estadoBotaoSteam(f, { local: { steamNoPc: false } }).acao, 'web');
   // Biblioteca que não veio (erro, sem conta) não vira "não tem".
   assert.strictEqual(p.estadoBotaoSteam(f, { local: pc, biblioteca: { erro: 1 } }).acao, 'abrir');
-  // A linha embaixo do botão.
-  const inst = p.estadoBotaoSteam(f, { local: { steamNoPc: true, instalados: [{ appid: 1145360 }] }, biblioteca: { jogos: [{ appid: 1145360, minutos: 2530 }] } });
-  assert.strictEqual(p.linhaSteamJogo(inst), 'Instalado · 42 h jogadas');
-  assert.strictEqual(p.linhaSteamJogo(p.estadoBotaoSteam(f, { local: pc, biblioteca: { jogos: [{ appid: 1145360, minutos: 30 }] } })), 'Na sua biblioteca · menos de 1 h jogadas');
-  assert.strictEqual(p.linhaSteamJogo(p.estadoBotaoSteam(f, { local: pc, biblioteca: { jogos: [{ appid: 1145360, minutos: 0 }] } })), 'Na sua biblioteca');
-  assert.strictEqual(p.linhaSteamJogo(p.estadoBotaoSteam(f, { local: pc, biblioteca: { jogos: [] } })), 'Ainda não está na sua biblioteca da Steam');
-  assert.strictEqual(p.linhaSteamJogo(p.estadoBotaoSteam(f, { local: pc })), '');
+  // O tempo de jogo ao lado do botão, como na biblioteca da Steam.
+  assert.strictEqual(p.tempoDeJogoSteam(6498), '108,3 h');
+  assert.strictEqual(p.tempoDeJogoSteam(2520), '42 h');
+  assert.strictEqual(p.tempoDeJogoSteam(45), '45 min');
+  assert.strictEqual(p.tempoDeJogoSteam(0), '');
+  const agora = new Date(2026, 10, 12, 15);
+  assert.strictEqual(p.ultimaVezSteam(new Date(2026, 10, 12, 9).toISOString(), agora), 'Hoje');
+  assert.strictEqual(p.ultimaVezSteam(new Date(2026, 10, 11, 22).toISOString(), agora), 'Ontem');
+  assert.ok(/^3 de nov/.test(p.ultimaVezSteam(new Date(2026, 10, 3).toISOString(), agora)));
+  assert.ok(/2024/.test(p.ultimaVezSteam(new Date(2024, 4, 3).toISOString(), agora)));
+  assert.strictEqual(p.ultimaVezSteam('', agora), '');
+  p.esc = (t) => String(t);
+  const inst = p.estadoBotaoSteam(f, { local: { steamNoPc: true, instalados: [{ appid: 1145360 }] }, biblioteca: { jogos: [{ appid: 1145360, minutos: 6498, ultimaVez: '2026-11-03T20:00:00.000Z' }] } });
+  assert.ok(p.tempoSteamJogoHTML(inst).includes('<span>Tempo de jogo</span><b>108,3 h</b>'));
+  assert.ok(/Jogado por último/.test(p.tempoSteamJogoHTML(inst)));
+  // Sem a biblioteca (ou sem o jogo nela), nada ao lado do botão.
+  assert.strictEqual(p.tempoSteamJogoHTML(p.estadoBotaoSteam(f, { local: pc })), '');
+  assert.strictEqual(p.tempoSteamJogoHTML(p.estadoBotaoSteam(f, { local: pc, biblioteca: { jogos: [] } })), '');
 });
 
 test('botão da Steam: sem appid vira a loja principal, o site ou a busca', () => {
