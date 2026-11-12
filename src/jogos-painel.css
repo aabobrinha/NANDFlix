@@ -91,19 +91,24 @@
 .jogo-plataformas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .jogo-plataforma { padding: 4px 9px; border-radius: 6px; background: var(--superficie-2); font: 600 12px/1.2 var(--ui); color: var(--texto-2); }
 
-/* HowLongToBeat: três blocos como no site (azul, roxo, vermelho) */
-.hltb-tempos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-width: 520px; }
+/* Coluna da direita: as fichas e, embaixo, o HowLongToBeat (para ela não ficar vazia
+   ao lado de status, tags e Onde jogar). */
+.jogo-lado { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+/* HowLongToBeat: os três tempos empilhados, compactos, com as cores do site
+   (azul, roxo, vermelho) */
+.jogo-hltb h3 { margin: 0 0 10px; font-size: 15px; }
+.hltb-tempos { display: flex; flex-direction: column; gap: 6px; }
 .hltb-tempo {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  min-height: 72px; padding: 10px 8px; border-radius: 10px; text-align: center; color: #FFFFFF;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 38px; padding: 6px 12px; border-radius: 8px; color: #FFFFFF;
 }
-.hltb-tempo span { font-size: 12px; font-weight: 600; opacity: .9; }
-.hltb-tempo b { font: 700 20px/1 var(--display); font-variant-numeric: tabular-nums; }
-.hltb-historia { background: linear-gradient(160deg, #2E78C2, #1F5A94); }
-.hltb-extras { background: linear-gradient(160deg, #6A55B8, #4B3A8C); }
-.hltb-cem { background: linear-gradient(160deg, #B9424C, #8C2F37); }
-.hltb-fonte { margin: 8px 0 6px; font-size: 12px; color: var(--texto-2); }
-.jogo-hltb .btn { padding: 0 14px; }
+.hltb-tempo span { font-size: 12.5px; font-weight: 600; opacity: .92; }
+.hltb-tempo b { font: 700 16px/1 var(--display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hltb-historia { background: linear-gradient(100deg, #2E78C2, #1F5A94); }
+.hltb-extras { background: linear-gradient(100deg, #6A55B8, #4B3A8C); }
+.hltb-cem { background: linear-gradient(100deg, #B9424C, #8C2F37); }
+.hltb-fonte { margin: 8px 0; font-size: 11.5px; color: var(--texto-2); }
+.jogo-hltb .btn { width: 100%; justify-content: center; min-height: 36px; padding: 0 12px; font-size: 13px; }
 
 /* Celular: uma coluna, botões largos como o Assistir */
 html.celular .painel-jogo .titulo-logo img { max-width: 72vw; max-height: 76px; }
@@ -114,5 +119,4 @@ html.celular .painel-botoes .jogo-steam-btn .steam-marca { color: #0B0C0E; }
 html.celular .jogo-steam-linha { margin: 0; text-shadow: none; }
 html.celular .jogo-tag-nova { width: 100%; min-height: 40px; }
 html.celular .jogo-loja-steam { width: 100%; }
-html.celular .hltb-tempo b { font-size: 18px; }
 html.celular .jogo-dev-aviso { margin: 24px 16px 0; }

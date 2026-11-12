@@ -406,10 +406,12 @@ function renderPainelJogo(f) {
         ${f.externo ? foraDaListaHTML(f) : usuarioJogoHTML(f)}
         ${f.sinopse ? `<p class="painel-sinopse">${esc(f.sinopse)}</p>` : ''}
         ${ondeJogarHTML(f)}
-        ${hltbHTML(f)}
       </div>
-      <div class="painel-fichas">
-        ${fichas.map(([r, v]) => `<p class="painel-ficha"><b>${r}:</b> <span>${esc(v)}</span></p>`).join('')}
+      <div class="jogo-lado">
+        <div class="painel-fichas">
+          ${fichas.map(([r, v]) => `<p class="painel-ficha"><b>${r}:</b> <span>${esc(v)}</span></p>`).join('')}
+        </div>
+        ${hltbHTML(f)}
       </div>
     </div>
     <div id="painel-relacionados"></div>`;
