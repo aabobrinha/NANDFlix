@@ -218,7 +218,7 @@ const todasPlataformas = () => Boolean(estado.config && estado.config.nandrollTo
 const plataformaVisivel = (l) => todasPlataformas() || PLATAFORMAS_BR.has(String(l.site || '').toLowerCase().trim());
 
 // Os links das plataformas oficiais, para séries (da temporada `t`) e filmes de anime.
-function ondeAssistirHTML(f, t = null, indice = null) {
+function ondeAssistirAnimeHTML(f, t = null, indice = null) {
   const todos = Array.isArray((t || f).ondeAssistir) ? (t || f).ondeAssistir : [];
   const links = todos.map((l, i) => ({ ...l, i })).filter(plataformaVisivel);
   const id = (t && t.anilistId) || f.anilistId;
@@ -247,7 +247,7 @@ function chipsTemporadasHTML(f, sel) {
 // Contador de episódios, status, próximo episódio e onde assistir.
 function animeNoPainelHTML(f) {
   if (!ehAnime(f)) return '';
-  if (!ehSerie(f)) return `<div class="serie" data-anime-bloco>${ondeAssistirHTML(f)}</div>`;
+  if (!ehSerie(f)) return `<div class="serie" data-anime-bloco>${ondeAssistirAnimeHTML(f)}</div>`;
   const ts = temporadasDe(f);
   const sel = indiceTemporada(f);
   const t = sel === null ? null : ts[sel];
@@ -289,7 +289,7 @@ function animeNoPainelHTML(f) {
       ${!t && episodiosNovos(f) ? `<p class="serie-novos">${icone('Sparkles')} ${episodiosNovos(f) === 1 ? '1 episódio novo' : `${episodiosNovos(f)} episódios novos`} para ver</p>` : ''}
       ${t && !temporadaLancada(t) ? '<p class="serie-proximo">Ainda não lançada.</p>' : ''}
       ${proximo ? `<p class="serie-proximo">${icone('CalendarClock')} ${esc(proximo)}</p>` : ''}
-      ${ts.length ? ondeAssistirHTML(f, corrente, corrente ? ts.indexOf(corrente) : null) : ondeAssistirHTML(f)}
+      ${ts.length ? ondeAssistirAnimeHTML(f, corrente, corrente ? ts.indexOf(corrente) : null) : ondeAssistirAnimeHTML(f)}
     </div>`;
 }
 

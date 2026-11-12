@@ -13,6 +13,8 @@ const estado = {
   diretor: '', // "filmes do mesmo diretor", escolhido no painel
   pais: '', // filtro de país, escolhido no cabeçalho do grupo ou no painel
   lista: '', // filtro por uma das listas da pessoa (listas.js)
+  onde: '', // filtro de onde assistir: 'meus' | 'streaming' | 'cinema' | 'stremio' (onde.js)
+  premio: '', // filtro de prêmio: 'oscar:indicado' | 'oscar:venceu' | 'oscar:venceu:Best Picture' (premios.js)
   ordenacao: 'ordem',
   vista: 'grade',
   painelId: null,
@@ -205,6 +207,8 @@ function filtrados() {
     if (diretores.length && !diretoresDe(f.diretor).some((d) => diretores.includes(d))) return false;
     if (estado.pais && !paisesDe(f).includes(estado.pais)) return false;
     if (estado.lista && !listasDe(f).includes(estado.lista)) return false;
+    if (estado.onde && !passaOnde(f, estado.onde)) return false;
+    if (estado.premio && !passaPremio(f, estado.premio)) return false;
     if (!palavras.length) return true;
     const alvo = normalizar([f.titulo, f.ano, f.diretor, f.notas, f.buscaCapa, ...paisesDe(f)].join(' '));
     return palavras.every((p) => alvo.includes(p));
@@ -220,6 +224,13 @@ function filtrados() {
     diretor: (a, b) => comparaGrupo((a.diretor || '').trim(), (b.diretor || '').trim()) || anoNumero(a.ano) - anoNumero(b.ano) || comparaTitulo(a, b),
     pais: (a, b) => comparaGrupo(paisPrincipal(a), paisPrincipal(b)) || anoNumero(a.ano) - anoNumero(b.ano) || comparaTitulo(a, b),
     recentes: (a, b) => String(b.adicionadoEm).localeCompare(String(a.adicionadoEm)) || (b.ordem || 0) - (a.ordem || 0),
+    // Pela nota do site escolhido para as capas (sem nota: no fim).
+    nota: (a, b) => {
+      const site = siteNaCapa() || 'letterboxd';
+      const na = notaDe0a100(a, site);
+      const nb = notaDe0a100(b, site);
+      return (nb ?? -1) - (na ?? -1) || comparaTitulo(a, b);
+    },
   };
   return lista.sort(ordens[estado.ordenacao] || ordens.ordem);
 }
@@ -309,6 +320,7 @@ function cartaoHTML(f) {
         ${f.visto ? `<span class="selo-visto" title="Visto">${icone('Check')}</span>` : ''}
         ${f.favorito ? `<span class="selo-fav" title="Favorito">${icone('Star', { preenchido: true })}</span>` : ''}
         ${hojeNaLista ? seloHojeHTML() : ''}
+        ${seloNotaHTML(f)}
       </div>
       <div class="info">
         <h3 title="${esc(f.titulo)}"><span>${esc(f.titulo)}</span></h3>
@@ -335,7 +347,7 @@ const cacheFileira = new Map();
 // (ver atualizarCartao), sem recriar o elemento. Recriar tirava da página o
 // botão que acabou de ser clicado e, com ele focado, o Chromium rolava a página.
 function assinatura(f) {
-  return [f.titulo, f.ano, f.diretor, f.capaLocal, f.poster].join('\u0001');
+  return [f.titulo, f.ano, f.diretor, f.capaLocal, f.poster, seloNotaHTML(f)].join('\u0001');
 }
 const estadoCartao = (f) => `${Boolean(f.visto)}|${Boolean(f.favorito)}|${naWatchlist(f.id)}|${estadoCartaoAnime(f)}`; // NANDRoll: progresso das séries
 
@@ -482,6 +494,7 @@ function render() {
   $('#chip-lista').hidden = !estado.lista;
   $('#chip-lista').innerHTML = `${icone('Tag')}<span>${esc(estado.lista || '')}</span>${icone('X')}`;
   $('#btn-listas').classList.toggle('ativo-leve', Boolean(estado.lista));
+  atualizarChipsFiltros();
   if (vazio) $('#secao-sorteado').hidden = true;
   atualizarTopo();
   renderFileira();
@@ -667,7 +680,7 @@ async function abrirStremio(id, { stremio = false } = {}) {
   if (r.semApp) {
     const escolha = await perguntar({
       titulo: 'Stremio não encontrado',
-      texto: 'Não encontrei o app do Stremio instalado neste computador. Quer abrir o filme no Stremio Web?',
+      texto: `Não encontrei o app do Stremio instalado neste ${api.celular ? 'celular' : 'computador'}. Quer abrir o filme no Stremio Web?`,
       botoes: [
         { rotulo: 'Cancelar', valor: null, classe: 'btn-fantasma' },
         { rotulo: 'Sempre usar o Stremio Web', valor: 'sempre' },
@@ -795,7 +808,8 @@ function renderPainel() {
         <div class="painel-listas">${listasDoFilmeHTML(f)}</div>
         <div class="painel-vistos">${vistosEmHTML(f)}</div>
         ${paginaNoPainelHTML(f)}
-        <div class="notas-linha">${notasHTML(f.info)}</div>
+        <div class="notas-linha">${notasHTML(f.info, f)}</div>
+        <div class="onde-assistir" data-info="onde">${ondeAssistirHTML(f)}</div>
         <p class="painel-sinopse" data-info="sinopse-painel"${sinopse ? '' : ' hidden'}>${esc(sinopse)}</p>
       </div>
       <div class="painel-fichas">
@@ -804,6 +818,7 @@ function renderPainel() {
         <p class="painel-ficha" data-info="elenco-painel"${elenco ? '' : ' hidden'}><b>Elenco:</b> <span>${esc(elenco)}</span></p>
         <p class="painel-ficha" data-info="generos-painel"${generos(f.info).length ? '' : ' hidden'}><b>Gêneros:</b> <span>${esc(generos(f.info).join(', '))}</span></p>
         ${f.notas ? `<p class="painel-ficha"><b>Suas notas:</b> <span>${esc(f.notas)}</span></p>` : ''}
+        ${premiosPainelHTML(f)}
       </div>
     </div>
     <div id="painel-relacionados"></div>
@@ -842,6 +857,13 @@ function renderPainel() {
 
   carregarRelacionados(f);
   ajustarCapaTemporada(f); // NANDRoll: numa temporada, a capa dela
+  // Notas do Letterboxd e do TMDB e onde assistir: busca de novo se tiverem mais de 7 dias.
+  api.extrasAgora(f.id).then((ex) => {
+    if (!ex || estado.painelId !== f.id) return;
+    f.extras = ex;
+    atualizarExtrasPainel(f);
+    agendarRender();
+  });
 
   if (!f.info) {
     const id = f.id;
@@ -858,9 +880,17 @@ function renderPainel() {
       const lista = generos(info);
       if (g && lista.length) { $('span', g).textContent = lista.join(', '); g.hidden = false; }
       const notas = $('#painel .notas-linha');
-      if (notas) notas.innerHTML = notasHTML(info);
+      if (notas) notas.innerHTML = notasHTML(info, f);
     });
   }
+}
+
+// Os extras chegaram (ou mudaram): redesenha as notas do painel.
+function atualizarExtrasPainel(f) {
+  const notas = $('#painel .painel-corpo .notas-linha');
+  if (notas) notas.innerHTML = notasHTML(f.info, f);
+  const onde = $('#painel [data-info="onde"]');
+  if (onde) onde.innerHTML = ondeAssistirHTML(f);
 }
 
 // "2001  1h 56m  [PG-13]", como a linha de dados do modal da Netflix.
@@ -1048,7 +1078,7 @@ function renderPainelExterno(f) {
       <div>
         <p class="painel-meta">${painelMetaHTML(f)}</p>
         <p class="painel-externo-aviso">${icone('Info')} Este filme não está na sua lista.</p>
-        <div class="notas-linha">${notasHTML(info)}</div>
+        <div class="notas-linha">${notasHTML(info, f)}</div>
         ${info.sinopse ? `<p class="painel-sinopse">${esc(info.sinopse)}</p>` : ''}
       </div>
       <div class="painel-fichas">
@@ -1819,22 +1849,95 @@ function metaCurtaHTML(f) {
   return html;
 }
 
-function notasHTML(info) {
-  if (!info) return '';
+// ---------- Notas de cada site (IMDb, Letterboxd, Metascore, Rotten Tomatoes, TMDB) ----------
+//
+// IMDb, Metascore e Rotten Tomatoes vêm do OMDb (f.info); Letterboxd e TMDB vêm
+// dos extras (lib/extras.js), atualizados toda semana. Cada selo abre a página
+// do filme no site. `notaNaCapa` (Configurações) escolhe o site do selo das capas.
+const corMeta = (n) => (n >= 61 ? '#54a72a' : n >= 40 ? '#d3a400' : '#e8302b');
+const buscaUrl = (f) => encodeURIComponent(f.titulo || '');
+const SITES_NOTA = {
+  letterboxd: {
+    nome: 'Letterboxd',
+    valor: (f, info) => (f.extras && f.extras.letterboxd) || (info && info.letterboxd) || '',
+    max: 5,
+    marca: () => `<span class="marca-lb">${LB_PONTOS}</span>`,
+    link: (f) => (f.extras && f.extras.letterboxdUrl) || f.linkLetterboxd || (f.imdbID ? `https://letterboxd.com/imdb/${f.imdbID}/` : `https://letterboxd.com/search/films/${buscaUrl(f)}/`),
+  },
+  imdb: {
+    nome: 'IMDb',
+    valor: (f, info) => (info && info.imdb) || '',
+    max: 10,
+    marca: () => '<span class="marca-imdb">IMDb</span>',
+    link: (f) => (f.imdbID ? `https://www.imdb.com/title/${f.imdbID}/` : `https://www.imdb.com/find/?q=${buscaUrl(f)}`),
+  },
+  metascore: {
+    nome: 'Metascore',
+    valor: (f, info) => (info && info.metascore) || '',
+    max: 100,
+    marca: (v) => `<span class="marca-meta" style="background:${corMeta(Number(v))}">${esc(v)}</span>`,
+    semNumero: true,
+    rotulo: 'Metascore',
+    link: (f) => `https://www.metacritic.com/search/${buscaUrl(f)}/?category=2`,
+  },
+  rotten: {
+    nome: 'Rotten Tomatoes',
+    valor: (f, info) => (info && info.rotten) || '',
+    max: 100,
+    marca: (v) => `<span class="marca-rt" aria-hidden="true">${parseInt(v, 10) >= 60 ? '🍅' : '🤢'}</span>`,
+    link: (f) => `https://www.rottentomatoes.com/search?search=${buscaUrl(f)}`,
+  },
+  tmdb: {
+    nome: 'TMDB',
+    valor: (f, info) => (f.extras && f.extras.tmdb) || (info && info.tmdb) || '',
+    max: 10,
+    marca: () => '<span class="marca-tmdb">TMDB</span>',
+    link: (f) => (f.tmdbId ? `https://www.themoviedb.org/movie/${f.tmdbId}` : `https://www.themoviedb.org/search/movie?query=${buscaUrl(f)}`),
+  },
+};
+const ORDEM_SITES = ['imdb', 'letterboxd', 'metascore', 'rotten', 'tmdb'];
+const siteNaCapa = () => (estado.config.notaNaCapa === 'nenhuma' ? null : SITES_NOTA[estado.config.notaNaCapa] ? estado.config.notaNaCapa : 'letterboxd');
+
+// A nota do site de 0 a 100, para comparar (ordenar por nota); null sem nota.
+function notaDe0a100(f, site) {
+  const s = SITES_NOTA[site];
+  const n = parseFloat(String(s.valor(f, f.info)).replace(',', '.'));
+  return Number.isFinite(n) ? (n / s.max) * 100 : null;
+}
+
+// `f`: o filme (ou o do TMDB, nos detalhes de um filme fora da lista), para os
+// links e as notas dos extras; `info`: as informações (padrão f.info).
+function notasHTML(info, f = {}) {
   const chips = [];
   if (info.anilist) chips.push(`<span class="nota-chip" title="Nota média na AniList"><span class="marca-anilist">AniList</span>${esc(info.anilist)}%</span>`); // NANDRoll
-  if (info.imdb) chips.push(`<span class="nota-chip" title="Nota no IMDb"><span class="marca-imdb">IMDb</span>${esc(info.imdb)}</span>`);
-  if (info.metascore) {
-    const n = Number(info.metascore);
-    const cor = n >= 61 ? '#54a72a' : n >= 40 ? '#d3a400' : '#e8302b';
-    chips.push(`<span class="nota-chip" title="Metascore"><span class="marca-meta" style="background:${cor}">${esc(info.metascore)}</span><span class="rotulo-nota">Metascore</span></span>`);
-  }
-  if (info.rotten) {
-    const fresco = parseInt(info.rotten, 10) >= 60;
-    chips.push(`<span class="nota-chip" title="Rotten Tomatoes">${fresco ? '🍅' : '🤢'} ${esc(info.rotten)}</span>`);
+  for (const site of ORDEM_SITES) {
+    const s = SITES_NOTA[site];
+    const v = String(s.valor(f, info) || '');
+    if (!v) continue;
+    const titulo = `${s.nome}: ${v}${s.max === 100 && !v.includes('%') ? '/100' : s.max === 5 ? ' de 5' : s.max === 10 ? ' de 10' : ''} · abrir no ${s.nome}`;
+    chips.push(`<button type="button" class="nota-chip nota-${site}" data-link="${esc(s.link(f))}" title="${esc(titulo)}" aria-label="${esc(titulo)}">${s.marca(v)}${s.semNumero ? '' : esc(v)}${s.rotulo ? `<span class="rotulo-nota">${s.rotulo}</span>` : ''}</button>`);
   }
   return chips.join('');
 }
+
+// O selo da capa: a nota do site escolhido em Configurações.
+function seloNotaHTML(f) {
+  const site = siteNaCapa();
+  if (!site) return '';
+  const s = SITES_NOTA[site];
+  const v = String(s.valor(f, f.info) || '');
+  if (!v) return '';
+  return `<span class="selo-nota selo-nota-${site}" title="${esc(`${s.nome}: ${v}`)}">${site === 'metascore' ? s.marca(v) : `${s.marca(v)}<span>${esc(v)}</span>`}</span>`;
+}
+
+// Selos de nota e outros links para sites: abrem no navegador (no celular, no app do site).
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-link]');
+  if (!el) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (el.dataset.link) api.abrirLink(el.dataset.link);
+}, true);
 
 function creditosHTML(f) {
   const partes = [];
@@ -1867,13 +1970,13 @@ let proximoSorteio = null;
 
 // Guardados nas configurações. Valem só para o sorteio (a lista da tela não muda):
 // duração máxima ("tenho 1h40"), gêneros, décadas, países e "só da watchlist de hoje".
-const FILTROS_SORTEIO_VAZIOS = { duracao: 0, generos: [], decadas: [], paises: [], listas: [], soWatchlist: false };
+const FILTROS_SORTEIO_VAZIOS = { duracao: 0, generos: [], decadas: [], paises: [], listas: [], onde: [], premios: [], soWatchlist: false };
 const filtrosSorteio = () => ({ ...FILTROS_SORTEIO_VAZIOS, ...(estado.config.filtrosSorteio || {}) });
 const minutosDe = (f) => f.duracao || parseInt(f.info && f.info.duracao, 10) || 0;
 const decadaDe = (f) => { const a = anoNumero(f.ano); return Number.isFinite(a) ? Math.floor(a / 10) * 10 : null; };
 
 function filtrosSorteioAtivos(fs = filtrosSorteio()) {
-  return Boolean(fs.duracao || fs.generos.length || fs.decadas.length || fs.paises.length || fs.listas.length || fs.soWatchlist);
+  return Boolean(fs.duracao || fs.generos.length || fs.decadas.length || fs.paises.length || fs.listas.length || fs.onde.length || fs.premios.length || fs.soWatchlist);
 }
 
 function passaNoSorteio(f, fs) {
@@ -1882,6 +1985,9 @@ function passaNoSorteio(f, fs) {
   if (fs.decadas.length && !fs.decadas.includes(decadaDe(f))) return false;
   if (fs.paises.length && !paisesDe(f).some((p) => fs.paises.includes(p))) return false;
   if (fs.listas.length && !listasDe(f).some((l) => fs.listas.includes(l))) return false;
+  // Onde assistir: basta um (nos meus serviços OU nos cinemas…).
+  if (fs.onde.length && !fs.onde.some((o) => passaOnde(f, o))) return false;
+  if (fs.premios.length && !fs.premios.some((p) => passaPremio(f, p))) return false;
   return true;
 }
 
@@ -1904,6 +2010,8 @@ function resumoFiltrosSorteio(fs = filtrosSorteio()) {
   if (fs.decadas.length) partes.push(fs.decadas.map((d) => `anos ${String(d).slice(2)}`).join(', '));
   if (fs.paises.length) partes.push(fs.paises.join(', '));
   if (fs.listas.length) partes.push(fs.listas.join(', '));
+  if (fs.premios.length) partes.push(fs.premios.map((p) => rotuloFiltroPremio(p).toLowerCase()).join(', '));
+  if (fs.onde.length) partes.push(fs.onde.map((o) => (FILTROS_ONDE[o] ? FILTROS_ONDE[o].rotulo.toLowerCase() : o)).join(', '));
   return partes;
 }
 
@@ -1925,6 +2033,8 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
     <div class="modal-corpo filtros-sorteio">
       ${secao('Sortear de', 'origem')}
       ${listasTodas.length ? secao('Das suas listas', 'listas') : ''}
+      ${secao('Onde assistir', 'onde')}
+      ${secao('Prêmios', 'premios')}
       ${secao('Quanto tempo você tem?', 'duracao')}
       ${generosTodos.length ? secao('Gêneros', 'generos') : ''}
       ${decadasTodas.length ? secao('Década', 'decadas') : ''}
@@ -1944,6 +2054,8 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
       decadas: decadasTodas.map(([d, n]) => chip('decadas', d, `Anos ${d < 2000 ? String(d).slice(2) : d}`, fs.decadas.includes(d), n)).join(''),
       paises: paisesTodos.map(([p, n]) => chip('paises', p, p, fs.paises.includes(p), n)).join(''),
       listas: listasTodas.map(([l, n]) => chip('listas', l, l, fs.listas.includes(l), n)).join(''),
+      premios: filtrosPremioSorteio().map((p) => chip('premios', p, rotuloFiltroPremio(p), fs.premios.includes(p), naoVistos.filter((f) => passaPremio(f, p)).length)).join(''),
+      onde: filtrosOndeDisponiveis().map((o) => chip('onde', o, FILTROS_ONDE[o].rotulo, fs.onde.includes(o), naoVistos.filter((f) => passaOnde(f, o)).length)).join(''),
     };
     for (const [nome, h] of Object.entries(html)) { const el = $(`[data-secao="${nome}"]`, modal); if (el) el.innerHTML = h; }
     const n = candidatosSorteio(fs, { paraHoje: paraHoje && !fs.soWatchlist }).length;
@@ -1968,6 +2080,8 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
     if (grupo === 'decadas') fs = { ...fs, decadas: alternarEm(fs.decadas, Number(valor)) };
     if (grupo === 'paises') fs = { ...fs, paises: alternarEm(fs.paises, valor) };
     if (grupo === 'listas') fs = { ...fs, listas: alternarEm(fs.listas, valor) };
+    if (grupo === 'onde') fs = { ...fs, onde: alternarEm(fs.onde, valor) };
+    if (grupo === 'premios') fs = { ...fs, premios: alternarEm(fs.premios, valor) };
     salvar();
   });
   $('#filtros-limpar', modal).onclick = () => { fs = { ...FILTROS_SORTEIO_VAZIOS }; salvar(); };
@@ -2047,7 +2161,7 @@ function mostrarDestaque(opcoes = {}) {
         </div>
       </div>
       <div class="destaque-textos">
-        <div class="notas-linha" data-info="notas">${notasHTML(f.info)}</div>
+        <div class="notas-linha" data-info="notas">${notasHTML(f.info, f)}</div>
         <p class="sinopse" data-info="sinopse"${f.info && f.info.sinopse ? '' : ' hidden'}>${esc(f.info ? f.info.sinopse : '')}</p>
         <p class="creditos" data-info="creditos">${creditosHTML(f)}</p>
         <div class="destaque-botoes">
@@ -2085,7 +2199,7 @@ async function carregarExtrasDestaque(f, token) {
   carregarInfo(f).then((info) => {
     if (!info || token !== tokenDestaque) return;
     $('[data-info="meta"]', el).innerHTML = metaHTML(f);
-    $('[data-info="notas"]', el).innerHTML = notasHTML(info);
+    $('[data-info="notas"]', el).innerHTML = notasHTML(info, f);
     $('[data-info="creditos"]', el).innerHTML = creditosHTML(f);
     const sinopse = $('[data-info="sinopse"]', el);
     sinopse.textContent = info.sinopse;
@@ -2233,7 +2347,8 @@ function previaHTML(f) {
       </div>
       <div class="meta-linha" data-info="meta">${metaCurtaHTML(f)}</div>
       <div class="generos" data-info="generos">${esc(generos(f.info).slice(0, 3).join(' • '))}</div>
-      <div class="notas-linha" data-info="notas">${notasHTML(f.info)}</div>
+      <div class="notas-linha" data-info="notas">${notasHTML(f.info, f)}</div>
+      <div class="servicos-linha">${servicosCurtosHTML(f)}</div>
       ${f.diretor ? `<p class="creditos"><b>Direção:</b> ${esc(f.diretor)}</p>` : ''}
       ${f.notas ? `<p class="notas-pessoais">${esc(f.notas)}</p>` : ''}
     </div>`;
@@ -2259,7 +2374,7 @@ async function abrirPrevia(cartao) {
     if (token !== tokenPrevia || !info) return;
     $('[data-info="meta"]', previa).innerHTML = metaCurtaHTML(f);
     $('[data-info="generos"]', previa).textContent = generos(info).slice(0, 3).join(' • ');
-    $('[data-info="notas"]', previa).innerHTML = notasHTML(info);
+    $('[data-info="notas"]', previa).innerHTML = notasHTML(info, f);
   });
   const videoId = await trailerDe(f.id);
   if (token !== tokenPrevia) return;
@@ -2489,6 +2604,14 @@ function abrirConfiguracoes() {
         </div>
       </div>
 ${nandrollConfigHTML()}
+      <div class="secao" id="cfg-onde"></div>
+      <div class="secao">
+        <h3>Nota nas capas</h3>
+        <div class="chips-linha" id="cfg-nota-capa">
+          ${[...ORDEM_SITES, 'nenhuma'].map((s) => `<button class="chip${(siteNaCapa() || 'nenhuma') === s ? ' ativo' : ''}" data-site="${s}" aria-pressed="${(siteNaCapa() || 'nenhuma') === s}">${s === 'nenhuma' ? 'Nenhuma' : SITES_NOTA[s].nome}</button>`).join('')}
+        </div>
+        <p>A nota que aparece no canto de cada capa (e a usada em “Ordenar por nota”). Letterboxd e TMDB não precisam de chave; IMDb, Metascore e Rotten Tomatoes vêm do OMDb.</p>
+      </div>
       <div class="secao">
         <h3>Capas e informações</h3>
         <div class="linha-botoes">
@@ -2504,7 +2627,7 @@ ${nandrollConfigHTML()}
           <button class="btn" id="cfg-exportar">Exportar para Excel</button>
           <button class="btn" id="cfg-backup-exp">Exportar backup</button>
           <button class="btn" id="cfg-backup-imp">Importar backup</button>
-          <button class="btn" id="cfg-letterboxd" title="A pasta do export de dados do Letterboxd (Settings → Import &amp; Export), descompactada">${LB_PONTOS} Importar do Letterboxd</button>
+          <button class="btn" id="cfg-letterboxd" title="Letterboxd, IMDb, Stremio, Rotten Tomatoes ou qualquer .csv">${icone('Download')} Importar de outro app</button>
           <button class="btn" id="cfg-capas-todas">${icone('Download')} Baixar todas as capas</button>
           <button class="btn btn-fantasma" id="cfg-pasta">Abrir pasta de dados</button>
         </div>
@@ -2549,6 +2672,14 @@ ${nandrollConfigHTML()}
   $$('input[name="stremio"]', modal).forEach((r) => {
     r.onchange = async () => { estado.config = await api.salvarConfig({ stremio: r.value }); };
   });
+  montarCfgOnde($('#cfg-onde', modal));
+  $('#cfg-nota-capa', modal).onclick = async (e) => {
+    const b = e.target.closest('[data-site]');
+    if (!b) return;
+    $$('#cfg-nota-capa .chip', modal).forEach((x) => { x.classList.toggle('ativo', x === b); x.setAttribute('aria-pressed', x === b); });
+    estado.config = await api.salvarConfig({ notaNaCapa: b.dataset.site });
+    render();
+  };
   $('#cfg-capas', modal).onclick = () => { fecharModal(); buscarCapas({ incluirNaoEncontradas: true }); };
   $('#cfg-infos', modal)?.addEventListener('click', () => { fecharModal(); buscarInfos(); });
   $('#cfg-importar', modal).onclick = () => { fecharModal(); importarPlanilha(); };
@@ -2568,7 +2699,7 @@ ${nandrollConfigHTML()}
     mostrarStatusBackup();
   };
   $('#cfg-backup-restaurar', modal).onclick = abrirRestaurarBackup;
-  $('#cfg-letterboxd', modal).onclick = () => { fecharModal(); importarLetterboxd(); };
+  $('#cfg-letterboxd', modal).onclick = () => { fecharModal(); abrirImportar(); };
   $('#cfg-pasta', modal).onclick = () => api.abrirPastaDados();
   $('#cfg-capas-todas', modal).onclick = async () => {
     const r = await api.baixarTodasCapas();
@@ -2636,30 +2767,102 @@ async function importarPlanilha() {
 
 // Pasta do export do Letterboxd: vistos (com as datas do diário de antes do
 // calendário daqui), notas e a watchlist como filmes novos.
-async function importarLetterboxd() {
-  const r = await api.importarLetterboxd();
-  if (r.cancelado) return;
+// ---------- Importar de outros apps (Letterboxd, IMDb, Stremio, Rotten Tomatoes…) ----------
+
+const FONTES_IMPORTAR = {
+  letterboxd: { nome: 'Letterboxd', icone: () => LB_PONTOS },
+  imdb: { nome: 'IMDb', icone: () => '<span class="marca-imdb">IMDb</span>' },
+  stremio: { nome: 'Stremio', icone: () => icone('Play') },
+  csv: { nome: 'outro app', icone: () => icone('FileSpreadsheet') },
+};
+
+// Tira todos os filtros da lista (busca, "não vistos", diretor, país, lista,
+// onde assistir, prêmio), para os filmes que acabaram de chegar aparecerem.
+function mostrarTudo() {
+  estado.filtro = 'todos';
+  $$('.chip[data-filtro]').forEach((c) => { c.classList.toggle('ativo', c.dataset.filtro === 'todos'); c.setAttribute('aria-checked', String(c.dataset.filtro === 'todos')); });
+  estado.busca = '';
+  $('#pesquisa').value = '';
+  fecharPesquisa();
+  Object.assign(estado, { diretor: '', pais: '', lista: '', onde: '', premio: '' });
+}
+
+function abrirImportar() {
+  const passo = (id, titulo, texto, corpo) => `
+    <section class="imp-fonte" data-fonte="${id}">
+      <div class="imp-cabeca"><span class="imp-icone">${FONTES_IMPORTAR[id].icone()}</span><h3>${titulo}</h3></div>
+      <p>${texto}</p>
+      ${corpo}
+    </section>`;
+  const botaoArquivos = (rotulo) => `<button class="btn" data-imp="arquivos">${icone('FolderOpen')} ${rotulo}</button>`;
+  abrirModal(`${cabecalhoModal('Importar de outro app')}
+    <div class="modal-corpo importar">
+      <p class="imp-intro">Os filmes vistos são marcados como vistos, as notas preenchem “Sua nota” onde ela está vazia e a watchlist entra como filmes novos. Nada que já está no NANDFlix é apagado, e um backup é feito antes.</p>
+      ${passo('letterboxd', 'Letterboxd', 'No Letterboxd: <b>Settings → Import &amp; Export → Export your data</b>. Escolha o <b>.zip</b> que chega por e-mail (não precisa descompactar). Vêm os vistos com as datas do diário, as notas e a watchlist.', botaoArquivos('Escolher o .zip'))}
+      ${passo('imdb', 'IMDb', 'No IMDb, em <b>Suas avaliações</b> e na sua <b>Watchlist</b>, use o menu <b>… → Exportar</b>; depois baixe os .csv em <b>imdb.com/exports</b>. Escolha os dois de uma vez: as avaliações viram vistos com nota (de 1 a 10 vira de ½ a 5 estrelas) e a watchlist entra na lista.', botaoArquivos('Escolher os .csv'))}
+      ${passo('stremio', 'Stremio', 'Entre com a sua conta do Stremio: os filmes assistidos (ou marcados como vistos) viram vistos, e os outros filmes da biblioteca entram como watchlist. A senha vai só para o Stremio e não fica guardada.', `
+        <form class="imp-stremio" autocomplete="on">
+          <input type="email" name="email" placeholder="E-mail do Stremio" required autocomplete="username">
+          <input type="password" name="senha" placeholder="Senha" required autocomplete="current-password">
+          <button class="btn btn-primario" type="submit">${icone('Download')} Importar biblioteca</button>
+        </form>`)}
+      ${passo('csv', 'Rotten Tomatoes e outros', 'O Rotten Tomatoes não exporta as suas avaliações; use uma extensão que gere um CSV no formato de importação do Letterboxd (há algumas na página de importação do Letterboxd). Serve também qualquer planilha .csv com <b>título e ano</b> e, se tiver, nota, data em que viu, código do IMDb ou uma coluna de watchlist.', botaoArquivos('Escolher o .csv'))}
+    </div>`, 'modal-importar');
+  const corpo = $('.importar', modal);
+  const ocupado = (sim, texto = 'Importando…') => {
+    corpo.classList.toggle('ocupado', sim);
+    $$('button, input', corpo).forEach((el) => { el.disabled = sim; });
+    let st = $('.imp-status', modal);
+    if (!st) { st = document.createElement('p'); st.className = 'imp-status'; corpo.prepend(st); }
+    st.textContent = sim ? `${texto} Procurando cada filme no TMDB; pode levar um minuto.` : '';
+  };
+  corpo.addEventListener('click', async (e) => {
+    if (!e.target.closest('[data-imp="arquivos"]')) return;
+    ocupado(true);
+    const r = await api.importarArquivos();
+    ocupado(false);
+    if (!r.cancelado) mostrarImportacao(r);
+  });
+  $('.imp-stremio', modal).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    ocupado(true, 'Lendo a sua biblioteca do Stremio…');
+    const r = await api.importarStremio(f.get('email'), f.get('senha'));
+    ocupado(false);
+    mostrarImportacao(r);
+  });
+}
+
+// O nome antigo (busca, atalhos): abre a mesma janela.
+function importarLetterboxd() { abrirImportar(); }
+
+function mostrarImportacao(r) {
   if (r.erro) { aviso(r.erro, { tipo: 'erro', duracao: 7000 }); return; }
   estado.filmes = r.filmes;
   cacheCartoes.clear();
   cacheFileira.clear();
+  // Sem filtro: com "Não vistos" ligado, por exemplo, os filmes vistos que chegaram não apareciam.
+  mostrarTudo();
   render();
+  if (filmeNoDestaque() == null) sortear({ rolar: false, avisarSeVazio: false });
   if (!calendario.hidden) renderCalendario();
+  const nome = (FONTES_IMPORTAR[r.fonte] || FONTES_IMPORTAR.csv).nome;
   const linha = (n, texto) => (n ? `<li><b>${n}</b> ${texto}</li>` : '');
   const nada = !(r.novosWatchlist || r.novosVistos || r.marcadosVistos || r.datas || r.notas);
-  abrirModal(`${cabecalhoModal('Letterboxd importado')}
+  abrirModal(`${cabecalhoModal(r.fonte === 'csv' ? 'Importado' : `${nome} importado`)}
     <div class="modal-corpo">
-      ${nada ? '<p style="margin:0;color:var(--texto-2)">Nada novo: tudo do export já estava no NANDFlix.</p>' : `<ul class="resumo-importacao">
+      ${nada ? '<p style="margin:0;color:var(--texto-2)">Nada novo: tudo já estava no NANDFlix.</p>' : `<ul class="resumo-importacao">
         ${linha(r.novosWatchlist, `filme${r.novosWatchlist === 1 ? '' : 's'} da watchlist adicionado${r.novosWatchlist === 1 ? '' : 's'} à lista`)}
         ${linha(r.novosVistos, `filme${r.novosVistos === 1 ? '' : 's'} visto${r.novosVistos === 1 ? '' : 's'} que não estava${r.novosVistos === 1 ? '' : 'm'} na lista`)}
         ${linha(r.marcadosVistos, `filme${r.marcadosVistos === 1 ? '' : 's'} da lista marcado${r.marcadosVistos === 1 ? '' : 's'} como visto${r.marcadosVistos === 1 ? '' : 's'}`)}
         ${linha(r.datas, `dia${r.datas === 1 ? '' : 's'} de filme no calendário`)}
         ${linha(r.notas, `nota${r.notas === 1 ? '' : 's'}`)}
       </ul>
-      <p style="margin:12px 0 0;color:var(--texto-2)">As capas e informações dos filmes novos chegam em seguida, pelo TMDB.${r.primeiroDia ? ` O calendário agora começa em ${esc(mesLegivel(r.primeiroDia.slice(0, 7)))}.` : ''}</p>`}
+      <p style="margin:12px 0 0;color:var(--texto-2)">A lista agora mostra todos os ${estado.filmes.length} filmes. As capas e informações dos novos chegam em seguida, pelo TMDB.${r.primeiroDia ? ` O calendário agora começa em ${esc(mesLegivel(r.primeiroDia.slice(0, 7)))}.` : ''}</p>`}
     </div>
     <div class="modal-rodape">${r.datas ? '<button class="btn btn-fantasma" id="lb-calendario">Ver no calendário</button>' : ''}<button class="btn btn-laranja" data-fechar>OK</button></div>`);
   $('#lb-calendario', modal)?.addEventListener('click', () => { fecharModal(); abrirCalendario(`${r.primeiroDia}`); });
+  modal.addEventListener('close', () => { if (calendario.hidden) rolarParaLista(); }, { once: true });
 }
 
 // ---------- Nuvem: conta e sincronia com o celular ----------
@@ -2918,7 +3121,8 @@ api.aoMudarFilme((novo) => {
   if (!f) return;
   // Só os campos da capa: o que o usuário está digitando no painel não é sobrescrito.
   const logoAntes = srcLogo(f);
-  for (const k of ['imdbID', 'tmdbId', 'tmdbEm', 'poster', 'capaLocal', 'capaNaoEncontrada', 'capaPersonalizada', 'logo', 'logoLocal', 'info', 'duracao', 'duracaoDe', 'trailerId', 'trailerManual']) f[k] = novo[k];
+  for (const k of ['imdbID', 'tmdbId', 'tmdbEm', 'poster', 'capaLocal', 'capaNaoEncontrada', 'capaPersonalizada', 'logo', 'logoLocal', 'info', 'duracao', 'duracaoDe', 'trailerId', 'trailerManual', 'extras']) f[k] = novo[k];
+  if (estado.painelId === f.id) atualizarExtrasPainel(f);
   if (!f.diretor && novo.diretor) f.diretor = novo.diretor;
   // NANDRoll: o que a AniList trouxe (episódios, próximo episódio, onde assistir).
   const anilistAntes = f.anilistEm;
@@ -3078,6 +3282,7 @@ $('#btn-adicionar').addEventListener('click', () => abrirAdicionar());
 $('#btn-adicionar-vazio').addEventListener('click', () => abrirAdicionar());
 $('#btn-config').addEventListener('click', abrirConfiguracoes);
 $('#btn-importar-vazio').addEventListener('click', importarPlanilha);
+$('#btn-importar-app-vazio').addEventListener('click', () => abrirImportar());
 $('#btn-capas-faltam').addEventListener('click', () => buscarCapas({ incluirNaoEncontradas: true }));
 
 function digitandoEm(el) {
@@ -4717,6 +4922,8 @@ $('#btn-estatisticas').addEventListener('click', () => abrirEstatisticas());
 // ---------- Início ----------
 
 (async function iniciar() {
+  // Espera os outros scripts (onde.js, premios.js…): o render e o sorteio usam funções deles.
+  if (document.readyState === 'loading') await new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true }));
   $('#btn-lupa').dataset.dica = `Pesquisar (${MAC ? '⌘' : 'Ctrl'} F)`;
   const dados = await api.carregar();
   estado.filmes = dados.filmes;

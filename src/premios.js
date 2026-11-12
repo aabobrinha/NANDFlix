@@ -1,0 +1,534 @@
+'use strict';
+
+// ---------- Prêmios: o Oscar (e, depois, outros) ----------
+//
+// Os dados vêm de lib/premios.js (api.premios): cada cerimônia com as categorias
+// e os indicados, e cada filme indicado com o código do IMDb e o id do TMDB.
+// A tela tem a lista de prêmios, uma aba por cerimônia (a mais recente com
+// indicados primeiro) e, em cada categoria, a sua cédula: os indicados que você
+// já viu (marcados sozinhos se o filme está na sua lista como visto) e o seu
+// palpite de vencedor. Depois da cerimônia, o vencedor aparece e o app conta os
+// acertos. As cédulas ficam em config.premios['oscar-98'] e vão para a nuvem.
+//
+// Os prêmios também viram filtros: na barra da lista ("Filtros"), no sorteio e
+// na tierlist; e os detalhes do filme mostram as indicações dele.
+
+// A lista dos prêmios (lib/premios.js → listaPremios): Oscar, Globo de Ouro,
+// Critics Choice, BAFTA, SAG, Spirit, Gotham, Cannes, Veneza e Berlim.
+let PREMIOS_INFO = []; // [{ id, nome, indicado, venceu, quando, festival }]
+const LISTA_PREMIOS = []; // os ids, na ordem
+const NOMES_PREMIOS = {};
+const infoPremio = (id) => PREMIOS_INFO.find((p) => p.id === id) || { id, nome: id, indicado: `Indicado: ${id}`, venceu: `Venceu: ${id}`, quando: '', festival: false };
+const premiosDados = {}; // id → { nome, cerimonias, filmes }
+let indicePremios = null;
+const cachePremiosFilme = new Map();
+const premiosTela = $('#premios');
+const vista = { premio: 'oscar', numero: null, soFalta: false };
+
+// ---- Dados ----
+
+let carregandoPremios = null;
+function carregarPremios() {
+  if (!carregandoPremios) {
+    carregandoPremios = (async () => {
+      PREMIOS_INFO = await api.listaPremios();
+      LISTA_PREMIOS.splice(0, LISTA_PREMIOS.length, ...PREMIOS_INFO.map((p) => p.id));
+      for (const p of PREMIOS_INFO) NOMES_PREMIOS[p.id] = p.nome;
+      await Promise.all(LISTA_PREMIOS.map(async (id) => { premiosDados[id] = await api.premios(id); }));
+      indicePremios = null;
+      cachePremiosFilme.clear();
+      agendarRender();
+    })();
+  }
+  return carregandoPremios;
+}
+
+// Busca as cerimônias recentes (a cada 3 h na temporada de cada prêmio, 1 vez por dia fora dela).
+// `so`: só esse prêmio (o aberto na tela); sem ele, todos, um de cada vez.
+async function atualizarPremios({ forcar = false, so = null } = {}) {
+  await carregarPremios();
+  const erros = [];
+  for (const id of so ? [so] : LISTA_PREMIOS) {
+    const r = await api.atualizarPremios(id, { forcar });
+    if (!r || !r.ok) { erros.push(`${NOMES_PREMIOS[id]}: ${r && r.erro ? r.erro.mensagem : 'sem internet'}`); continue; }
+    if (!r.dados) continue; // nada mudou
+    premiosDados[id] = await api.premios(id);
+    indicePremios = null;
+    cachePremiosFilme.clear();
+    if (!premiosTela.hidden && vista.premio === id) renderPremios();
+    agendarRender();
+  }
+  if (forcar && erros.length) aviso(`Não deu para atualizar. ${erros.join(' · ')}`, { tipo: 'erro', duracao: 7000 });
+}
+
+const idsDoIndicado = (premio, x) => (x.wiki && premiosDados[premio] && premiosDados[premio].filmes[x.wiki]) || {};
+
+// Cada indicação, achável pelo IMDb, pelo TMDB ou (sem nenhum dos dois) pelo título.
+function indice() {
+  if (indicePremios) return indicePremios;
+  const porImdb = new Map();
+  const porTmdb = new Map();
+  const porTitulo = new Map();
+  const add = (m, k, r) => { if (!k) return; const l = m.get(k); if (l) l.push(r); else m.set(k, [r]); };
+  for (const premio of LISTA_PREMIOS) {
+    const d = premiosDados[premio];
+    if (!d) continue;
+    for (const c of d.cerimonias) {
+      for (const k of c.categorias) {
+        for (const x of k.indicados) {
+          const ids = idsDoIndicado(premio, x);
+          const r = { premio, numero: c.numero, ano: c.ano, chave: k.chave, nome: k.nome, pessoa: x.pessoa, venceu: x.venceu };
+          add(porImdb, ids.imdb, r);
+          add(porTmdb, ids.tmdb && String(ids.tmdb), r);
+          if (!ids.imdb && !ids.tmdb) add(porTitulo, normalizar(x.titulo), r);
+        }
+      }
+    }
+  }
+  indicePremios = { porImdb, porTmdb, porTitulo };
+  return indicePremios;
+}
+
+// As indicações de um filme (da lista ou de fora): [{ premio, numero, ano, chave, nome, pessoa, venceu }].
+function premiosDoFilme(f) {
+  if (!f) return [];
+  const chave = `${f.id}|${f.imdbID}|${f.tmdbId}|${f.titulo}|${f.ano}`;
+  if (cachePremiosFilme.has(chave)) return cachePremiosFilme.get(chave);
+  const { porImdb, porTmdb, porTitulo } = indice();
+  const achados = new Set([...(porImdb.get(f.imdbID) || []), ...(porTmdb.get(String(f.tmdbId || '')) || [])]);
+  // Sem código: pelo título, se o ano bate (a cerimônia é no ano seguinte ao do filme).
+  const ano = anoNumero(f.ano);
+  // (Num festival, o filme é do mesmo ano do festival.)
+  for (const r of porTitulo.get(normalizar(f.titulo)) || []) if (Number.isFinite(ano) && Math.abs(r.ano - (infoPremio(r.premio).festival ? 0 : 1) - ano) <= 1) achados.add(r);
+  const lista = [...achados].sort((a, b) => b.numero - a.numero || Number(b.venceu) - Number(a.venceu));
+  cachePremiosFilme.set(chave, lista);
+  return lista;
+}
+
+// O filme da sua lista que é este indicado (ou null).
+function filmeDoIndicado(premio, x, cerimonia) {
+  const ids = idsDoIndicado(premio, x);
+  return estado.filmes.find((f) => (ids.imdb && f.imdbID === ids.imdb) || (ids.tmdb && String(f.tmdbId) === String(ids.tmdb)))
+    || (!ids.imdb && !ids.tmdb ? estado.filmes.find((f) => normalizar(f.titulo) === normalizar(x.titulo) && Math.abs(anoNumero(f.ano) - (cerimonia.ano - (infoPremio(premio).festival ? 0 : 1))) <= 1) : null)
+    || null;
+}
+
+// ---- Filtros (barra da lista, sorteio, tierlist) ----
+
+// 'oscar:indicado', 'oscar:venceu', 'oscar:venceu:Best Picture' ou '*:venceu' (qualquer prêmio).
+// Nos festivais, "indicado" é estar na competição.
+function passaPremio(f, filtro) {
+  if (!filtro) return true;
+  const [premio, tipo, chave] = filtro.split(':');
+  return premiosDoFilme(f).some((r) => (premio === '*' || r.premio === premio) && (tipo !== 'venceu' || r.venceu) && (!chave || nomeCategoria(r.premio, chave) === nomeCategoria(r.premio, r.chave)));
+}
+
+// O nome em português junta as categorias renomeadas (Filme Estrangeiro = Internacional).
+function nomeCategoria(premio, chave) {
+  for (const c of (premiosDados[premio] || { cerimonias: [] }).cerimonias) {
+    const k = c.categorias.find((x) => x.chave === chave);
+    if (k) return k.nome;
+  }
+  return chave;
+}
+
+function rotuloFiltroPremio(filtro) {
+  const [premio, tipo, chave] = filtro.split(':');
+  if (premio === '*') return tipo === 'venceu' ? 'Venceu algum prêmio' : 'Indicado a algum prêmio';
+  const info = infoPremio(premio);
+  return `${tipo === 'venceu' ? info.venceu : info.indicado}${chave ? ` · ${nomeCategoria(premio, chave)}` : ''}`;
+}
+
+function filtrarPremio(filtro) {
+  estado.premio = filtro || '';
+  aplicarFiltroDaBarra();
+}
+
+// As categorias de um prêmio que têm algum filme da sua lista (para escolher no filtro).
+function categoriasNaLista(premio) {
+  const conta = new Map();
+  for (const f of estado.filmes) {
+    const nomes = new Set();
+    for (const r of premiosDoFilme(f)) if (r.premio === premio && !nomes.has(r.nome)) { nomes.add(r.nome); const c = conta.get(r.nome) || { chave: r.chave, n: 0 }; c.n++; conta.set(r.nome, c); }
+  }
+  return [...conta].sort((a, b) => b[1].n - a[1].n).map(([nome, { chave, n }]) => ({ nome, chave, n }));
+}
+
+// Escolher um prêmio, indicados ou vencedores, e (opcional) uma categoria.
+function escolherCategoriaPremio(premioInicial = null) {
+  const qtd = (filtro) => estado.filmes.filter((f) => passaPremio(f, filtro)).length;
+  const comFilmes = LISTA_PREMIOS.filter((p) => qtd(`${p}:indicado`));
+  let [premio, tipo] = estado.premio && !estado.premio.startsWith('*') ? estado.premio.split(':') : [premioInicial || comFilmes[0] || 'oscar', 'indicado'];
+  abrirModal(`${cabecalhoModal('Filtrar por prêmio')}
+    <div class="modal-corpo filtros-sorteio">
+      <div class="secao"><h3>Prêmio</h3><div class="chips-linha" data-secao="premio"></div></div>
+      <div class="secao"><h3>Mostrar</h3><div class="chips-linha" data-secao="tipo"></div></div>
+      <div class="secao"><h3>Categoria</h3><div class="chips-linha" data-secao="cats"></div></div>
+    </div>
+    <div class="modal-rodape"><span class="filtros-contagem" id="premio-contagem"></span><button class="btn btn-primario" id="premio-aplicar">Mostrar</button></div>`, 'modal-filtros');
+  const desenhar = () => {
+    const info = infoPremio(premio);
+    $('[data-secao="premio"]', modal).innerHTML = (comFilmes.length ? comFilmes : LISTA_PREMIOS)
+      .map((p) => `<button class="chip${p === premio ? ' ativo' : ''}" data-premio-escolha="${p}" aria-pressed="${p === premio}">${esc(NOMES_PREMIOS[p])}<span class="chip-qtd">${qtd(`${p}:indicado`) || ''}</span></button>`).join('');
+    $('[data-secao="tipo"]', modal).innerHTML = [['indicado', info.festival ? 'Na competição' : 'Indicados'], ['venceu', info.festival ? 'Premiados' : 'Vencedores']]
+      .map(([v, r]) => `<button class="chip${tipo === v ? ' ativo' : ''}" data-tipo="${v}" aria-pressed="${tipo === v}">${r}</button>`).join('');
+    const cats = categoriasNaLista(premio);
+    $('[data-secao="cats"]', modal).innerHTML = cats.length ? cats.map((c) => {
+      const n = qtd(`${premio}:${tipo}:${c.chave}`);
+      return `<button class="chip" data-cat="${esc(c.chave)}"${n ? '' : ' disabled'}>${esc(c.nome)}<span class="chip-qtd">${n}</span></button>`;
+    }).join('') : '<p>Nenhum filme da sua lista foi indicado a este prêmio.</p>';
+    const n = qtd(`${premio}:${tipo}`);
+    $('#premio-contagem', modal).textContent = n === 1 ? '1 filme' : `${n} filmes`;
+    $('#premio-aplicar', modal).disabled = !n;
+  };
+  $('.filtros-sorteio', modal).addEventListener('click', (e) => {
+    const p = e.target.closest('[data-premio-escolha]');
+    if (p) { premio = p.dataset.premioEscolha; desenhar(); return; }
+    const t = e.target.closest('[data-tipo]');
+    if (t) { tipo = t.dataset.tipo; desenhar(); return; }
+    const c = e.target.closest('[data-cat]');
+    if (c) { fecharModal(); filtrarPremio(`${premio}:${tipo}:${c.dataset.cat}`); }
+  });
+  $('#premio-aplicar', modal).onclick = () => { fecharModal(); filtrarPremio(`${premio}:${tipo}`); };
+  desenhar();
+}
+
+SECOES_FILTRO.push({
+  titulo: 'Prêmios',
+  ativa: () => Boolean(estado.premio),
+  itensHTML: () => {
+    const qtd = (filtro) => estado.filmes.filter((f) => passaPremio(f, filtro)).length;
+    const porPremio = estado.premio && !estado.premio.startsWith('*');
+    return itemMenuHTML(estado.premio === '*:indicado', 'data-premio="*:indicado"', 'Indicados a algum prêmio', qtd('*:indicado'))
+      + itemMenuHTML(estado.premio === '*:venceu', 'data-premio="*:venceu"', 'Vencedores de algum prêmio', qtd('*:venceu'))
+      + itemMenuHTML(porPremio, 'data-premio-categoria=""', porPremio ? `${esc(rotuloFiltroPremio(estado.premio))}…` : 'Por prêmio e categoria…', '');
+  },
+  aoClicar: (e) => {
+    const cat = e.target.closest('[data-premio-categoria]');
+    if (cat) { fecharFlutuante(); escolherCategoriaPremio(cat.dataset.premioCategoria || null); return true; }
+    const b = e.target.closest('[data-premio]');
+    if (!b) return false;
+    filtrarPremio(b.dataset.premio === estado.premio ? '' : b.dataset.premio);
+    return true;
+  },
+  atualizarChip: () => {
+    const chip = $('#chip-premio');
+    chip.hidden = !estado.premio;
+    chip.innerHTML = `${icone('Trophy')}<span>${esc(estado.premio ? rotuloFiltroPremio(estado.premio) : '')}</span>${icone('X')}`;
+  },
+});
+$('#chip-premio').addEventListener('click', () => filtrarPremio(''));
+
+// Sorteio: "Indicado a algum prêmio", "Venceu algum prêmio" e um por prêmio
+// (os que têm algum filme não visto da lista).
+function filtrosPremioSorteio() {
+  const naoVistos = estado.filmes.filter((f) => !f.visto);
+  return ['*:indicado', '*:venceu', ...LISTA_PREMIOS.map((p) => `${p}:indicado`).filter((x) => naoVistos.some((f) => passaPremio(f, x)))];
+}
+
+// Tierlist: "Indicado ao Oscar", "Venceu o Oscar", "Na competição de Cannes"…
+FILTROS_TL.push({
+  chave: 'premios',
+  titulo: 'Prêmios',
+  valores: (f) => {
+    const v = new Set();
+    for (const r of premiosDoFilme(f)) { const info = infoPremio(r.premio); v.add(info.indicado); if (r.venceu) v.add(info.venceu); }
+    return [...v];
+  },
+});
+
+// ---- Nos detalhes do filme ----
+
+function premiosPainelHTML(f) {
+  const lista = premiosDoFilme(f);
+  if (!lista.length) return '';
+  const item = (r, texto, pessoa, venceu) => `<li${venceu ? ' class="venceu"' : ''}>
+      <button class="link-premio" data-p="premio" data-premio="${r.premio}" data-numero="${r.numero}" title="Abrir a cédula: ${esc(NOMES_PREMIOS[r.premio])} ${r.ano}">${r.ano}</button>
+      <span>${esc(texto)}${pessoa ? ` <small>${esc(pessoa)}</small>` : ''}</span>
+      ${venceu ? `<b class="selo-venceu">${icone('Trophy')} Venceu</b>` : ''}
+    </li>`;
+  return LISTA_PREMIOS.map((p) => {
+    const doPremio = lista.filter((r) => r.premio === p);
+    if (!doPremio.length) return '';
+    let resumo;
+    let itens;
+    if (infoPremio(p).festival) {
+      // Num festival, o filme está em todas as categorias da competição: uma linha por edição.
+      const porEdicao = new Map();
+      for (const r of doPremio) {
+        const x = porEdicao.get(r.numero) || { r, ganhou: [] };
+        if (r.venceu) x.ganhou.push(r.nome);
+        porEdicao.set(r.numero, x);
+      }
+      const ganhou = [...porEdicao.values()].flatMap((x) => x.ganhou);
+      resumo = ganhou.length ? ganhou.join(' · ') : (porEdicao.size === 1 ? 'na competição' : `na competição ${porEdicao.size} vezes`);
+      itens = [...porEdicao.values()].map(({ r, ganhou: g }) => item(r, g.length ? g.join(', ') : 'Competição oficial', '', g.length > 0)).join('');
+    } else {
+      const vitorias = doPremio.filter((r) => r.venceu).length;
+      resumo = [vitorias ? `${vitorias} ${vitorias === 1 ? 'vitória' : 'vitórias'}` : '', `${doPremio.length} ${doPremio.length === 1 ? 'indicação' : 'indicações'}`].filter(Boolean).join(' · ');
+      itens = doPremio.map((r) => item(r, r.nome, r.pessoa, r.venceu)).join('');
+    }
+    return `<details class="painel-ficha painel-premios">
+      <summary><b>${icone('Trophy')} ${esc(NOMES_PREMIOS[p])}:</b> <span>${esc(resumo)}</span></summary>
+      <ul>${itens}</ul>
+    </details>`;
+  }).join('');
+}
+
+// ---- A tela ----
+
+const chaveCedula = (premio, numero) => `${premio}-${numero}`;
+const cedula = (premio, numero) => ((estado.config.premios || {})[chaveCedula(premio, numero)]) || { palpites: {} };
+const chaveIndicado = (x) => `${x.titulo}|${x.pessoa}`;
+
+function salvarCedula(premio, numero, c) {
+  const todas = { ...(estado.config.premios || {}), [chaveCedula(premio, numero)]: { ...c, em: new Date().toISOString() } };
+  estado.config.premios = todas;
+  api.salvarConfig({ premios: todas });
+}
+
+function cerimoniaPadrao(premio) {
+  const d = premiosDados[premio];
+  if (!d || !d.cerimonias.length) return null;
+  return (d.cerimonias.find((c) => c.indicados) || d.cerimonias[0]).numero;
+}
+
+async function abrirPremios({ premio = vista.premio, numero = null } = {}) {
+  fecharPrevia(false);
+  fecharPainel();
+  premiosTela.hidden = false;
+  vista.premio = premio;
+  if (!premiosDados[premio]) {
+    $('#premios-caixa').innerHTML = `<div class="tl-topo"><h2>Prêmios</h2><button class="redondo tl-fechar" data-pr="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button></div><p class="mensagem">Carregando…</p>`;
+    await carregarPremios();
+  }
+  vista.numero = numero || (vista.numero && premiosDados[premio].cerimonias.some((c) => c.numero === vista.numero) ? vista.numero : cerimoniaPadrao(premio));
+  renderPremios();
+  Movimento.animar($('#premios-caixa'), [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 260 });
+  $('#premios [data-pr="fechar"]')?.focus({ preventScroll: true });
+  // As cerimônias recentes podem ter mudado (indicados novos, vencedores).
+  atualizarPremios({ so: premio });
+}
+
+function fecharPremios() {
+  if (premiosTela.hidden) return;
+  premiosTela.hidden = true;
+  $('#premios-caixa').innerHTML = '';
+}
+
+// A capa de um indicado: a sua (se o filme está na lista) ou a do Stremio (Cinemeta), pelo IMDb.
+function capaIndicadoHTML(f, ids, titulo) {
+  const imdb = ids.imdb || (f && f.imdbID);
+  const src = (f && srcCapa(f)) || (imdb ? `https://images.metahub.space/poster/small/${imdb}/img` : '');
+  return src
+    ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async" data-titulo-capa="${esc(titulo)}">`
+    : `<span class="pr-capa-vazia">${esc(titulo)}</span>`;
+}
+
+// A capa não carregou: fica o título.
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || !img.dataset.tituloCapa) return;
+  const s = document.createElement('span');
+  s.className = 'pr-capa-vazia';
+  s.textContent = img.dataset.tituloCapa;
+  img.replaceWith(s);
+}, true);
+
+function renderPremios() {
+  const caixa = $('#premios-caixa');
+  const premio = vista.premio;
+  const d = premiosDados[premio];
+  if (!d) return;
+  // A edição escolhida sumiu (ou ainda não havia dados ao abrir): a padrão.
+  if (!d.cerimonias.some((x) => x.numero === vista.numero)) vista.numero = cerimoniaPadrao(premio);
+  const c = d.cerimonias.find((x) => x.numero === vista.numero);
+  const info = infoPremio(premio);
+  // "98º Oscar · 2026", ou "Cannes 2025" quando a edição é o próprio ano.
+  const nomeEdicao = (x) => (x.numero === x.ano ? `${d.nome} ${x.ano}` : `${x.numero}º ${d.nome} · ${x.ano}`);
+  const abas = d.cerimonias.map((x) => `<button class="chip pr-aba${x.numero === vista.numero ? ' ativo' : ''}" data-pr="cerimonia" data-numero="${x.numero}" role="tab" aria-selected="${x.numero === vista.numero}" title="${esc(nomeEdicao(x))}${x.indicados ? '' : ' (ainda não anunciado)'}">${x.ano}${x.indicados ? '' : ' <small>em breve</small>'}</button>`).join('');
+
+  let corpo = '';
+  if (!c) {
+    corpo = `<p class="mensagem">Ainda não há edições aqui. ${esc(info.quando)}.</p>`;
+  } else if (!c.indicados) {
+    corpo = `<section class="pr-resumo pr-aguardando">
+      <span class="est-kicker">${icone('Hourglass')} ${esc(nomeEdicao(c))}</span>
+      <p>${info.festival ? 'Os filmes da competição ainda não foram anunciados.' : 'Os indicados ainda não foram anunciados.'} ${esc(info.quando)}, e aparecem aqui sozinhos.</p>
+      <button class="btn" data-pr="atualizar">${icone('RefreshCw')} Procurar agora</button>
+    </section>`;
+  } else {
+    const ced = cedula(premio, c.numero);
+    // Os filmes indicados (cada um uma vez) e quantos você viu.
+    const filmes = new Map();
+    for (const k of c.categorias) for (const x of k.indicados) {
+      const chave = x.wiki || normalizar(x.titulo);
+      if (!filmes.has(chave)) filmes.set(chave, filmeDoIndicado(premio, x, c));
+    }
+    const vistos = [...filmes.values()].filter((f) => f && f.visto).length;
+    const naLista = [...filmes.values()].filter(Boolean).length;
+    const palpitados = c.categorias.filter((k) => ced.palpites[k.chave]).length;
+    const acertos = c.vencedores ? c.categorias.filter((k) => k.indicados.some((x) => x.venceu && chaveIndicado(x) === ced.palpites[k.chave])).length : 0;
+    const pct = filmes.size ? Math.round((vistos / filmes.size) * 100) : 0;
+    const nomesRepetidos = new Set(c.categorias.map((k) => k.nome).filter((n, i, l) => l.indexOf(n) !== i));
+
+    const cards = c.categorias.map((k) => {
+      const palpite = ced.palpites[k.chave];
+      const indicados = k.indicados.map((x, i) => ({ x, i, f: filmeDoIndicado(premio, x, c) }))
+        .filter(({ f }) => !vista.soFalta || !(f && f.visto));
+      if (vista.soFalta && !indicados.length) return '';
+      let status = '';
+      if (c.vencedores && palpite) status = k.indicados.some((x) => x.venceu && chaveIndicado(x) === palpite) ? `<span class="pr-status certo">${icone('Check')} Acertou</span>` : `<span class="pr-status errado">${icone('X')} Errou</span>`;
+      else if (!c.vencedores) status = palpite ? `<span class="pr-status">${icone('Trophy')} Palpite feito</span>` : '<span class="pr-status vazio">Sem palpite</span>';
+      return `<section class="pr-cat" data-chave="${esc(k.chave)}">
+        <header>
+          <h4>${esc(k.nome)}${nomesRepetidos.has(k.nome) ? ` <small>${esc(k.original)}</small>` : ''}</h4>
+          ${status}
+        </header>
+        <ol class="pr-indicados">${indicados.map(({ x, i, f }) => {
+          const ids = idsDoIndicado(premio, x);
+          const eu = palpite === chaveIndicado(x);
+          const visto = Boolean(f && f.visto);
+          const pessoa = x.pessoa && x.pessoa !== x.titulo ? x.pessoa : '';
+          return `<li class="pr-ind${x.venceu ? ' venceu' : ''}${eu ? ' palpite' : ''}${visto ? ' visto' : ''}" data-i="${i}">
+            <button class="pr-capa" data-pr="abrir" title="Ver os detalhes de ${esc(x.titulo)}">${capaIndicadoHTML(f, ids, x.titulo)}</button>
+            <div class="pr-ind-texto">
+              <b title="${esc(x.titulo)}">${esc(f ? f.titulo : x.titulo)}</b>
+              ${pessoa ? `<span>${esc(pessoa)}</span>` : ''}
+              ${x.venceu ? `<em class="selo-venceu">${icone('Trophy')} Venceu</em>` : ''}
+            </div>
+            <div class="pr-ind-acoes">
+              <button class="pr-botao pr-visto${visto ? ' on' : ''}" data-pr="visto" aria-pressed="${visto}" title="${visto ? 'Você já viu (clique para desmarcar)' : f ? 'Marcar como visto' : 'Adicionar à sua lista como visto'}">${icone('Check')}<span>Visto</span></button>
+              <button class="pr-botao pr-palpite${eu ? ' on' : ''}" data-pr="palpite" aria-pressed="${eu}" title="${eu ? 'Tirar o palpite' : 'Acho que este vence'}">${icone('Trophy')}<span>Palpite</span></button>
+            </div>
+          </li>`;
+        }).join('')}</ol>
+      </section>`;
+    }).join('');
+
+    corpo = `<section class="pr-resumo">
+        <div class="pr-resumo-titulo">
+          <span class="est-kicker">${icone('Trophy')} ${esc(nomeEdicao(c))}</span>
+          <h3>Você viu ${vistos} de ${filmes.size} filmes ${info.festival ? 'da competição' : 'indicados'}</h3>
+          <div class="pr-barra" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>
+          <p>${naLista - vistos > 0 ? `${naLista - vistos} ${naLista - vistos === 1 ? 'está' : 'estão'} na sua lista para ver. ` : ''}${c.vencedores ? (info.festival ? 'Os prêmios do júri já saíram.' : 'Os vencedores já saíram.') : (info.festival ? 'O júri anuncia os prêmios no fim do festival; faça seus palpites.' : 'Os vencedores saem na cerimônia; faça seus palpites.')}</p>
+        </div>
+        <div class="pr-numeros">
+          <div><b>${palpitados}<small>/${c.categorias.length}</small></b><span>palpites</span></div>
+          ${c.vencedores && palpitados ? `<div class="ouro"><b>${acertos}<small>/${palpitados}</small></b><span>acertos</span></div>` : ''}
+        </div>
+        <div class="pr-acoes">
+          <button class="chip${vista.soFalta ? ' ativo' : ''}" data-pr="so-falta" aria-pressed="${vista.soFalta}">${icone('EyeOff')} Só o que falta ver</button>
+          ${palpitados ? `<button class="chip" data-pr="limpar-palpites">${icone('Eraser')} Limpar palpites</button>` : ''}
+        </div>
+      </section>
+      <div class="pr-categorias">${cards || `<p class="mensagem">Você já viu todos os ${info.festival ? 'filmes da competição' : 'indicados'}. 🎉</p>`}</div>`;
+  }
+
+  caixa.innerHTML = `
+    <div class="tl-topo pr-topo">
+      <h2>Prêmios</h2>
+      <div class="chips-linha pr-lista" role="radiogroup" aria-label="Prêmio">
+        ${LISTA_PREMIOS.map((p) => `<button class="chip${p === premio ? ' ativo' : ''}" data-pr="premio" data-premio="${p}" role="radio" aria-checked="${p === premio}">${icone('Trophy')} ${esc(NOMES_PREMIOS[p])}</button>`).join('')}
+      </div>
+      <button class="redondo tl-fechar" data-pr="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
+    </div>
+    <div class="pr-abas" role="tablist" aria-label="Cerimônias">${abas}</div>
+    ${corpo}`;
+  // O prêmio e a aba escolhidos à vista.
+  $('.pr-lista .chip.ativo', caixa)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  $('.pr-aba.ativo', caixa)?.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
+
+// Visto: o filme da lista muda; um filme fora da lista entra nela já como visto
+// (sem data: dá para pôr no calendário depois, em "Lançar outro dia").
+async function alternarVistoIndicado(premio, c, x) {
+  const f = filmeDoIndicado(premio, x, c);
+  if (f) {
+    if (f.visto) { await alternar(f.id, 'visto', false); }
+    else { f.visto = true; aposMudarDia(f.id); await api.atualizarFilme(f.id, { visto: true }); }
+    renderPremios();
+    return;
+  }
+  const ids = idsDoIndicado(premio, x);
+  const dados = { titulo: x.titulo, ano: String(c.ano - 1), imdbID: ids.imdb || '', tmdbId: ids.tmdb || '' };
+  const repetido = await api.acharRepetido(dados);
+  if (repetido) {
+    const f2 = porId(repetido.id) || repetido;
+    f2.visto = true;
+    aposMudarDia(f2.id);
+    await api.atualizarFilme(f2.id, { visto: true });
+  } else {
+    const novo = await api.adicionarFilme(dados);
+    novo.tmdbId = dados.tmdbId;
+    novo.visto = true;
+    estado.filmes.push(novo);
+    await api.atualizarFilme(novo.id, { visto: true });
+    aviso(`“${x.titulo}” entrou na sua lista como visto. Para pôr a data no calendário, use “Lançar outro dia” nos detalhes.`, { tipo: 'ok', duracao: 6000 });
+  }
+  render();
+  renderPremios();
+}
+
+premiosTela.addEventListener('click', async (e) => {
+  if (e.target === premiosTela) { fecharPremios(); return; }
+  const b = e.target.closest('[data-pr]');
+  if (!b) return;
+  const d = premiosDados[vista.premio];
+  const c = d && d.cerimonias.find((x) => x.numero === vista.numero);
+  const li = b.closest('.pr-ind');
+  const cat = b.closest('.pr-cat');
+  const k = c && cat ? c.categorias.find((x) => x.chave === cat.dataset.chave) : null;
+  const x = k && li ? k.indicados[Number(li.dataset.i)] : null;
+  switch (b.dataset.pr) {
+    case 'fechar': fecharPremios(); break;
+    case 'premio': vista.premio = b.dataset.premio; vista.numero = cerimoniaPadrao(vista.premio); renderPremios(); atualizarPremios({ so: vista.premio }); break;
+    case 'cerimonia': vista.numero = Number(b.dataset.numero); renderPremios(); $('#premios-caixa').scrollTo({ top: 0 }); break;
+    case 'so-falta': vista.soFalta = !vista.soFalta; renderPremios(); break;
+    case 'atualizar': b.disabled = true; await atualizarPremios({ forcar: true, so: vista.premio }); renderPremios(); break;
+    case 'limpar-palpites': salvarCedula(vista.premio, c.numero, { ...cedula(vista.premio, c.numero), palpites: {} }); renderPremios(); break;
+    case 'palpite': {
+      if (!x) return;
+      const ced = cedula(vista.premio, c.numero);
+      const palpites = { ...ced.palpites };
+      if (palpites[k.chave] === chaveIndicado(x)) delete palpites[k.chave]; else palpites[k.chave] = chaveIndicado(x);
+      salvarCedula(vista.premio, c.numero, { ...ced, palpites });
+      renderPremios();
+      break;
+    }
+    case 'visto': if (x) { b.disabled = true; await alternarVistoIndicado(vista.premio, c, x); } break;
+    case 'abrir': {
+      if (!x) return;
+      const f = filmeDoIndicado(vista.premio, x, c);
+      const ids = idsDoIndicado(vista.premio, x);
+      if (f) abrirPainel(f.id);
+      else if (ids.tmdb) abrirFilmeExterno(ids.tmdb);
+      else aviso('Não achei esse filme no TMDB.');
+      break;
+    }
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !modal.open && !premiosTela.hidden && !estado.painelId) { e.preventDefault(); fecharPremios(); }
+});
+
+// A roda do mouse rola de lado a lista de prêmios e as abas dos anos.
+premiosTela.addEventListener('wheel', (e) => {
+  const abas = e.target.closest('.pr-abas, .pr-lista');
+  if (!abas || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+  e.preventDefault();
+  abas.scrollLeft += e.deltaY;
+}, { passive: false });
+
+// Nos detalhes: o ano de uma indicação abre a cédula daquela cerimônia.
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('#painel [data-p="premio"]');
+  if (!b) return;
+  e.stopPropagation();
+  abrirPremios({ premio: b.dataset.premio, numero: Number(b.dataset.numero) });
+}, true);
+
+$('#btn-premios').addEventListener('click', () => abrirPremios());
+
+carregarPremios().then(() => setTimeout(() => atualizarPremios(), 8000));

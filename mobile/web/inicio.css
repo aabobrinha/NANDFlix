@@ -106,6 +106,8 @@ html.celular.cel-modo-todos #secao-todos .cabecalho-secao { display: none; }
   background: var(--acento); color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
 }
 .cel-visto .ico { width: 13px; height: 13px; }
+/* Nota do site escolhido (Configurações → Nota nas capas): no canto de cima à esquerda */
+.cel-capa .selo-nota { left: 6px; top: 6px; bottom: auto; }
 .cel-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 18px 16px 0; }
 .cel-grade .cel-capa { width: auto; }
 .cel-fim { height: calc(var(--nav-alt) + var(--nav-baixo) + 32px); }

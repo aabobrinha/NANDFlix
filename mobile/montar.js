@@ -55,6 +55,13 @@ async function montar() {
     logLevel: 'warning',
   });
 
+  // 3b. O histórico dos prêmios (lib/premios-<id>.json): um arquivo por prêmio, lido quando usado.
+  fs.mkdirSync(path.join(WWW, 'premios'), { recursive: true });
+  for (const n of fs.readdirSync(path.join(AQUI, '..', 'lib'))) {
+    const m = n.match(/^premios-(\w+)\.json$/);
+    if (m) fs.copyFileSync(path.join(AQUI, '..', 'lib', n), path.join(WWW, 'premios', `${m[1]}.json`));
+  }
+
   // 4. Ajustes de celular.
   for (const n of fs.readdirSync(path.join(AQUI, 'web'))) fs.copyFileSync(path.join(AQUI, 'web', n), path.join(WWW, n));
 

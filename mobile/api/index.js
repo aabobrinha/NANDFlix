@@ -8,6 +8,7 @@
 
 import { carregarDisco, descarregar, fs } from './disco.js';
 import { App } from '@capacitor/app';
+import { AppLauncher } from '@capacitor/app-launcher';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { Filesystem, Directory } from '@capacitor/filesystem';
@@ -20,20 +21,25 @@ import anilist from '../../lib/anilist.js';
 import omdb from '../../lib/omdb.js';
 import trailer from '../../lib/trailer.js';
 import letterboxd from '../../lib/letterboxd.js';
-import { textosDoExport, escolherArquivos } from './letterboxd-zip.mjs';
+import { Extras } from '../../lib/extras.js';
+import { Acervo, listaPremios } from '../../lib/premios.js';
+import { escolherArquivos } from './letterboxd-zip.mjs';
+import importar from '../../lib/importar.js';
+import stremio from '../../lib/stremio.js';
 // URL e chave do Supabase, de lib/nuvem.config.json (o montar.js põe aqui na hora
 // de montar). Sem esse arquivo (a versão pública do GitHub), o app funciona só
 // com os dados do aparelho: sem conta, sem sincronia e sem atualização sozinha.
 // eslint-disable-next-line no-undef
 const nuvemConfig = NUVEM_CONFIG;
 
-// A busca do trailer lê a página de resultados do YouTube, que o WebView não
-// deixa ler (CORS): no aparelho, esse pedido vai pela rede nativa do Android.
+// A busca do trailer lê a página de resultados do YouTube e a nota do Letterboxd
+// vem da página do filme, que o WebView não deixa ler (CORS): no aparelho, esses
+// pedidos vão pela rede nativa do Android.
 if (Capacitor.isNativePlatform()) {
   const fetchOriginal = window.fetch.bind(window);
   window.fetch = async (url, opcoes = {}) => {
     const u = String((url && url.url) || url);
-    if (!u.startsWith('https://www.youtube.com/results')) return fetchOriginal(url, opcoes);
+    if (!u.startsWith('https://www.youtube.com/results') && !u.startsWith('https://letterboxd.com/')) return fetchOriginal(url, opcoes);
     const r = await CapacitorHttp.get({ url: u, headers: opcoes.headers || {}, responseType: 'text' });
     return new Response(typeof r.data === 'string' ? r.data : JSON.stringify(r.data), { status: r.status });
   };
@@ -46,6 +52,7 @@ const C = {
   sincronia: `${PASTA}/sincronia.json`,
   imagens: `${PASTA}/imagens`,
   capas: `${PASTA}/capas`,
+  premios: `${PASTA}/premios.json`,
 };
 // A versão do app (mobile/package.json), posta pelo montar.js.
 // eslint-disable-next-line no-undef
@@ -110,6 +117,7 @@ function aplicarTmdb(f, d, { trocarFilme = false } = {}) {
   const info = { ...(outroFilme ? {} : f.info || {}), ...d.info, atualizadoEm: new Date().toISOString() };
   if (outroFilme) for (const k of NOTAS_OMDB) delete info[k];
   const m = {
+    ...(outroFilme ? { extras: null } : {}),
     tmdbId: d.tmdbId,
     tmdbEm: new Date().toISOString(),
     idiomaOriginal: d.idiomaOriginal,
@@ -226,7 +234,7 @@ function buscarCapasQueFaltam({ incluirNaoEncontradas = false } = {}) {
   if (buscaEmAndamento) return buscaEmAndamento;
   if (!config.tmdbKey) return Promise.resolve({ pulada: 'chave' });
   const fila = filmes.filter((f) => !f.tmdbEm || (incluirNaoEncontradas && !f.tmdbId));
-  if (!fila.length) return Promise.resolve({ total: 0, encontradas: 0 });
+  if (!fila.length) { extras.atualizar(); return Promise.resolve({ total: 0, encontradas: 0 }); }
   buscaEmAndamento = (async () => {
     const total = fila.length;
     let feitos = 0; let encontradas = 0; let erro = null;
@@ -243,6 +251,7 @@ function buscarCapasQueFaltam({ incluirNaoEncontradas = false } = {}) {
     gravarAgora();
     const r = { total: feitos, encontradas, erro: erro ? { tipo: erro.tipo, mensagem: erro.message } : null };
     avisar('capas:fim', r);
+    extras.atualizar();
     return r;
   })().finally(() => { buscaEmAndamento = null; });
   return buscaEmAndamento;
@@ -341,6 +350,19 @@ function abrirFora(url) {
   window.open(url, '_system');
 }
 
+// O Stremio do Android (com.stremio.one) ou qualquer app que abra stremio://.
+// Precisa do <queries> no AndroidManifest.xml: sem ele, o Android 11 em diante
+// esconde os outros apps e a resposta é sempre "não".
+async function stremioInstalado() {
+  if (!Capacitor.isNativePlatform()) return true;
+  for (const url of ['com.stremio.one', 'stremio:///']) {
+    try {
+      if ((await AppLauncher.canOpenUrl({ url })).value) return true;
+    } catch { /* tenta o próximo */ }
+  }
+  return false;
+}
+
 function linksStremio(f) {
   const tipo = ehSerie(f) ? 'series' : 'movie'; // NANDRoll: séries de anime
   if (f.imdbID) return { app: `stremio:///detail/${tipo}/${f.imdbID}`, web: `https://web.stremio.com/#/detail/${tipo}/${f.imdbID}` };
@@ -427,6 +449,30 @@ const relacionadosCache = new Map();
 const soNoPc = async () => ({ erro: 'Isso só funciona no app do computador.' });
 
 let pronto = null;
+// Importar de outros apps (lib/importar.js): procura no TMDB o que não está na lista
+// e aplica tudo de uma vez na lista atual.
+async function aplicarImportacao(fonte, itens) {
+  const chave = config.tmdbKey;
+  const res = await importar.aplicar(itens, () => filmes, {
+    idPorTitulo: chave ? (titulo, ano) => tmdb.idPorTitulo(chave, titulo, ano) : null,
+    idPorImdb: chave ? (imdbID) => tmdb.idPorImdb(chave, imdbID) : null,
+  });
+  gravarAgora();
+  buscarCapasQueFaltam();
+  return { ...res, fonte, filmes };
+}
+
+// Notas do TMDB e do Letterboxd, onde assistir e Stremio (lib/extras.js).
+const extras = new Extras({ filmes: () => filmes, config: () => config, atualizarFilme, avisar, gravarAgora });
+
+// Prêmios (lib/premios.js): o histórico vem no app; as cerimônias recentes, da Wikipédia.
+let acervo = null;
+const pegarAcervo = () => {
+  // O histórico de cada prêmio vem num arquivo à parte (www/premios/<id>.json, posto pelo montar.js).
+  if (!acervo) acervo = new Acervo({ historico: (id) => fetch(`premios/${id}.json`).then((r) => (r.ok ? r.json() : null)), lerCache: () => lerJSON(C.premios, null), gravarCache: (d) => gravarJSON(C.premios, d) });
+  return acervo;
+};
+
 function iniciar() {
   if (pronto) return pronto;
   pronto = (async () => {
@@ -485,11 +531,12 @@ window.api = {
     return { filmes, config: configPublica(), pastaDados: '', versao: VERSAO };
   },
   salvarConfig: async (mudancas) => {
-    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma'];
+    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios'];
     for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
     if ('nandroll' in mudancas) { config.nandroll = Boolean(mudancas.nandroll); if (config.nandroll) atualizarSeriesEmExibicao(); }
     gravarConfig();
     if ('tmdbKey' in mudancas && config.tmdbKey) buscarCapasQueFaltam();
+    if ('pais' in mudancas) extras.atualizar();
     return configPublica();
   },
   atualizarFilme: async (id, mudancas) => {
@@ -570,7 +617,7 @@ window.api = {
       if (serie) return f;
     }
     if (config.tmdbKey) {
-      processarTmdb(f, { tmdbId: dados.tmdbId || null }).catch(() => {}).then(() => { gravarAgora(); avisar('filme:mudou', f); });
+      processarTmdb(f, { tmdbId: dados.tmdbId || null }).catch(() => {}).then(() => { gravarAgora(); avisar('filme:mudou', f); extras.agora(f.id); });
     }
     return f;
   },
@@ -666,10 +713,27 @@ window.api = {
     const f = filmes.find((x) => x.id === id);
     if (!f) return { ok: false };
     const l = linksStremio(f);
-    const url = forcarWeb || config.stremio === 'web' ? l.web : l.app;
-    abrirFora(url);
-    return { ok: true, url };
+    if (forcarWeb || config.stremio === 'web') {
+      abrirFora(l.web);
+      return { ok: true, url: l.web };
+    }
+    // Sem o app do Stremio, o link stremio:// não vai a lugar nenhum: a interface
+    // pergunta se abre o Stremio Web (como no PC).
+    if (!(await stremioInstalado())) return { ok: false, semApp: true };
+    try {
+      const { completed } = await AppLauncher.openUrl({ url: l.app });
+      if (!completed) return { ok: false, semApp: true };
+    } catch {
+      return { ok: false, semApp: true };
+    }
+    return { ok: true, url: l.app };
   },
+  abrirLink: async (url) => { if (String(url).startsWith('https://')) abrirFora(String(url)); },
+  extrasAgora: (id, opcoes) => extras.agora(id, opcoes || {}),
+  listaPremios: async () => listaPremios(),
+  premios: async (id) => { await iniciar(); return pegarAcervo().dados(id); },
+  atualizarPremios: async (id, opcoes) => { await iniciar(); return chamar(() => pegarAcervo().atualizar(id, opcoes || {})); },
+  provedoresTmdb: () => chamar(() => tmdb.provedores(config.tmdbKey, config.pais || 'BR')),
   abrirLetterboxd: async (id) => {
     const f = filmes.find((x) => x.id === id);
     if (!f) return { ok: false };
@@ -689,22 +753,31 @@ window.api = {
   backupAgora: soNoPc,
   restaurarBackup: soNoPc,
   // O .zip do export do Letterboxd (ou os .csv), escolhido no celular.
-  importarLetterboxd: async () => {
-    const arquivos = await escolherArquivos();
-    if (!arquivos.length) return { cancelado: true };
-    let itens;
+  // Os arquivos exportados de outro app (.zip ou .csv: Letterboxd, IMDb, Rotten Tomatoes…).
+  importarArquivos: async () => {
+    const escolhidos = await escolherArquivos();
+    if (!escolhidos.length) return { cancelado: true };
+    let lido;
     try {
-      itens = letterboxd.lerTextos(await textosDoExport(arquivos));
+      const arquivos = await Promise.all(escolhidos.map(async (a) => ({ nome: a.name || '', bytes: new Uint8Array(await a.arrayBuffer()) })));
+      lido = importar.lerArquivos(importar.textosDosArquivos(arquivos));
     } catch (e) {
       return { erro: e.message };
     }
-    const res = await letterboxd.aplicar(itens, filmes, {
-      idPorTitulo: config.tmdbKey ? (titulo, ano) => tmdb.idPorTitulo(config.tmdbKey, titulo, ano) : null,
-    });
-    gravarAgora();
-    buscarCapasQueFaltam();
-    return { ...res, filmes };
+    return aplicarImportacao(lido.fonte, lido.itens);
   },
+  // A biblioteca do Stremio, pela conta (a senha não é guardada).
+  importarStremio: async (email, senha) => {
+    let itens;
+    try {
+      itens = stremio.converter(await stremio.biblioteca(email, senha));
+    } catch (e) {
+      return { erro: e.message };
+    }
+    if (!itens.length) return { erro: 'Não achei filmes na sua biblioteca do Stremio.' };
+    return aplicarImportacao('stremio', itens);
+  },
+  importarLetterboxd: (...args) => window.api.importarArquivos(...args),
   dadosImagem,
   guardarImagem,
   salvarStory: (dataUrl, nome) => compartilharImagens([dataUrl], nome),

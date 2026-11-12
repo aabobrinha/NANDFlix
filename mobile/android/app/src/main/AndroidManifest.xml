@@ -35,6 +35,15 @@
         </provider>
     </application>
 
+    <!-- Para saber se o Stremio está instalado (Android 11 em diante). -->
+    <queries>
+        <package android:name="com.stremio.one" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="stremio" />
+        </intent>
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

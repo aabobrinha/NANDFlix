@@ -62,6 +62,7 @@ function filmesDoModo() {
     if (m.filtro === 'animes' || m.filtro === 'assistindo') return todos.filter((f) => passaFiltroAnime(f, m.filtro)); // NANDRoll
   }
   if (m.tipo === 'genero') return todos.filter((f) => generos(f.info).includes(m.genero));
+  if (m.tipo === 'onde') return todos.filter((f) => passaOnde(f, m.onde));
   return todos;
 }
 
@@ -76,6 +77,11 @@ function fileirasDoModo(lista) {
   if (cel.modo.tipo === 'inicio') add('Para ver hoje', hojeIds.map(porId).filter(Boolean));
   if (cel.modo.tipo !== 'filtro' || cel.modo.filtro !== 'favoritos') add('Seus favoritos', lista.filter((f) => f.favorito && !f.visto));
   add('Na sua lista', naoVistos.slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0)), { minimo: 3 });
+  // Onde assistir (onde.js): o que dá para ver agora nos seus streamings, e o que está nos cinemas.
+  if (cel.modo.tipo !== 'onde') {
+    if (meusServicos().size) add('Nos seus streamings', naoVistos.filter((f) => passaOnde(f, 'meus')));
+    add('Nos cinemas', naoVistos.filter((f) => passaOnde(f, 'cinema')));
+  }
   add('Suas maiores notas', lista.filter((f) => f.visto && f.minhaNota >= 4).sort((a, b) => b.minhaNota - a.minhaNota || ultimaVezVisto(b).localeCompare(ultimaVezVisto(a))), { grande: true, nota: true, minimo: 3 });
 
   // Um gênero por fileira: os que mais têm filmes não vistos.
@@ -116,7 +122,7 @@ function capaCelHTML(f, { nota = false } = {}) {
     : nota && f.minhaNota ? `<span class="cel-selo cel-selo-nota">${icone('Star', { preenchido: true })}${notaLegivel(f.minhaNota)}</span>` : '';
   return `<button class="cel-capa" data-cel="filme" data-id="${f.id}" aria-label="${esc(f.titulo)}">
     ${src ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">` : `<span class="cel-capa-vazia">${esc(f.titulo)}</span>`}
-    ${f.visto && !nota ? `<span class="cel-visto">${icone('Check')}</span>` : ''}${selo || seloSerieHTML(f)}
+    ${f.visto && !nota ? `<span class="cel-visto">${icone('Check')}</span>` : ''}${selo || seloSerieHTML(f)}${seloNotaHTML(f)}
   </button>`;
 }
 
@@ -145,6 +151,7 @@ function pilulasHTML() {
   const fechar = m.tipo !== 'inicio' ? `<button class="cel-pilula cel-pilula-x" data-cel="inicio" aria-label="Voltar ao início">${icone('X')}</button>` : '';
   const filtros = Object.entries(ROTULOS_FILTRO).filter(([k]) => nandrollLigado() || (k !== 'animes' && k !== 'assistindo')).map(([k, r]) => `<button class="cel-pilula${ativo('filtro', k)}" data-cel="filtro" data-filtro="${k}">${r}</button>`).join('');
   return `<div class="cel-pilulas">${fechar}${filtros}
+    ${meusServicos().size ? `<button class="cel-pilula${m.tipo === 'onde' && m.onde === 'meus' ? ' ativa' : ''}" data-cel="onde" data-onde="meus">Nos meus serviços</button>` : ''}
     <button class="cel-pilula${m.tipo === 'genero' ? ' ativa' : ''}" data-cel="generos">${m.tipo === 'genero' ? esc(m.genero) : 'Gêneros'} ${icone('ChevronDown')}</button>
     <button class="cel-pilula${m.tipo === 'todos' ? ' ativa' : ''}" data-cel="todos">Todos</button>
   </div>`;
@@ -161,6 +168,7 @@ function tituloDoModo() {
   const m = cel.modo;
   if (m.tipo === 'filtro') return ROTULOS_FILTRO[m.filtro];
   if (m.tipo === 'genero') return m.genero;
+  if (m.tipo === 'onde') return FILTROS_ONDE[m.onde] ? FILTROS_ONDE[m.onde].rotulo : '';
   if (m.tipo === 'todos') return 'Todos os filmes';
   return 'Início';
 }
@@ -224,6 +232,7 @@ function abrirMais() {
   abrirFolha(`<div class="cel-mais">
     ${item('paginas', 'NotebookPen', 'Suas páginas')}
     ${item('estatisticas', 'ChartColumn', 'Estatísticas')}
+    ${item('premios', 'Trophy', 'Prêmios')}
     ${item('sortear', 'Dices', 'Sortear um filme')}
     ${item('sortear-filtro', 'SlidersHorizontal', 'Sortear com filtro')}
     ${nandrollLigado() ? item('agenda', 'CalendarClock', 'Agenda de episódios') : ''}
@@ -258,6 +267,7 @@ function aoTocarCelular(e) {
     case 'inicio': fecharFolha(); irPara({ tipo: 'inicio' }); break;
     case 'filtro': irPara(cel.modo.tipo === 'filtro' && cel.modo.filtro === b.dataset.filtro ? { tipo: 'inicio' } : { tipo: 'filtro', filtro: b.dataset.filtro }); break;
     case 'generos': abrirGeneros(); break;
+    case 'onde': irPara(cel.modo.tipo === 'onde' && cel.modo.onde === b.dataset.onde ? { tipo: 'inicio' } : { tipo: 'onde', onde: b.dataset.onde }); break;
     case 'genero': fecharFolha(); irPara({ tipo: 'genero', genero: b.dataset.genero }); break;
     case 'todos': fecharFolha(); irPara({ tipo: 'todos' }); break;
     case 'fechar-folha': fecharFolha(); break;
@@ -270,6 +280,7 @@ function aoTocarCelular(e) {
     case 'mais': abrirMais(); break;
     case 'paginas': fecharFolha(); $('#btn-paginas').click(); break;
     case 'estatisticas': fecharFolha(); abrirEstatisticas(); break;
+    case 'premios': fecharFolha(); abrirPremios(); break;
     case 'config': fecharFolha(); abrirConfiguracoes(); break;
   }
 }
