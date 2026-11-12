@@ -58,15 +58,15 @@ Para buscar em todos os consoles e ver a sua biblioteca da Steam, configure as c
 | Arquivo | O que é |
 |---|---|
 | [`NANDFlix.exe`](NANDFlix.exe) | Versão portátil para Windows: é só abrir, não precisa instalar. |
-| [`dist/NANDFlix-Setup-1.1.0.exe`](dist/NANDFlix-Setup-1.1.0.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
-| [`dist/NANDFlix-1.1.0-portable.exe`](dist/NANDFlix-1.1.0-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
-| [`NANDFlix-Android-1.1.0.apk`](../../releases/latest) | App para Android (na página de Releases). |
+| [`dist/NANDFlix-Setup-1.2.0.exe`](dist/NANDFlix-Setup-1.2.0.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
+| [`dist/NANDFlix-1.2.0-portable.exe`](dist/NANDFlix-1.2.0-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
+| [`NANDFlix-Android-1.2.0.apk`](../../releases/latest) | App para Android (na página de Releases). |
 
 Os mesmos arquivos estão na página de [Releases](../../releases).
 
 > O executável não é assinado digitalmente, então o Windows pode mostrar o aviso do SmartScreen na primeira vez. Clique em **Mais informações → Executar assim mesmo**.
 
-## NANDFlix no Android (versão 1.1.0)
+## NANDFlix no Android (versão 1.2.0)
 
 A mesma lista no celular, com uma interface feita para o toque, no jeito dos apps de streaming:
 
