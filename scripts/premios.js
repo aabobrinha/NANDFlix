@@ -31,12 +31,16 @@ async function gerar(id) {
   const saida = path.join(__dirname, '..', 'lib', `premios-${id}.json`);
   fs.writeFileSync(saida, JSON.stringify(dados));
   const nFilmes = Object.keys(dados.filmes).length;
-  const comImdb = Object.values(dados.filmes).filter((f) => f[0]).length;
+  const jogo = premios.ehPremioDeJogo(p);
+  // Cinema: [imdb, tmdb]; jogos: [igdbSlug, igdb, steam] (ligado = tem o slug do IGDB ou a Steam).
+  const comImdb = Object.values(dados.filmes).filter((f) => (jogo ? f[0] || f[2] : f[0])).length;
+  const comIgdb = jogo ? Object.values(dados.filmes).filter((f) => f[0]).length : 0;
+  const comSteam = jogo ? Object.values(dados.filmes).filter((f) => f[2]).length : 0;
   const semVencedor = cerimonias.filter((c) => c.vencedores && c.categorias.some((k) => !k.indicados.some((x) => x.venceu))).length;
   // As categorias ainda sem nome em português (para completar CATEGORIAS_PT).
   const semTraducao = new Map();
-  for (const c of cerimonias) for (const k of c.categorias) if (k.nome === k.original && /[a-z]/.test(k.nome) && !premios.CATEGORIAS_PT[k.chave]) semTraducao.set(k.chave, (semTraducao.get(k.chave) || 0) + 1);
-  console.log(`${p.nome}: ${cerimonias.length} cerimônias (${cerimonias[cerimonias.length - 1]?.ano || '-'}), ${nFilmes} filmes (${comImdb} com IMDb), ${semPagina} sem página, ${semVencedor} com categoria sem vencedor → ${path.basename(saida)} (${Math.round(fs.statSync(saida).size / 1024)} KB)`);
+  for (const c of cerimonias) for (const k of c.categorias) if (k.nome === k.original && /[a-z]/.test(k.nome) && !premios.CATEGORIAS_PT[k.chave] && !(jogo && premios.CATEGORIAS_PT_JOGOS[k.chave])) semTraducao.set(k.chave, (semTraducao.get(k.chave) || 0) + 1);
+  console.log(`${p.nome}: ${cerimonias.length} cerimônias (${cerimonias[cerimonias.length - 1]?.ano || '-'}), ${nFilmes} ${jogo ? 'jogos' : 'filmes'} (${jogo ? `${comImdb} ligados: ${comIgdb} com IGDB, ${comSteam} com Steam` : `${comImdb} com IMDb`}), ${semPagina} sem página, ${semVencedor} com categoria sem vencedor → ${path.basename(saida)} (${Math.round(fs.statSync(saida).size / 1024)} KB)`);
   if (semTraducao.size) console.log(`  sem tradução: ${[...semTraducao].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, n]) => `${k} (${n})`).join('; ')}`);
 }
 

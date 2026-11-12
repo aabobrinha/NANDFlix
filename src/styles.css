@@ -3056,6 +3056,8 @@ span.serie-conta .ico { width: 16px; height: 16px; }
 .pr-ind-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pr-ind-texto b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pr-ind-texto span { font-size: 12.5px; color: var(--texto-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-ind-texto .pr-na-lista { font-size: 11.5px; font-weight: 600; color: var(--acento-texto); }
+.pr-ind.sem-jogo .pr-capa { cursor: default; }
 .selo-venceu { display: inline-flex; align-items: center; gap: 4px; font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--dourado); }
 .selo-venceu .ico { width: 13px; height: 13px; }
 .pr-ind-acoes { display: flex; gap: 6px; }
