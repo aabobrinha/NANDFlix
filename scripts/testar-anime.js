@@ -306,13 +306,11 @@ test('definir: numa temporada, vale só para ela; sem temporadas, é o número d
   assert.deepStrictEqual(definirSerie(f, 5, 1).temporadas.map((t) => t.vistos), [12, 5]);
   assert.strictEqual(definirSerie(serie({ episodios: 0, status: 'assistindo' }), 1100).episodiosVistos, 1100);
 });
-test('em alta: a temporada do ano certa, e busca vazia mostra o que está em alta', async () => {
-  assert.deepStrictEqual(anilist.temporadaDoAno(new Date(2026, 10, 11)), { season: 'FALL', seasonYear: 2026 });
-  assert.deepStrictEqual(anilist.temporadaDoAno(new Date(2026, 0, 5)), { season: 'WINTER', seasonYear: 2026 });
+test('busca vazia: não consulta a AniList e devolve lista vazia (sem "em alta")', async () => {
   const pedidos = simular({ data: { Page: { media: [MIDIA] } } });
   const r = await anilist.pesquisar('   ');
-  assert.strictEqual(r.length, 1);
-  assert.ok('season' in pedidos[0].corpo.variables && !('termo' in pedidos[0].corpo.variables));
+  assert.deepStrictEqual(r, []);
+  assert.strictEqual(pedidos.length, 0);
 });
 
 const entrada = (id, extra = {}, midia = {}) => ({ status: 'planejo', vistos: 0, nota: 0, completoEm: '', ...extra,

@@ -333,7 +333,7 @@ function cartaoHTML(f) {
         <button class="acao${f.favorito ? ' fav-on' : ''}" data-acao="favorito" title="${tituloFav}" aria-label="${tituloFav}">${icone('Star', { preenchido: f.favorito })}</button>
         <button class="acao${hojeNaLista ? ' hoje-on' : ''}" data-acao="hoje" title="${tituloHoje(hojeNaLista)}" aria-label="${tituloHoje(hojeNaLista)}">${icone('CalendarClock')}</button>
         <button class="acao acao-stremio" data-acao="stremio" title="Abrir no Stremio" aria-label="Abrir no Stremio">${icone('Play')}</button>
-        ${ehSerie(f) ? acaoEpisodioHTML(f) : `<button class="acao acao-lb" data-acao="letterboxd" title="Abrir no Letterboxd" aria-label="Abrir no Letterboxd">${LB_PONTOS}</button>`}
+        ${ehSerie(f) ? '' : `<button class="acao acao-lb" data-acao="letterboxd" title="Abrir no Letterboxd" aria-label="Abrir no Letterboxd">${LB_PONTOS}</button>`}
       </div>
     </article>`;
 }
@@ -1508,9 +1508,10 @@ function montarBuscaTmdb({ termoInicial, atualTmdb, aoEscolher, fonte = () => 'f
 
   async function buscar() {
     const termo = input.value.trim();
-    // NANDRoll: animes são buscados na AniList (sem chave); sem termo, o que está em alta.
+    // Sem termo, a busca fica em branco (animes e filmes).
+    if (!termo) { area.innerHTML = ''; return; }
+    // NANDRoll: animes são buscados na AniList (sem chave); filmes, no TMDB.
     const anime = fonte() === 'anime';
-    if (!termo && !anime) { area.innerHTML = ''; return; }
     if (!anime && !estado.config.tmdbKey) { geracao++; area.innerHTML = '<p class="mensagem">Coloque a chave do TMDB em Configurações para buscar.</p>'; return; }
     const minha = ++geracao;
     area.innerHTML = `<p class="mensagem carregando">Buscando ${anime ? 'na AniList' : 'no TMDB'}</p>`;
@@ -1519,7 +1520,7 @@ function montarBuscaTmdb({ termoInicial, atualTmdb, aoEscolher, fonte = () => 'f
     if (!r.ok) { area.innerHTML = `<p class="mensagem">${esc(anime ? 'Sem conexão com a AniList. Verifique a internet e tente de novo.' : mensagemErroTmdb(r.erro))}</p>`; return; }
     itens = r.dados;
     area.innerHTML = itens.length
-      ? `${anime && !termo ? '<h3 class="trocar-subtitulo">Em alta nesta temporada</h3>' : ''}<div class="resultados">${resultadosHTML(itens, atualTmdb)}</div>`
+      ? `<div class="resultados">${resultadosHTML(itens, atualTmdb)}</div>`
       : `<p class="mensagem">${anime ? 'Nada encontrado. Tente o título em inglês ou em japonês (romaji).' : 'Nada encontrado. Tente o título original ou o código do IMDb (tt…).'}</p>`;
   }
   ligarFontesBusca(modal, () => { input.placeholder = fonte() === 'anime' ? 'Digite o nome do anime e tecle Enter' : 'Digite o título e tecle Enter'; itens = []; area.innerHTML = ''; buscar(); input.focus(); });
@@ -1533,7 +1534,7 @@ function montarBuscaTmdb({ termoInicial, atualTmdb, aoEscolher, fonte = () => 'f
   });
   input.focus();
   input.select();
-  if (termoInicial || fonte() === 'anime') buscar();
+  if (termoInicial) buscar();
 }
 
 // Duas partes: as outras capas deste mesmo filme no TMDB (idioma original

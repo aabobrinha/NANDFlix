@@ -428,7 +428,7 @@ async function mudarEpisodios(id, delta, indice) {
   aposMudarDia(id);
 }
 
-// "+1" fora do painel (cartão da lista, fileira do celular, agenda): marca o
+// "+1" fora do painel (agenda, aviso ao abrir o anime): marca o
 // próximo episódio na ordem, com um aviso que desfaz.
 let avisoEpisodio = null;
 async function viMaisUm(id) {
@@ -597,9 +597,9 @@ function passaFiltroAnime(f, filtro) {
   return true;
 }
 
-// ---- "+1" nos cartões ----
+// ---- "+1" da agenda ----
 
-// Antes dos outros cliques (fase de captura), para o cartão não abrir o painel junto.
+// Antes dos outros cliques (fase de captura), para o botão não abrir o painel junto.
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-ep-mais]');
   if (!b) return;
@@ -608,28 +608,15 @@ document.addEventListener('click', (e) => {
   viMaisUm(b.dataset.epMais);
 }, true);
 
-// O "+1" dos cartões da lista do PC, no lugar do atalho do Letterboxd.
-function acaoEpisodioHTML(f) {
-  if (!ehSerie(f) || !nandrollLigado() || f.status === 'completo') return '';
-  return `<button class="acao acao-ep" data-ep-mais="${f.id}" title="Vi ${textoDaVez(f)}" aria-label="Marcar ${textoDaVez(f)} como visto">+1</button>`;
-}
-
-// O que muda num cartão de série sem recriá-lo: o selo da capa e o "+1"
-// (recriar tiraria da página o botão que acabou de ser clicado).
-const estadoCartaoAnime = (f) => (ehSerie(f) ? `${nandrollLigado()}|${f.status}|${seloSerieTexto(f)}|${rotuloDaVez(f)}` : '');
+// O que muda num cartão de série sem recriá-lo: o selo da capa (recriar o
+// cartão faria as capas piscarem).
+const estadoCartaoAnime = (f) => (ehSerie(f) ? `${nandrollLigado()}|${f.status}|${seloSerieTexto(f)}` : '');
 function atualizarCartaoAnime(el, f) {
   if (!ehSerie(f)) return;
   for (const capa of $$('.capa', el)) {
     $('.selo-serie', capa)?.remove();
     capa.insertAdjacentHTML('beforeend', seloSerieHTML(f));
   }
-  const acoes = $('.acoes', el);
-  if (!acoes) return;
-  const velho = $('.acao-ep', acoes);
-  const html = acaoEpisodioHTML(f);
-  if (velho && html) { velho.title = `Vi ${textoDaVez(f)}`; velho.setAttribute('aria-label', `Marcar ${textoDaVez(f)} como visto`); }
-  else if (velho) velho.remove();
-  else if (html) acoes.insertAdjacentHTML('beforeend', html);
 }
 
 // ---- Celular: fileiras de animes no início ----
@@ -639,15 +626,6 @@ function seriesAssistindo() {
   if (!nandrollLigado()) return [];
   return estado.filmes.filter((f) => ehSerie(f) && f.status === 'assistindo' && daPlataforma(f)) // Plataformas
     .sort((a, b) => (episodiosNovos(b) > 0) - (episodiosNovos(a) > 0) || String(b.anilistEm || '').localeCompare(String(a.anilistEm || '')));
-}
-
-// O cartão da fileira "Continue assistindo": a capa e, embaixo, o "+1" com o episódio da vez.
-function cartaoContinuarHTML(f, capa) {
-  const novos = episodiosNovos(f);
-  return `<div class="cel-continuar">
-    ${capa}
-    <button class="cel-ep-mais${novos ? ' novo' : ''}" data-ep-mais="${f.id}" aria-label="Marcar ${textoDaVez(f)} de ${esc(f.titulo)} como visto">${icone('Plus')} ${rotuloDaVez(f)}</button>
-  </div>`;
 }
 
 // ---- Agenda: os próximos episódios ----

@@ -72,8 +72,8 @@ function fileirasDoModo(lista) {
   const naoVistos = lista.filter((f) => !f.visto);
   const hojeIds = idsWatchlist();
 
-  // NANDRoll: os animes em andamento vêm primeiro, com o "+1" no cartão.
-  if (cel.modo.tipo === 'inicio' || (cel.modo.tipo === 'filtro' && ['animes', 'assistindo'].includes(cel.modo.filtro))) add('Continue assistindo', seriesAssistindo(), { continuar: true });
+  // NANDRoll: os animes em andamento vêm primeiro.
+  if (cel.modo.tipo === 'inicio' || (cel.modo.tipo === 'filtro' && ['animes', 'assistindo'].includes(cel.modo.filtro))) add('Continue assistindo', seriesAssistindo());
   if (cel.modo.tipo === 'inicio') add('Para ver hoje', hojeIds.map(porId).filter(Boolean));
   if (cel.modo.tipo !== 'filtro' || cel.modo.filtro !== 'favoritos') add('Seus favoritos', lista.filter((f) => f.favorito && !f.visto));
   add('Na sua lista', naoVistos.slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0)), { minimo: 3 });
@@ -160,7 +160,7 @@ function pilulasHTML() {
 function fileiraHTML(r) {
   return `<section class="cel-fileira${r.grande ? ' grande' : ''}">
     <h2>${r.genero ? `<button data-cel="genero" data-genero="${esc(r.genero)}">${esc(r.titulo)} ${icone('ChevronRight')}</button>` : esc(r.titulo)}</h2>
-    <div class="cel-trilho">${r.filmes.map((f) => (r.continuar ? cartaoContinuarHTML(f, capaCelHTML(f, r)) : capaCelHTML(f, r))).join('')}</div>
+    <div class="cel-trilho">${r.filmes.map((f) => capaCelHTML(f, r)).join('')}</div>
   </section>`;
 }
 

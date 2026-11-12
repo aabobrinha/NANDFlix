@@ -2861,7 +2861,6 @@ button.serie-conta:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--an
 .serie-falta { margin: 0; font-size: 13px; color: var(--texto-2); }
 .serie-novos { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; color: var(--acento-texto); }
 .serie-novos .ico { width: 16px; height: 16px; flex: none; }
-.acao.acao-ep { font: 700 13px/1 var(--ui); font-variant-numeric: tabular-nums; }
 .marca-anilist { font-weight: 700; color: var(--texto-2); margin-right: 6px; }
 .chip-agenda { display: inline-flex; align-items: center; gap: 8px; }
 .chip-agenda .ico { width: 15px; height: 15px; }
@@ -2883,14 +2882,7 @@ button.serie-conta:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--an
 .agenda-texto small { font-size: 13px; color: var(--texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agenda-hora { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--texto-2); padding-right: 8px; }
 .agenda-mais { min-height: 40px; padding: 0 14px; font-size: 13px; flex: none; }
-/* Celular: a fileira "Continue assistindo" */
-.cel-continuar { display: flex; flex-direction: column; gap: 6px; flex: none; }
-.cel-ep-mais { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 40px; border: 0; border-radius: 8px; background: var(--superficie-2); color: var(--texto); font: 600 13px/1 var(--ui); font-variant-numeric: tabular-nums; cursor: pointer; }
-.cel-ep-mais:active { transform: scale(.97); }
-.cel-ep-mais.novo { background: var(--gradiente-acento); color: #fff; }
-.cel-ep-mais .ico { width: 14px; height: 14px; }
 .cel-capa .selo-serie { left: 6px; bottom: 6px; }
-.cel-continuar { scroll-snap-align: start; }
 .nandroll-opcoes { flex-direction: column; align-items: flex-start; gap: 10px; }
 
 /* NANDRoll — grade de episódios e filmes na ordem */
