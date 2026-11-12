@@ -1329,6 +1329,12 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
 .cal-numero { font-size: 14px; font-weight: 500; color: var(--texto-2); font-variant-numeric: tabular-nums; }
 .cal-dia.com-vistos .cal-numero, .cal-dia.hoje .cal-numero { color: var(--texto); font-weight: 700; text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
 .cal-dia.futuro .cal-numero { color: rgba(156, 159, 163, .7); }
+/* Animes: episódios assistidos no dia */
+.cal-eps { padding: 2px 7px; border-radius: 999px; background: rgba(0, 0, 0, .55); color: var(--texto); font-size: 10.5px; font-weight: 700; line-height: 1.2; text-shadow: none; font-variant-numeric: tabular-nums; }
+/* Plataforma do calendário / das estatísticas (hub) */
+.escopo-seletor select { min-height: 40px; }
+.est-topo .escopo-seletor { margin-left: 4px; }
+.est-nota-rodape { margin: 0; color: var(--texto-2); font-size: 12.5px; }
 .cal-hoje {
   padding: 3px 8px; border-radius: 999px;
   background: var(--gradiente-acento); color: var(--sobre-acento);
@@ -1562,6 +1568,8 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
   .cal-cabeca { top: 6px; left: 6px; }
   .cal-numero { font-size: 12px; }
   .cal-hoje { display: none; }
+  .escopo-seletor > span:first-child { display: none; }
+  .cal-eps { display: none; }
   /* Pequeno demais para capas nítidas: fica a capa desfocada de fundo e, na watchlist, um ponto roxo. */
   .cal-vistos, .cal-dia > .cal-mais { display: none; }
   .cal-fundo { filter: blur(6px) saturate(1.25) brightness(.65); }
@@ -3211,3 +3219,9 @@ html[data-tema="laranja"] {
   .plat-opcao[aria-pressed] .plat-opcao-texto { padding-right: 34px; }
   .plat-check { top: 50%; translate: 0 -50%; }
 }
+.tl-plat-icone { width: 16px; height: 16px; font-size: 14px; vertical-align: -3px; }
+.tl-menu-nome small { color: var(--texto-2); font-weight: 400; margin-left: 6px; }
+/* No hub o menu de plataforma toma espaço: os números do mês descem para a linha de baixo (sempre, em todos os meses). */
+.cal-topo:has(.escopo-seletor) { flex-wrap: wrap; }
+.cal-topo:has(.escopo-seletor) .cal-stats { order: 3; width: 100%; }
+.cal-topo:has(.escopo-seletor) .cal-fechar { margin-left: auto; }

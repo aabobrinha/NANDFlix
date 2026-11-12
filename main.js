@@ -11,7 +11,7 @@ const omdb = require('./lib/omdb');
 const trailer = require('./lib/trailer');
 const tmdb = require('./lib/tmdb');
 const anilist = require('./lib/anilist');
-const { novoFilme, juntar, resumo, acharRepetido, mesmoFilme, ehSerie, passoSerie, definirSerie, alternarEpisodio, statusSerie, comDia, vistoSerie } = require('./lib/filmes');
+const { novoFilme, juntar, resumo, acharRepetido, mesmoFilme, ehSerie, passoSerie, definirSerie, alternarEpisodio, statusSerie, comDia, comEpisodiosDoDia, vistoSerie } = require('./lib/filmes');
 const letterboxd = require('./lib/letterboxd');
 const importar = require('./lib/importar');
 const stremio = require('./lib/stremio');
@@ -78,7 +78,7 @@ function gravarConfig() {
 // ficam os 30 dias mais recentes. Se houver uma pasta extra (a do Google
 // Drive, por exemplo), a mesma cópia vai para lá também.
 const MAX_DIARIOS = 30;
-const CONFIG_NO_BACKUP = ['stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
+const CONFIG_NO_BACKUP = ['stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'animesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
 const RE_DIARIO = /^diario-\d{4}-\d{2}-\d{2}\.json$/;
 let mudouDesdeBackup = true;
 let ultimoBackup = { em: null, erroExtra: null };
@@ -728,7 +728,7 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
   // (watchlistHoje é o formato antigo, de um dia só; o app o apaga ao salvar o novo).
   // filmesDoMes: { 'AAAA-MM': id }, o filme favorito de cada mês (só aparece no calendário).
   // tierlist: [{ id, nome, cor, filmes: [ids] }], as tiers de cima para baixo.
-  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
+  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'animesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
   for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
   if ('nandroll' in mudancas) { config.nandroll = Boolean(mudancas.nandroll); if (config.nandroll) atualizarSeriesEmExibicao(); }
   if ('omdbKey' in mudancas) config.limiteAtingidoEm = null;
@@ -740,7 +740,7 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
 });
 
 ipcMain.handle('filme:atualizar', (_e, id, mudancas) => {
-  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa', 'pagina', 'paginaEm', 'story', 'listas', 'shots', 'paginaOutra'];
+  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa', 'pagina', 'paginaEm', 'story', 'listas', 'shots', 'paginaOutra', 'epDias'];
   const limpo = {};
   for (const k of permitidas) if (k in mudancas) limpo[k] = mudancas[k];
   // Mudar a busca da capa faz o filme ser procurado de novo no TMDB por ela.
@@ -757,24 +757,24 @@ ipcMain.handle('filme:atualizar', (_e, id, mudancas) => {
 ipcMain.handle('serie:progresso', (_e, id, delta, dia, temporada) => {
   const f = filmes.find((x) => x.id === id);
   if (!ehSerie(f)) return null;
-  return atualizarFilme(id, comDia(f, passoSerie(f, Number(delta) < 0 ? -1 : 1, Number.isInteger(temporada) ? temporada : null), dia));
+  return atualizarFilme(id, comEpisodiosDoDia(f, comDia(f, passoSerie(f, Number(delta) < 0 ? -1 : 1, Number.isInteger(temporada) ? temporada : null), dia), dia));
 });
 ipcMain.handle('serie:definir', (_e, id, n, dia, temporada) => {
   const f = filmes.find((x) => x.id === id);
   if (!ehSerie(f)) return null;
-  return atualizarFilme(id, comDia(f, definirSerie(f, n, Number.isInteger(temporada) ? temporada : null), dia));
+  return atualizarFilme(id, comEpisodiosDoDia(f, comDia(f, definirSerie(f, n, Number.isInteger(temporada) ? temporada : null), dia), dia, { registrar: false }));
 });
 // Marcar ou desmarcar um episódio avulso (a grade de episódios).
 ipcMain.handle('serie:episodio', (_e, id, temporada, n, dia) => {
   const f = filmes.find((x) => x.id === id);
   if (!ehSerie(f)) return null;
-  return atualizarFilme(id, comDia(f, alternarEpisodio(f, Number(temporada), n), dia));
+  return atualizarFilme(id, comEpisodiosDoDia(f, comDia(f, alternarEpisodio(f, Number(temporada), n), dia), dia));
 });
 ipcMain.handle('anilist:importar', (_e, nome) => chamar(() => importarAnilist(nome)));
 ipcMain.handle('serie:status', (_e, id, status, dia) => {
   const f = filmes.find((x) => x.id === id);
   if (!ehSerie(f)) return null;
-  return atualizarFilme(id, comDia(f, statusSerie(f, status), dia));
+  return atualizarFilme(id, comEpisodiosDoDia(f, comDia(f, statusSerie(f, status), dia), dia, { registrar: false }));
 });
 ipcMain.handle('anilist:pesquisar', (_e, termo) => chamar(() => anilist.pesquisar(termo)));
 ipcMain.handle('anilist:atualizar', (_e, id) => chamar(async () => {

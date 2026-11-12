@@ -15,7 +15,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Marcas } from '../../lib/marcas.js';
 import { Nuvem } from '../../lib/nuvem.js';
-import { novoFilme, acharRepetido, ehSerie, passoSerie, definirSerie, alternarEpisodio, statusSerie, comDia, vistoSerie } from '../../lib/filmes.js';
+import { novoFilme, acharRepetido, ehSerie, passoSerie, definirSerie, alternarEpisodio, statusSerie, comDia, comEpisodiosDoDia, vistoSerie } from '../../lib/filmes.js';
 import tmdb from '../../lib/tmdb.js';
 import anilist from '../../lib/anilist.js';
 import omdb from '../../lib/omdb.js';
@@ -531,7 +531,7 @@ window.api = {
     return { filmes, config: configPublica(), pastaDados: '', versao: VERSAO };
   },
   salvarConfig: async (mudancas) => {
-    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
+    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'animesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollAssistir', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
     for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
     if ('nandroll' in mudancas) { config.nandroll = Boolean(mudancas.nandroll); if (config.nandroll) atualizarSeriesEmExibicao(); }
     gravarConfig();
@@ -540,7 +540,7 @@ window.api = {
     return configPublica();
   },
   atualizarFilme: async (id, mudancas) => {
-    const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa', 'pagina', 'paginaEm', 'story', 'listas', 'shots', 'paginaOutra'];
+    const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa', 'pagina', 'paginaEm', 'story', 'listas', 'shots', 'paginaOutra', 'epDias'];
     const limpo = {};
     for (const k of permitidas) if (k in mudancas) limpo[k] = mudancas[k];
     const atual = filmes.find((f) => f.id === id);
@@ -553,23 +553,23 @@ window.api = {
   progressoSerie: async (id, delta, dia, temporada) => {
     const f = filmes.find((x) => x.id === id);
     if (!ehSerie(f)) return null;
-    return atualizarFilme(id, comDia(f, passoSerie(f, Number(delta) < 0 ? -1 : 1, Number.isInteger(temporada) ? temporada : null), dia));
+    return atualizarFilme(id, comEpisodiosDoDia(f, comDia(f, passoSerie(f, Number(delta) < 0 ? -1 : 1, Number.isInteger(temporada) ? temporada : null), dia), dia));
   },
   definirSerie: async (id, n, dia, temporada) => {
     const f = filmes.find((x) => x.id === id);
     if (!ehSerie(f)) return null;
-    return atualizarFilme(id, comDia(f, definirSerie(f, n, Number.isInteger(temporada) ? temporada : null), dia));
+    return atualizarFilme(id, comEpisodiosDoDia(f, comDia(f, definirSerie(f, n, Number.isInteger(temporada) ? temporada : null), dia), dia, { registrar: false }));
   },
   episodioSerie: async (id, temporada, n, dia) => {
     const f = filmes.find((x) => x.id === id);
     if (!ehSerie(f)) return null;
-    return atualizarFilme(id, comDia(f, alternarEpisodio(f, Number(temporada), n), dia));
+    return atualizarFilme(id, comEpisodiosDoDia(f, comDia(f, alternarEpisodio(f, Number(temporada), n), dia), dia));
   },
   importarAnilist: (nome) => chamar(() => importarAnilist(nome)),
   statusSerie: async (id, status, dia) => {
     const f = filmes.find((x) => x.id === id);
     if (!ehSerie(f)) return null;
-    return atualizarFilme(id, comDia(f, statusSerie(f, status), dia));
+    return atualizarFilme(id, comEpisodiosDoDia(f, comDia(f, statusSerie(f, status), dia), dia, { registrar: false }));
   },
   pesquisarAnilist: (termo) => chamar(() => anilist.pesquisar(termo)),
   atualizarAnilist: (id) => chamar(async () => {

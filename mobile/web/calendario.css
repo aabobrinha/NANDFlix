@@ -214,3 +214,8 @@ html.celular .cdia-item + .cdia-item { padding-top: 18px; border-top: 1px solid 
   .ccal-dia { transition: none; }
   .ccal-dia:active { transform: none; }
 }
+.ccal-escopo { padding: 0 var(--margem, 16px) 10px; }
+.ccal-escopo .ordenar { width: 100%; }
+.ccal-escopo .ordenar-caixa { width: 100%; }
+.ccal-escopo select { width: 100%; }
+.ccal-mais.ccal-eps { font-size: 9.5px; padding: 1px 4px; width: auto; min-width: 0; }

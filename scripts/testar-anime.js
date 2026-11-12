@@ -3,7 +3,7 @@
 const assert = require('assert');
 const test = require('node:test');
 
-const { novoFilme, mesmoFilme, progressoSerie, statusSerie, comDia, vistoSerie, ehSerie, passoSerie, totalTemporadas, definirSerie, alternarEpisodio, marcadosDe } = require('../lib/filmes');
+const { comEpisodiosDoDia, novoFilme, mesmoFilme, progressoSerie, statusSerie, comDia, vistoSerie, ehSerie, passoSerie, totalTemporadas, definirSerie, alternarEpisodio, marcadosDe } = require('../lib/filmes');
 const anilist = require('../lib/anilist');
 
 const serie = (dados = {}) => novoFilme({ tipo: 'serie', anime: true, anilistId: 1, episodios: 12, episodiosVistos: 0, status: 'planejo', ...dados });
@@ -41,6 +41,19 @@ test('o dia: completar grava a data, reabrir no mesmo dia desfaz', () => {
   assert.deepStrictEqual(comDia(g, progressoSerie(g, 11), '2026-11-11').vistoEm, []);
   // sem mudar de visto, as datas não são tocadas
   assert.ok(!('vistoEm' in comDia(f, progressoSerie(f, 5), '2026-11-11')));
+});
+test('episódios por dia: +1 grava no dia, desfazer tira do dia, em bloco não inventa datas', () => {
+  const f = serie({ episodiosVistos: 2, epDias: { '2026-11-10': 2 }, status: 'assistindo' });
+  const m = comEpisodiosDoDia(f, progressoSerie(f, 3), '2026-11-11');
+  assert.deepStrictEqual(m.epDias, { '2026-11-10': 2, '2026-11-11': 1 });
+  const g = { ...f, ...m };
+  assert.deepStrictEqual(comEpisodiosDoDia(g, progressoSerie(g, 2), '2026-11-11').epDias, { '2026-11-10': 2 });
+  // desfazer sem nada hoje tira do dia mais recente
+  assert.deepStrictEqual(comEpisodiosDoDia(f, progressoSerie(f, 1), '2026-11-11').epDias, { '2026-11-10': 1 });
+  // vários de uma vez (digitar o número): sem datas novas
+  assert.ok(!('epDias' in comEpisodiosDoDia(f, progressoSerie(f, 9), '2026-11-11', { registrar: false })));
+  // zerar limpa
+  assert.deepStrictEqual(comEpisodiosDoDia(f, statusSerie(f, 'planejo'), '2026-11-11', { registrar: false }).epDias, {});
 });
 test('o ✓ numa série acompanha o status', () => {
   assert.deepStrictEqual(vistoSerie(serie({ episodiosVistos: 2, status: 'assistindo' }), true), { status: 'completo', visto: true, episodiosVistos: 12 });

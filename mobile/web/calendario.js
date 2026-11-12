@@ -22,16 +22,19 @@ const capaCalHTML = (f) => (srcCapa(f) ? `<img src="${esc(srcCapa(f))}" alt="" l
 
 // eslint-disable-next-line no-func-assign
 mesHTML = function mesHTMLCelular(mes) {
+  const p = escopoCal();
+  const porEp = porEpisodio(p);
   const [ano, m] = mes.split('-').map(Number);
   const deslocamento = new Date(ano, m - 1, 1).getDay();
   const diasNoMes = new Date(ano, m, 0).getDate();
-  const porDia = vistosPorDia();
+  const porDia = vistosPorDia(p);
   const diaHoje = hoje();
   const mesAtual = diaHoje.slice(0, 7);
-  const doMes = filmeDoMes(mes);
+  const doMes = itemDoMes(mes, p);
   const diasDoMes = [...porDia.entries()].filter(([d]) => d.startsWith(mes)).sort((a, b) => b[0].localeCompare(a[0]));
-  const noMes = diasDoMes.reduce((n, [, fs]) => n + fs.length, 0);
-  const wlHoje = idsWatchlist(diaHoje).map(porId).filter(Boolean);
+  const contagem = contagemDoMes(p, mes, porDia);
+  const noMes = contagem.sessoes;
+  const wlHoje = idsWatchlist(diaHoje, p).map(porId).filter(Boolean);
 
   let celulas = '';
   for (let i = 0; i < deslocamento; i++) celulas += '<span class="ccal-dia ccal-branco" aria-hidden="true"></span>';
@@ -40,7 +43,8 @@ mesHTML = function mesHTMLCelular(mes) {
     let vistos = porDia.get(dia) || [];
     const temDoMes = Boolean(doMes && vistos.includes(doMes));
     if (temDoMes) vistos = [doMes, ...vistos.filter((f) => f !== doMes)];
-    const wl = idsWatchlist(dia).length;
+    const wl = idsWatchlist(dia, p).length;
+    const eps = porEp ? selosEpisodios(vistos, dia) : 0;
     const classes = ['ccal-dia'];
     if (vistos.length) classes.push('com-vistos');
     if (vistos.length > 1) classes.push('varios');
@@ -49,10 +53,10 @@ mesHTML = function mesHTMLCelular(mes) {
     if (dia > diaHoje) classes.push('futuro');
     const src = vistos.length ? srcCapa(vistos[0]) : '';
     celulas += `
-      <button class="${classes.join(' ')}" data-c="dia" data-dia="${dia}" aria-label="${esc(`${diaLegivel(dia)}${vistos.length ? `: ${vistos.length} visto${vistos.length === 1 ? '' : 's'}` : ''}`)}">
+      <button class="${classes.join(' ')}" data-c="dia" data-dia="${dia}" aria-label="${esc(`${diaLegivel(dia)}${vistos.length ? (porEp ? `: ${eps ? `${eps} episódio${eps === 1 ? '' : 's'}` : 'assistido'}` : `: ${vistos.length} visto${vistos.length === 1 ? '' : 's'}`) : ''}`)}">
         ${src ? `<img src="${esc(src)}" alt="">` : ''}
         <span class="ccal-num">${d}</span>
-        ${vistos.length > 1 ? `<span class="ccal-mais">${vistos.length}</span>` : ''}
+        ${porEp && eps ? `<span class="ccal-mais ccal-eps">${eps}ep</span>` : vistos.length > 1 ? `<span class="ccal-mais">${vistos.length}</span>` : ''}
         ${temDoMes ? `<span class="ccal-trofeu">${icone('Trophy')}</span>` : ''}
         ${wl && !vistos.length ? '<span class="ccal-ponto" aria-hidden="true"></span>' : ''}
       </button>`;
@@ -60,15 +64,15 @@ mesHTML = function mesHTMLCelular(mes) {
 
   const anterior = mesVizinho(mes, -1);
   const proximo = mesVizinho(mes, 1);
-  const linhaDiario = (f) => `
+  const linhaDiario = (f, dia) => `
     <button class="ccal-linha" data-c="detalhes" data-id="${f.id}">
       <span class="ccal-capa">${capaCalHTML(f)}</span>
       <span class="ccal-info">
         <strong>${esc(f.titulo)}</strong>
-        <small>${esc([f.ano, f.diretor].filter(Boolean).join(' · '))}</small>
+        <small>${esc([episodiosNoDia(f, dia) ? `${episodiosNoDia(f, dia)} ep.` : '', f.ano, porEp ? '' : f.diretor].filter(Boolean).join(' · '))}</small>
         ${f.minhaNota ? notaFixaHTML(f.minhaNota) : ''}
       </span>
-      ${doMes === f ? `<span class="ccal-linha-trofeu" title="Filme do mês">${icone('Trophy')}</span>` : temPagina(f) ? `<span class="ccal-linha-pagina" title="Tem página">${icone('NotebookPen')}</span>` : ''}
+      ${doMes === f ? `<span class="ccal-linha-trofeu" title="${esc(rotuloDoMes(p))}">${icone('Trophy')}</span>` : temPagina(f) ? `<span class="ccal-linha-pagina" title="Tem página">${icone('NotebookPen')}</span>` : ''}
     </button>`;
   const grupoDiario = ([dia, fs]) => {
     const dt = new Date(`${dia}T12:00:00`);
@@ -78,12 +82,13 @@ mesHTML = function mesHTMLCelular(mes) {
         <button class="ccal-grupo-dia" data-c="dia" data-dia="${dia}">
           <b>${dt.getDate()}</b><span>${esc(dia === diaHoje ? 'hoje' : semana)}</span>${icone('ChevronRight')}
         </button>
-        ${fs.map(linhaDiario).join('')}
+        ${fs.map((f) => linhaDiario(f, dia)).join('')}
       </div>`;
   };
 
   return `
     ${barraCalHTML({ voltar: 'fechar', titulo: 'Calendário' })}
+    ${seletorEscopoHTML('calendario') ? `<div class="ccal-escopo">${seletorEscopoHTML('calendario')}</div>` : ''}
     <div class="cal-topo ccal-topo">
       <div class="cal-navegacao">
         <h2>${esc(MESES[m - 1])} <span class="cal-ano">${ano}</span></h2>
@@ -93,7 +98,7 @@ mesHTML = function mesHTMLCelular(mes) {
         </div>
       </div>
       <p class="ccal-resumo">
-        <span>${noMes ? `<b>${noMes}</b> ${noMes === 1 ? 'filme visto' : 'filmes vistos'}` : 'Nada visto ainda'}</span>
+        <span>${noMes ? resumoDoMesHTML(p, contagem) : (porEp ? 'Nada assistido ainda' : 'Nada visto ainda')}</span>
         ${mes !== mesAtual ? `<button class="ccal-hoje-btn" data-c="mes" data-mes="${mesAtual}">Voltar para hoje</button>` : ''}
       </p>
     </div>
@@ -102,12 +107,12 @@ mesHTML = function mesHTMLCelular(mes) {
     ${doMes
       ? `<button class="ccal-do-mes" data-c="filme-do-mes" data-mes="${mes}">
           <span class="ccal-do-mes-capa">${capaCalHTML(doMes)}</span>
-          <span class="ccal-do-mes-texto"><small>${icone('Trophy')} Filme de ${esc(MESES[m - 1])}</small><strong>${esc(doMes.titulo)}</strong></span>
+          <span class="ccal-do-mes-texto"><small>${icone('Trophy')} ${esc(rotuloDoMes(p).replace(' do mês', ''))} de ${esc(MESES[m - 1])}</small><strong>${esc(doMes.titulo)}</strong></span>
           ${icone('ChevronRight')}
         </button>`
       : noMes ? `<button class="ccal-do-mes vazio" data-c="filme-do-mes" data-mes="${mes}">
           <span class="ccal-do-mes-icone">${icone('Trophy')}</span>
-          <span class="ccal-do-mes-texto"><strong>Escolher o filme do mês</strong><small>O melhor que você viu em ${esc(MESES[m - 1])}</small></span>
+          <span class="ccal-do-mes-texto"><strong>Escolher ${voc('artigo', undefined, p)} ${esc(rotuloDoMes(p).toLowerCase())}</strong><small>O melhor que você ${porEp ? 'assistiu' : 'viu'} em ${esc(MESES[m - 1])}</small></span>
           ${icone('ChevronRight')}
         </button>` : ''}
     ${mes === mesAtual ? `
@@ -118,14 +123,14 @@ mesHTML = function mesHTMLCelular(mes) {
         </header>
         <div class="ccal-trilho">
           ${wlHoje.map((f) => `<button class="ccal-wl" data-c="detalhes" data-id="${f.id}" aria-label="${esc(f.titulo)}">${capaCalHTML(f)}</button>`).join('')}
-          <button class="ccal-wl ccal-wl-sortear" data-c="sortear-hoje">${icone('Dices')}<span>${voc('sortear')}</span></button>
+          <button class="ccal-wl ccal-wl-sortear" data-c="sortear-hoje">${icone('Dices')}<span>${voc('sortear', undefined, p)}</span></button>
         </div>
       </section>` : ''}
     <section class="ccal-secao">
       <header><h3>Diário de ${esc(MESES[m - 1])}</h3></header>
       ${diasDoMes.length
         ? `<div class="ccal-diario">${diasDoMes.map(grupoDiario).join('')}</div>`
-        : `<p class="ccal-vazio">Nenhum filme visto em ${esc(MESES[m - 1])}.</p>`}
+        : `<p class="ccal-vazio">${porEp ? `Nenhum episódio assistido em ${esc(MESES[m - 1])}.` : `Nenhum filme visto em ${esc(MESES[m - 1])}.`}</p>`}
     </section>`;
 };
 
@@ -153,10 +158,12 @@ function itemWatchlistCelHTML(f, dia) {
 
 function itemVistoCelHTML(f, dia) {
   const mes = dia.slice(0, 7);
-  const ehDoMes = filmeDoMes(mes)?.id === f.id;
-  const meta = [f.ano, f.diretor].filter(Boolean).join(' · ');
+  const pf = plataformaDoItem(f);
+  const ehDoMes = itemDoMes(mes, pf)?.id === f.id;
+  const eps = episodiosNoDia(f, dia);
+  const meta = [eps ? `${eps} episódio${eps === 1 ? '' : 's'}` : '', f.ano, porEpisodio(pf) ? '' : f.diretor].filter(Boolean).join(' · ');
   const trofeu = `<button class="cdia-trofeu${ehDoMes ? ' on' : ''}" data-c="alternar-filme-do-mes" data-id="${f.id}" data-mes="${mes}" aria-pressed="${ehDoMes}">
-      ${icone('Trophy')} ${ehDoMes ? 'Filme do mês' : 'Filme do mês?'}</button>`;
+      ${icone('Trophy')} ${ehDoMes ? rotuloDoMes(pf) : `${rotuloDoMes(pf)}?`}</button>`;
   const pagina = temPagina(f);
   return `
     <article class="cal-filme cdia-item cdia-visto${pagina ? ' com-pagina' : ''}${ehDoMes ? ' do-mes' : ''}" data-id="${f.id}">
@@ -181,10 +188,12 @@ function itemVistoCelHTML(f, dia) {
 
 // eslint-disable-next-line no-func-assign
 paginaDiaHTML = function paginaDiaHTMLCelular(dia) {
-  const vistos = vistosPorDia().get(dia) || [];
+  const p = escopoCal();
+  const porEp = porEpisodio(p);
+  const vistos = vistosPorDia(p).get(dia) || [];
   const ehHoje = dia === hoje();
   const futuro = dia > hoje();
-  const watchlist = idsWatchlist(dia).map(porId).filter(Boolean);
+  const watchlist = idsWatchlist(dia, p).map(porId).filter(Boolean);
   const dt = new Date(`${dia}T12:00:00`);
   const semana = dt.toLocaleDateString('pt-BR', { weekday: 'long' });
   const nomeSemana = semana.charAt(0).toUpperCase() + semana.slice(1);
@@ -204,21 +213,21 @@ paginaDiaHTML = function paginaDiaHTMLCelular(dia) {
       <section class="cal-secao cdia-secao" data-secao="watchlist">
         <header><h3>${ehHoje ? 'Para ver hoje' : 'Para ver neste dia'} ${contagem(watchlist.length)}</h3></header>
         ${ehHoje ? `<div class="cdia-pilulas">
-            <button class="cel-pilula" data-c="sortear-hoje">${icone('Dices')} ${voc('sortear')}</button>
+            <button class="cel-pilula" data-c="sortear-hoje">${icone('Dices')} ${voc('sortear', undefined, p)}</button>
             <button class="cel-pilula" data-c="sortear-hoje-filtro">${icone('SlidersHorizontal')} Com filtro</button>
           </div>` : ''}
         ${watchlist.length
           ? `<div class="cdia-lista">${watchlist.map((f) => itemWatchlistCelHTML(f, dia)).join('')}</div>`
           : `<p class="ccal-vazio">${ehHoje
-            ? `Nada separado ainda. Sorteie ${voc('um')} ou toque em ${icone('CalendarClock')} nos detalhes ${voc('de')}. A lista vira junto com o dia, às 5h.`
-            : `${voc('Nenhum')} planejado para este dia.`}</p>`}
+            ? `Nada separado ainda. Sorteie ${voc('um', undefined, p)} ou toque em ${icone('CalendarClock')} nos detalhes ${voc('de', undefined, p)}. A lista vira junto com o dia, às 5h.`
+            : `${voc('Nenhum', undefined, p)} planejado para este dia.`}</p>`}
       </section>` : ''}
     ${futuro ? '' : `
       <section class="cal-secao cdia-secao">
-        <header><h3>${ehHoje ? 'Vistos hoje' : 'Vistos neste dia'} ${contagem(vistos.length)}</h3></header>
+        <header><h3>${porEp ? (ehHoje ? 'Assistidos hoje' : 'Assistidos neste dia') : (ehHoje ? 'Vistos hoje' : 'Vistos neste dia')} ${contagem(vistos.length)}</h3></header>
         ${vistos.length
           ? `<div class="cdia-lista">${ordenados.map((f) => itemVistoCelHTML(f, dia)).join('')}</div>`
-          : `<p class="ccal-vazio">${ehHoje ? 'Nada visto hoje ainda.' : 'Nada visto neste dia.'}</p>`}
+          : `<p class="ccal-vazio">${porEp ? (ehHoje ? 'Nenhum episódio assistido hoje ainda.' : 'Nenhum episódio assistido neste dia.') : (ehHoje ? 'Nada visto hoje ainda.' : 'Nada visto neste dia.')}</p>`}
       </section>`}`;
 };
 

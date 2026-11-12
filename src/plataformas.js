@@ -22,6 +22,8 @@ const ehAnime = (f) => Boolean(f) && (f.anime === true || ehSerie(f));
 //   de/deste/um/este: "do filme", "deste filme", "um filme", "este filme";
 //   adicionar/sortear: o texto do botão ("Adicionar filme", "Sortear um anime").
 // recursos: telas que só existem em certas plataformas (plataformaTem).
+// doMes: onde fica guardado o "item do mês" do calendário (config da conta, uma chave por
+// plataforma, que também entra em CONFIG_SINC e nas permitidas) e como se chama.
 // tema: o nome do tema de cor (CSS html[data-tema]); hub: junta as habilitadas.
 const PLATAFORMAS = [
   {
@@ -29,7 +31,8 @@ const PLATAFORMAS = [
     descricao: 'Seus filmes: watchlist, notas, calendário e tierlists.',
     pertence: (f) => !ehAnime(f),
     rotulos: { item: 'filme', itens: 'filmes', todos: 'Todos os filmes', nenhum: 'Nenhum filme', artigo: 'o', genero: 'm', de: 'do filme', deste: 'deste filme', um: 'um filme', este: 'este filme', adicionar: 'Adicionar filme', sortear: 'Sortear um filme' },
-    recursos: ['premios'], // telas só de filme
+    recursos: ['premios', 'retrospectiva'], // telas só de filme (a retrospectiva em stories é de filmes)
+    doMes: { chave: 'filmesDoMes', rotulo: 'Filme do mês' },
     tema: 'roxo',
   },
   {
@@ -38,6 +41,8 @@ const PLATAFORMAS = [
     descricao: 'Seus animes: episódios, temporadas e o próximo episódio.',
     pertence: ehAnime,
     rotulos: { item: 'anime', itens: 'animes', todos: 'Todos os animes', nenhum: 'Nenhum anime', artigo: 'o', genero: 'm', de: 'do anime', deste: 'deste anime', um: 'um anime', este: 'este anime', adicionar: 'Adicionar anime', sortear: 'Sortear um anime' },
+    doMes: { chave: 'animesDoMes', rotulo: 'Anime do mês' },
+    porEpisodio: true, // o que se registra num dia é episódio assistido (epDias), não "vi o filme"
     tema: 'laranja',
   },
   {
@@ -252,6 +257,46 @@ function aposMudarPlataformas() {
     return;
   }
   render();
+}
+
+// ---- Calendário e estatísticas: qual plataforma mostrar ----
+//
+// Cada plataforma tem o seu calendário e as suas estatísticas (filmes e animes
+// são coisas diferentes: um dia de filme é "vi", um de anime é "vi N episódios").
+// Fora do hub, vale a plataforma atual. No hub, um menu no alto da tela escolhe
+// entre as habilitadas, e a escolha fica gravada neste aparelho (por tela).
+const escopoSalvo = (tela) => { try { return localStorage.getItem(`escopo-${tela}`); } catch { return null; } };
+function escopoDe(tela) {
+  const atual = plataformaAtual();
+  if (!atual.hub) return atual;
+  const ids = plataformasHabilitadas();
+  const salvo = escopoSalvo(tela);
+  return plataformaPorId(ids.includes(salvo) ? salvo : ids[0]);
+}
+function definirEscopo(tela, id) {
+  try { localStorage.setItem(`escopo-${tela}`, id); } catch { /* sem armazenamento: vale só até fechar a tela */ }
+}
+const escopoCal = () => escopoDe('calendario');
+const escopoEst = () => escopoDe('estatisticas');
+const chaveDoMes = (p) => (p.doMes && p.doMes.chave) || 'filmesDoMes';
+const rotuloDoMes = (p) => (p.doMes && p.doMes.rotulo) || 'Item do mês';
+const porEpisodio = (p) => Boolean(p && p.porEpisodio);
+
+// O menu do alto (só no hub), com o visual dos menus do app (.ordenar).
+function seletorEscopoHTML(tela) {
+  if (!plataformaAtual().hub) return '';
+  const atual = escopoDe(tela).id;
+  const opcoes = plataformasHabilitadas().map((id) => {
+    const p = plataformaPorId(id);
+    return `<option value="${p.id}"${p.id === atual ? ' selected' : ''}>${voc('Itens', undefined, p)} · ${p.nome}</option>`;
+  }).join('');
+  return `<label class="ordenar escopo-seletor">
+    <span>Mostrar</span>
+    <span class="ordenar-caixa">
+      <select data-escopo="${tela}" aria-label="${tela === 'calendario' ? 'Calendário de' : 'Estatísticas de'}">${opcoes}</select>
+      <span class="ordenar-seta">${icone('ChevronDown')}</span>
+    </span>
+  </label>`;
 }
 
 // ---- Menu da marca (topo do PC) ----
