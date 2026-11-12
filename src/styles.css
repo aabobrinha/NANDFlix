@@ -3168,24 +3168,6 @@ html[data-tema="mistura"] #marca-nome {
   -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none;
 }
 
-/* Ícone do nandhub: os ícones das plataformas que ele junta, em selos redondos
-   sobrepostos. --ic é o tamanho do lugar (cada contexto define o seu). */
-.plat-junta { --ic: 28px; display: inline-flex; align-items: center; flex: none; }
-span.plat-junta { width: auto !important; height: var(--ic) !important; }
-.plat-junta > * {
-  flex: none; width: calc(var(--ic) * .8) !important; height: calc(var(--ic) * .8) !important; border-radius: 50%;
-  object-fit: cover; margin-left: calc(var(--ic) * -.24);
-  background: var(--superficie-2); box-shadow: 0 0 0 max(1.5px, calc(var(--ic) * .045)) rgba(5, 6, 8, .92);
-  font-size: calc(var(--ic) * .56) !important;
-}
-.plat-junta > :first-child { margin-left: 0; }
-.marca-icone.plat-junta { --ic: 36px; }
-.marca-menu-icone.plat-junta { --ic: 30px; }
-.cfg-plat-icone.plat-junta { --ic: 24px; }
-.plat-opcao-icone.plat-junta { --ic: 58px; }
-.entrada-marca .plat-junta { --ic: 46px; }
-.tl-plat-icone.plat-junta { --ic: 18px; }
-
 /* A marca do topo é um botão: abre a lista de plataformas. */
 .marca-caixa { position: relative; display: flex; min-width: 0; }
 .marca-botao {
@@ -3303,7 +3285,6 @@ span.plat-junta { width: auto !important; height: var(--ic) !important; }
   .plat-opcao-texto b { font-size: 21px; }
   .plat-opcao.plat-hub { padding: 16px; gap: 14px; margin-bottom: 8px; }
   .plat-hub .plat-opcao-texto b { font-size: 22px; }
-  .plat-opcao-icone.plat-junta { --ic: 48px; }
   .plat-opcao[aria-pressed] .plat-opcao-texto { padding-right: 34px; }
   .plat-check { top: 50%; translate: 0 -50%; }
 }

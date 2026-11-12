@@ -13,20 +13,25 @@
 
 O NANDFlix é um app de desktop para catalogar os filmes que você quer ver. Ele troca a planilha por uma interface no estilo Netflix: o filme sorteado ocupa o topo com o trailer rodando, as capas viram trailers ao passar o mouse e cada filme tem uma página de detalhes com logo, notas, sinopse, elenco e duração. Na hora de assistir, ele abre o filme direto no Stremio. Ele também guarda o que você viu num calendário, deixa você dar notas, escrever uma página sobre cada filme, montar tierlists, criar stories para o Instagram e ver as suas estatísticas. Tem também uma **versão para Android**, que pode ficar igual à do computador pela nuvem.
 
-## NANDRoll: animes
+## nandflix, nandchan e nandhub
 
-O NANDRoll acrescenta animes ao NANDFlix, sem tirar nada dos filmes. É **opcional**: ligue em **Configurações → NANDRoll (animes) → Ativar animes**. Desligado, o app é o NANDFlix de sempre.
+O app agora tem plataformas, cada uma com a sua lista, o seu tema e o seu vocabulário:
 
-- **Adicionar → Animes**: a busca passa a ter **Filmes** (TMDB) e **Animes** ([AniList](https://anilist.co), sem chave), e mostra o que está **em alta nesta temporada**.
-- **Temporadas juntas**: cada série é um item só, com todas as temporadas (achadas pela AniList a partir de qualquer uma) e os **filmes na ordem de assistir** (Temporada 1 → Filme → Temporada 2). No painel, **Tudo** mostra a soma e a capa principal; escolher uma temporada mostra os episódios e a capa dela, num quadro menor.
-- **Episódios**: **Vi mais um** e o −1, clique no contador para **digitar** o número, ou **Escolher episódios** para marcar um avulso. Barra de progresso, quanto falta para terminar e status: planejo ver, assistindo, pausado, completo, larguei. Completar marca como vista e entra no calendário.
-- **Em exibição**: o painel mostra quando sai o próximo episódio (atualizado ao abrir o app), a capa ganha o selo de **episódios novos** e a **Agenda** reúne o que já saiu e o que vem, por dia e hora.
-- **+1** direto no cartão da lista e na fileira **Continue assistindo** do celular.
-- **Capa e logo das séries** vêm do TMDB quando há chave (maiores, e a logo vira o título); sem chave, fica a capa da AniList. **Trocar capa** oferece as capas do TMDB e de cada temporada.
-- **Onde assistir**: os links oficiais de cada temporada (Crunchyroll, Netflix…). **Assistir** abre a plataforma oficial (a última que você escolheu vira a preferida), e o Stremio continua num botão ao lado, abrindo direto na série. Por padrão só aparecem as plataformas que funcionam no Brasil; **Configurações → NANDRoll → Mostrar plataformas de fora do Brasil** mostra todas.
-- **Filmes de anime** continuam sendo filmes (TMDB, Letterboxd) e ganham os links de onde assistir.
-- **Importar a sua lista da AniList** (Configurações → NANDRoll), com episódios, status e notas.
-- Nota da AniList e do IMDb nas séries, e filtros **Animes** e **Assistindo** na lista e nas pílulas do celular.
+- **nandflix** 🎬: os filmes, como sempre (tema roxo).
+- **nandchan** 🍣: os animes (tema laranja).
+- **nandhub** 🍿: **tudo junto**, filmes e animes numa lista só.
+
+Ao abrir, o app pergunta onde entrar (dá para marcar **Sempre abrir direto na que eu escolher**); depois, troque pela marca no alto da tela. Em **Configurações → Plataformas** você escolhe o que acompanha e onde o app abre. A estrutura já está pronta para outros tipos no futuro (jogos, séries).
+
+No **nandchan**:
+
+- **Adicionar** busca na [AniList](https://anilist.co) (sem chave); a tela fica em branco até você pesquisar, como a de filmes.
+- **Temporadas juntas**: cada série é um item só, com um menu de **temporadas** nos detalhes e a **lista de episódios** com título e sinopse em português (TMDB). Marque episódios, acompanhe o progresso e o status (planejo ver, assistindo, pausado, completo, larguei).
+- **Aberturas** de cada temporada (YouTube), **onde assistir** (Crunchyroll, Netflix…) e **Assistir** abrindo direto no Stremio.
+- **Em exibição**: quando sai o próximo episódio, selo de episódios novos e a **Agenda**.
+- **Watchlist, calendário, estatísticas, tierlists e "anime do mês"** separados dos filmes; no nandhub, tudo junto.
+- **Stories**: o story de um anime usa a logo da AniList, estrelas laranja, a capa de uma temporada e um selo de progresso ("Temporada 2 · 10 episódios"). A **retrospectiva em stories** também tem versão de animes.
+- **Importar a sua lista da AniList** (Configurações → nandchan), com episódios, status e notas.
 
 `node scripts/testar-anime.js` confere as regras de episódios e a leitura da AniList, sem internet.
 
@@ -35,16 +40,15 @@ O NANDRoll acrescenta animes ao NANDFlix, sem tirar nada dos filmes. É **opcion
 | Arquivo | O que é |
 |---|---|
 | [`NANDFlix.exe`](NANDFlix.exe) | Versão portátil para Windows: é só abrir, não precisa instalar. |
-| [`dist/NANDFlix-Setup-1.0.10.exe`](dist/NANDFlix-Setup-1.0.10.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
-| [`dist/NANDFlix-1.0.10-portable.exe`](dist/NANDFlix-1.0.10-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
-
-| [`NANDFlix-Android-1.0.10.apk`](../../releases/latest) | App para Android (na página de Releases). |
+| [`dist/NANDFlix-Setup-1.1.0.exe`](dist/NANDFlix-Setup-1.1.0.exe) | Instalador para Windows (cria atalho no menu Iniciar). |
+| [`dist/NANDFlix-1.1.0-portable.exe`](dist/NANDFlix-1.1.0-portable.exe) | O mesmo portátil da raiz, com o número da versão. |
+| [`NANDFlix-Android-1.1.0.apk`](../../releases/latest) | App para Android (na página de Releases). |
 
 Os mesmos arquivos estão na página de [Releases](../../releases).
 
 > O executável não é assinado digitalmente, então o Windows pode mostrar o aviso do SmartScreen na primeira vez. Clique em **Mais informações → Executar assim mesmo**.
 
-## NANDFlix no Android (versão 1.0.10)
+## NANDFlix no Android (versão 1.1.0)
 
 A mesma lista no celular, com uma interface feita para o toque, no jeito dos apps de streaming:
 

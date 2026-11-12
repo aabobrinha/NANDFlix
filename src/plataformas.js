@@ -47,9 +47,7 @@ const PLATAFORMAS = [
     tema: 'laranja',
   },
   {
-    // O ícone do hub não é um desenho próprio: é feito dos ícones das plataformas que ele junta
-    // (iconePlataformaHTML), para ficar claro que é a soma, não uma terceira opção.
-    id: 'nandhub', nome: 'nandhub', hub: true,
+    id: 'nandhub', nome: 'nandhub', emoji: '🍿', hub: true,
     descricao: 'Tudo junto, numa lista só.', // o texto de verdade vem de descricaoPlataforma()
     rotulos: { item: 'título', itens: 'títulos', todos: 'Todos', nenhum: 'Nada', artigo: 'o', genero: 'm', de: 'do título', deste: 'deste título', um: 'um título', este: 'este título', adicionar: 'Adicionar à lista', sortear: 'Sortear um título' },
     tema: 'mistura', // roxo + laranja: o acento é a mistura das cores das plataformas que junta
@@ -173,11 +171,8 @@ function descricaoPlataforma(p) {
 // Muda quando o ícone muda (o do hub depende das habilitadas): para não redesenhar à toa.
 const chaveIconePlataforma = (p) => (p.hub ? `${p.id}:${plataformasHabilitadas().join()}` : p.id);
 
-// O ícone de uma plataforma: a imagem dela ou o emoji. O do hub é a junção dos
-// ícones das que ele inclui, em selos redondos sobrepostos (cada plataforma
-// nova entra sozinha); o tamanho vem da classe do lugar (CSS: .plat-junta).
+// O ícone de uma plataforma: a imagem dela ou o emoji.
 function iconePlataformaHTML(p, classe = 'marca-icone') {
-  if (p.hub) return `<span class="${classe} plat-junta" aria-hidden="true">${plataformasDoHub().map((q) => iconePlataformaHTML(q, 'plat-junta-i')).join('')}</span>`;
   return p.imagem ? `<img class="${classe}" src="${p.imagem}" alt="">` : `<span class="${classe} plat-emoji" aria-hidden="true">${p.emoji}</span>`;
 }
 

@@ -182,10 +182,7 @@ html.cel-coberto .cel-nav, html.cel-coberto .cel-topo { opacity: 0; pointer-even
 
 /* Plataformas: a marca do topo (ícone + nome) abre a escolha de plataforma. */
 .cel-marca { display: grid; place-items: center; }
-.cel-marca:has(.plat-junta) { width: auto; }
 .cel-marca .plat-emoji { font-size: 27px; }
-.cel-marca-icone.plat-junta { --ic: 36px; }
-.cel-plat-icone.plat-junta { --ic: 34px; }
 .cel-titulo[data-cel] { cursor: pointer; }
 html[data-tema="laranja"] .cel-titulo.marca-nandflix {
   background-image: linear-gradient(90deg, #FFF5EC 0%, #FFC59A 60%, #F08E45 100%);
