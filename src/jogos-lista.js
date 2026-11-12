@@ -117,8 +117,14 @@ function completarImagensDoJogo(d) {
 // com status 'quero' e sem tags e grava como os filmes e animes (api.adicionarFilme).
 // Devolve o item; se o jogo já estava na lista, devolve o que já estava (sem duplicar).
 async function adicionarJogo(arg) {
-  const leve = arg && typeof arg === 'object' ? arg : { igdb: Number(arg) };
+  const leve = arg && typeof arg === 'object' ? { ...arg } : { igdb: Number(arg) };
   let dados = null;
+  // Veio só da Steam (biblioteca, busca sem a IGDB): com as chaves, acha o jogo na IGDB pelo appid,
+  // para ter consoles, desenvolvedores e tempos. Sem as chaves, segue com a loja da Steam.
+  if (!leve.igdb && leve.steam && api.igdbDaSteam) {
+    const r = await api.igdbDaSteam(Number(leve.steam));
+    if (r && r.ok && r.dados) leve.igdb = r.dados;
+  }
   if (leve.igdb) {
     const r = await api.detalhesJogo(leve.igdb);
     if (r && r.ok && r.dados) dados = r.dados;
@@ -655,3 +661,114 @@ abrirPainel = (id, opcoes) => {
   }
   return abrirPainelFilme(id, opcoes);
 };
+
+// ---- "Da sua Steam": os jogos que você já tem, para pôr na lista com um clique ----
+// No Adicionar do nandplay, um botão abre a sua biblioteca da Steam em capas. Clicar numa capa
+// põe o jogo na lista (sem abrir a página dele) e a tela continua aberta para os próximos; ela só
+// fecha no X, em "Pronto" ou no Esc (modal-fixo: clicar fora não fecha).
+
+const abrirAdicionarSemSteam = abrirAdicionar;
+abrirAdicionar = (termo = '') => {
+  const pronto = abrirAdicionarSemSteam(termo); // o modal já está na tela quando volta daqui
+  ligarBotaoDaSteam();
+  return pronto;
+};
+
+function ligarBotaoDaSteam() {
+  const rodape = $('.modal-rodape', modal);
+  if (!rodape || $('#btn-da-steam', modal)) return;
+  const botao = document.createElement('button');
+  Object.assign(botao, { id: 'btn-da-steam', type: 'button', className: 'btn btn-fantasma btn-da-steam', title: 'Os jogos que você já tem na Steam' });
+  botao.innerHTML = `${MARCA_STEAM_JOGO}<span>Da sua Steam</span>`;
+  botao.addEventListener('click', abrirBibliotecaSteamAdicionar);
+  rodape.prepend(botao);
+  // No hub, só aparece com a fonte "Jogos" escolhida.
+  const mostrar = () => { botao.hidden = fonteAtual() !== 'jogo'; };
+  mostrar();
+  modal.addEventListener('click', (e) => { if (e.target.closest('[data-fonte]')) setTimeout(mostrar, 0); });
+}
+
+// Horas jogadas na capa: "108 h", "45 min".
+function horasDaBiblioteca(minutos) {
+  const m = Number(minutos) || 0;
+  if (m <= 0) return 'Nunca jogado';
+  return m < 60 ? `${m} min` : `${Math.round(m / 60).toLocaleString('pt-BR')} h`;
+}
+const naListaPelaSteam = (appid) => estado.filmes.some((f) => ehJogo(f) && Number(f.steam) === Number(appid));
+
+async function abrirBibliotecaSteamAdicionar() {
+  abrirModal(`${cabecalhoModal('Da sua Steam')}
+    <div class="modal-corpo steam-bib">
+      <div class="steam-bib-topo">
+        <input id="steam-bib-busca" placeholder="Procurar nos seus jogos" spellcheck="false" aria-label="Procurar nos seus jogos da Steam">
+        <label class="steam-bib-esconder"><input type="checkbox" id="steam-bib-esconder"> Esconder os que já estão na lista</label>
+      </div>
+      <p class="steam-bib-contagem" id="steam-bib-contagem"></p>
+      <div id="steam-bib-area"><p class="mensagem carregando">Lendo a sua biblioteca da Steam</p></div>
+    </div>
+    <div class="modal-rodape"><button class="btn btn-laranja" data-fechar>Pronto</button></div>`, 'modal-steam-bib modal-fixo');
+
+  if (!temBibliotecaSteam()) await carregarSteamDaLista({ forcar: true });
+  const area = $('#steam-bib-area', modal);
+  if (!area) return; // fechou enquanto lia
+  const bib = steamDaLista.biblioteca;
+  if (!bib || !bib.jogos.length) {
+    area.innerHTML = `<p class="mensagem">${bib ? 'A sua biblioteca da Steam veio vazia. Confira se o perfil e os detalhes de jogos estão públicos na Steam.' : 'Para ver os jogos que você tem, coloque a chave da Steam e o seu perfil em Configurações &gt; nandplay.'}</p>`;
+    return;
+  }
+  // Os mais jogados primeiro, como a Steam ordena por tempo de jogo.
+  const jogos = [...bib.jogos].sort((a, b) => (Number(b.minutos) || 0) - (Number(a.minutos) || 0) || String(a.nome).localeCompare(String(b.nome), 'pt', { sensitivity: 'base' }));
+  area.innerHTML = `<div class="steam-bib-grade">${jogos.map((j) => {
+    const appid = Number(j.appid);
+    const base = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appid}/`;
+    const ja = naListaPelaSteam(appid);
+    return `<button class="steam-bib-jogo${ja ? ' na-lista' : ''}" data-appid="${appid}" data-nome="${esc(normalizar(j.nome || ''))}" title="${esc(j.nome || '')}${ja ? ' (já está na lista)' : ' (clique para pôr na lista)'}">
+      <span class="steam-bib-capa"><img src="${base}library_600x900.jpg" data-alt="${base}header.jpg" alt="" loading="lazy"><span class="steam-bib-nome-capa">${esc(j.nome || '')}</span><span class="steam-bib-selo">${icone('Check')}</span></span>
+      <strong>${esc(j.nome || '')}</strong><small>${horasDaBiblioteca(j.minutos)}</small>
+    </button>`;
+  }).join('')}</div>`;
+
+  const grade = $('.steam-bib-grade', area);
+  // Capa que falha: o cabeçalho da Steam (em pé não existe em todo jogo); depois, só o nome.
+  grade.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    if (img.dataset.alt) { img.src = img.dataset.alt; img.removeAttribute('data-alt'); img.classList.add('steam-bib-deitada'); return; }
+    img.remove();
+  }, true);
+
+  const busca = $('#steam-bib-busca', modal);
+  const esconder = $('#steam-bib-esconder', modal);
+  const filtrar = () => {
+    const t = normalizar(busca.value.trim());
+    let vis = 0;
+    for (const b of grade.children) {
+      const mostra = (!t || b.dataset.nome.includes(t)) && !(esconder.checked && b.classList.contains('na-lista'));
+      b.hidden = !mostra;
+      if (mostra) vis++;
+    }
+    const naLista = grade.querySelectorAll('.na-lista').length;
+    $('#steam-bib-contagem', modal).textContent = `${jogos.length.toLocaleString('pt-BR')} jogos na sua Steam · ${naLista} na lista${vis !== jogos.length ? ` · mostrando ${vis}` : ''}`;
+  };
+  busca.addEventListener('input', filtrar);
+  esconder.addEventListener('change', filtrar);
+  filtrar();
+  busca.focus();
+
+  grade.addEventListener('click', async (e) => {
+    const b = e.target.closest('.steam-bib-jogo');
+    if (!b || b.classList.contains('carregando')) return;
+    const appid = Number(b.dataset.appid);
+    const nome = (jogos.find((j) => Number(j.appid) === appid) || {}).nome || '';
+    if (b.classList.contains('na-lista')) { aviso(`“${nome}” já está na sua lista.`); return; }
+    b.classList.add('carregando');
+    let novo = null;
+    try { novo = await adicionarJogo({ steam: appid, titulo: nome }); } catch (erro) { console.error('adicionar da Steam', erro); }
+    b.classList.remove('carregando');
+    if (!novo) { aviso(`Não deu para pôr “${nome}” na lista agora.`, { tipo: 'erro' }); return; }
+    b.classList.add('na-lista');
+    b.title = `${nome} (já está na lista)`;
+    aviso(`“${novo.titulo}” entrou na lista.`, { tipo: 'ok' });
+    filtrar();
+  });
+}

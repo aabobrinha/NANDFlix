@@ -821,6 +821,7 @@ window.api = {
   // nandplay
   buscarJogos: (termo) => chamar(() => igdb.buscarJogos(termo)),
   detalhesJogo: (id) => chamar(() => igdb.detalhesJogo(id)),
+  igdbDaSteam: (appid) => chamar(() => igdb.igdbDaSteam(appid)),
   buscarJogosSteam: (termo) => chamar(async () => (await steam.buscarLoja(termo)).filter(steam.ehJogoDaLoja).map(steam.resultadoDaLoja)),
   detalhesJogoSteam: (appid) => chamar(async () => {
     const det = await steam.detalhesLoja(appid);

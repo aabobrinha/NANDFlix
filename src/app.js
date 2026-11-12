@@ -1504,7 +1504,7 @@ modal.addEventListener('close', () => {
 
 // Clicar fora da caixa fecha o modal.
 modal.addEventListener('mousedown', (e) => {
-  if (e.target !== modal) return;
+  if (e.target !== modal || modal.classList.contains('modal-fixo')) return; // fixo: só fecha quando a pessoa sai
   const r = modal.getBoundingClientRect();
   const dentro = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
   if (!dentro) fecharModal(null);

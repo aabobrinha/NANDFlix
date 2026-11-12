@@ -125,3 +125,34 @@ html.celular .painel-botoes .jogo-steam-btn .ico { color: #0B0C0E; }
 html.celular .jogo-tag-nova { width: 100%; min-height: 40px; }
 html.celular .jogo-loja-steam { width: 100%; }
 html.celular .jogo-dev-aviso { margin: 24px 16px 0; }
+
+/* "Da sua Steam" no Adicionar (jogos-lista.js): a biblioteca em capas; clicar põe na lista. */
+.btn-da-steam { margin-right: auto; }
+.btn-da-steam .steam-marca { width: 18px; height: 18px; }
+.modal-steam-bib { width: min(1040px, calc(100vw - 40px)); }
+.steam-bib-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.steam-bib-topo #steam-bib-busca { flex: 1 1 260px; min-width: 0; }
+.steam-bib-esconder { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--texto-2); cursor: pointer; }
+.steam-bib-contagem { margin: 12px 0 14px; font-size: 13px; color: var(--texto-2); font-variant-numeric: tabular-nums; }
+.steam-bib-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 16px 12px; height: min(60vh, 640px); align-content: start; overflow-y: auto; padding: 2px 4px 4px 2px; }
+.steam-bib-jogo { display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: none; color: var(--texto); text-align: left; cursor: pointer; }
+.steam-bib-jogo[hidden] { display: none; }
+.steam-bib-capa { position: relative; display: block; aspect-ratio: 2 / 3; border-radius: 8px; overflow: hidden; background: var(--superficie-2); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); transition: transform .15s var(--saida), box-shadow .15s; }
+.steam-bib-capa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.steam-bib-capa img.steam-bib-deitada { object-fit: contain; background: #0E1114; }
+.steam-bib-nome-capa { position: absolute; inset: auto 8px 8px; font: 700 12px/1.25 var(--ui); color: var(--texto-2); }
+.steam-bib-capa img ~ .steam-bib-nome-capa { display: none; }
+.steam-bib-jogo strong { font-size: 12.5px; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.steam-bib-jogo small { margin-top: -3px; font-size: 11.5px; color: var(--texto-2); }
+.steam-bib-jogo:hover .steam-bib-capa, .steam-bib-jogo:focus-visible .steam-bib-capa { transform: translateY(-3px); box-shadow: 0 0 0 2px var(--acento-vivo), 0 10px 24px rgba(0, 0, 0, .45); }
+.steam-bib-jogo:focus-visible { outline: none; }
+.steam-bib-selo { position: absolute; top: 6px; right: 6px; display: none; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--acento-vivo); color: #FFFFFF; box-shadow: 0 2px 8px rgba(0, 0, 0, .5); }
+.steam-bib-selo .ico { width: 16px; height: 16px; stroke-width: 2.6; }
+.steam-bib-jogo.na-lista .steam-bib-selo { display: grid; }
+.steam-bib-jogo.na-lista .steam-bib-capa img { filter: saturate(.55) brightness(.6); }
+.steam-bib-jogo.na-lista { cursor: default; }
+.steam-bib-jogo.na-lista:hover .steam-bib-capa { transform: none; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+.steam-bib-jogo.carregando .steam-bib-capa { animation: steamBibPulso 1s ease-in-out infinite; }
+@keyframes steamBibPulso { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .steam-bib-capa { transition: none; } .steam-bib-jogo.carregando .steam-bib-capa { animation: none; opacity: .5; } }
+html.celular .modal-steam-bib .steam-bib-grade { grid-template-columns: repeat(3, minmax(0, 1fr)); height: auto; }
