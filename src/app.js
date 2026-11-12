@@ -6,6 +6,9 @@ const $$ = (sel, raiz = document) => Array.from(raiz.querySelectorAll(sel));
 const MAC = api.plataforma === 'darwin';
 
 const estado = {
+  // Enquanto o app abre (dados, entrada, escolha da plataforma), o "lista vazia" não aparece:
+  // a plataforma lembrada pode estar vazia e o aviso piscava antes da tela de escolha.
+  abrindo: true,
   filmes: [],
   config: {},
   filtro: 'todos',
@@ -491,7 +494,7 @@ function render() {
   const vazio = itensDaPlataforma().length === 0; // Plataformas: vazia a plataforma, mesmo que as outras tenham itens
   const vazioAntes = !$('#vazio').hidden;
   const semResultadosAntes = !$('#sem-resultados').hidden;
-  $('#vazio').hidden = !vazio;
+  $('#vazio').hidden = !vazio || estado.abrindo;
   $('#titulo-todos').hidden = vazio;
   $('#barra-ferramentas').hidden = vazio;
   $('#chip-diretor').hidden = !estado.diretor;
@@ -5270,6 +5273,8 @@ $('#btn-estatisticas').addEventListener('click', () => abrirEstatisticas());
   }
   // Plataformas: quais sistemas (primeiro uso) e onde entrar (com mais de uma).
   await escolherPlataformaAoAbrir();
+  estado.abrindo = false; // agora o "lista vazia" pode aparecer, se for o caso
+  render();
   // nandplay: jogos não usam o TMDB, então abrir direto nele não pede a chave.
   if (!estado.config.tmdbKey) { if (!ehPlataformaJogos()) pedirChaveTmdb(); }
   else if (estado.filmes.length) buscarCapas({ automatica: true });

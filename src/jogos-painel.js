@@ -394,6 +394,7 @@ function renderPainelJogo(f) {
           </div>
           <div class="painel-botoes">
             <button class="btn btn-assistir jogo-steam-btn" data-j="steam" data-acao="${e.tipo === 'steam' ? e.acao : 'link'}" title="${esc(e.dica)}">${botaoSteamConteudoHTML(e)}</button>
+            ${f.externo ? '' : zereiBotaoHTML(f)}
             ${f.externo ? `<button class="btn jogo-adicionar" data-j="adicionar">${icone('Plus')} Adicionar à lista</button>` : ''}
             ${f.externo ? '' : `<button class="redondo" data-p="story" title="Criar story para o Instagram" aria-label="Criar story para o Instagram">${icone('ImagePlus')}</button>`}
             ${f.trailer ? `<button class="redondo" data-p="trailer" data-rotulo="Trailer" title="Ver o trailer em tela cheia" aria-label="Ver o trailer em tela cheia">${icone('Maximize')}</button>` : ''}
@@ -615,12 +616,39 @@ function renderUsuarioJogo(f, foco = null) {
   if (foco) $(`#painel ${foco}`)?.focus({ preventScroll: true });
 }
 
+// O botão "Zerei" ao lado do Jogar: o jeito rápido de marcar (e desmarcar) o jogo como zerado.
+function zereiBotaoHTML(f) {
+  const status = ROTULOS_STATUS_JOGO[f.status] ? f.status : 'quero';
+  const zerado = STATUS_JOGO_ZERADO.includes(status);
+  const nome = status === 'cem' ? '100%' : 'Zerado';
+  const texto = zerado ? nome : 'Zerei';
+  const dica = zerado
+    ? `${nome}${f.zeradoEm ? ` em ${diaLegivel(f.zeradoEm)}` : ''}. Clique para desmarcar.`
+    : 'Marcar como zerado hoje (o dia aparece no calendário)';
+  return `<button class="btn jogo-zerei${zerado ? ' ativo' : ''}" data-j="zerei" aria-pressed="${zerado}" title="${esc(dica)}">${icone('Trophy')} ${texto}</button>`;
+}
+function atualizarZereiJogo(f) {
+  const b = document.querySelector('#painel [data-j="zerei"]');
+  if (b && estado.painelId === f.id) b.outerHTML = zereiBotaoHTML(f);
+}
+// Zerei: marca zerado hoje. Já zerado: volta para "jogando", com Desfazer (devolve o status e o dia).
+async function alternarZereiJogo(f) {
+  if (!STATUS_JOGO_ZERADO.includes(f.status)) { await mudarStatusJogo(f, 'zerado'); return; }
+  const antes = { status: f.status, zeradoEm: f.zeradoEm || '' };
+  await mudarStatusJogo(f, 'jogando');
+  aviso(`“${f.titulo}” não está mais como zerado.`, {
+    duracao: 6000,
+    acao: { rotulo: 'Desfazer', fn: async () => { await salvarJogo(f, antes); renderUsuarioJogo(f); atualizarZereiJogo(f); } },
+  });
+}
+
 async function mudarStatusJogo(f, status) {
   const m = mudancasDoStatusJogo(f, status, hoje());
   if (!m) return;
   const antes = f.status;
   await salvarJogo(f, m);
   renderUsuarioJogo(f, '[data-j-status]');
+  atualizarZereiJogo(f);
   if (STATUS_JOGO_ZERADO.includes(status) && !STATUS_JOGO_ZERADO.includes(antes)) {
     aviso(`“${f.titulo}”: ${status === 'cem' ? '100%' : 'zerado'} em ${diaLegivel(f.zeradoEm)}! Dá para mudar o dia ao lado do status.`, { tipo: 'ok', duracao: 6000 });
   }
@@ -653,6 +681,7 @@ function ligarPainelJogo(painel) {
       case 'loja': abrirLinkJogo(b.dataset.url); break;
       case 'hltb': abrirLinkJogo(linkHltbJogo(f)); break;
       case 'adicionar': adicionarJogoFora(f, b); break;
+      case 'zerei': alternarZereiJogo(f); break;
       case 'tirar-tag': tirarTagJogo(f, b.dataset.tag); break;
       case 'por-tag': adicionarTagJogo(f, b.dataset.tag); break;
       case 'config': fecharPainel(); abrirConfiguracoes(); setTimeout(() => document.getElementById('cfg-nandplay')?.scrollIntoView({ block: 'start' }), 60); break;

@@ -200,7 +200,7 @@ function renderCelular() {
   document.documentElement.classList.toggle('cel-modo-todos', cel.modo.tipo === 'todos');
   for (const b of $$('.cel-nav-item')) b.classList.toggle('ativo', b.dataset.cel === 'inicio');
   // A plataforma não tem nada ainda (mesmo que as outras tenham): convida a adicionar.
-  if (!itensDaPlataforma().length) { el.innerHTML = vazioCelHTML(); return; }
+  if (!itensDaPlataforma().length) { el.innerHTML = estado.abrindo ? '' : vazioCelHTML(); return; } // abrindo: sem o aviso piscando
   if (cel.modo.tipo === 'todos') { el.innerHTML = pilulasHTML(); return; }
   const lista = filmesDoModo();
   const destaque = escolherDestaque(cel.modo.tipo === 'inicio' ? lista.filter((f) => !f.visto) : lista);

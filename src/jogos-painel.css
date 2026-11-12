@@ -156,3 +156,11 @@ html.celular .jogo-dev-aviso { margin: 24px 16px 0; }
 @keyframes steamBibPulso { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .steam-bib-capa { transition: none; } .steam-bib-jogo.carregando .steam-bib-capa { animation: none; opacity: .5; } }
 html.celular .modal-steam-bib .steam-bib-grade { grid-template-columns: repeat(3, minmax(0, 1fr)); height: auto; }
+
+/* "Zerei" ao lado do Jogar: contorno; zerado, cheio (verde do nandplay) */
+.jogo-zerei { min-height: 48px; padding: 0 20px; font-size: 15px; background: rgba(255, 255, 255, .1); color: #FFFFFF; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28); backdrop-filter: blur(6px); }
+.jogo-zerei:hover { background: rgba(255, 255, 255, .18); }
+.jogo-zerei .ico { width: 18px; height: 18px; }
+.jogo-zerei.ativo { background: rgba(var(--acento-rgb), .22); color: var(--acento-texto); box-shadow: inset 0 0 0 1.5px var(--acento-vivo); }
+.jogo-zerei.ativo .ico { fill: currentColor; }
+html.celular .painel-botoes .jogo-zerei { width: 100%; min-height: 46px; border-radius: 6px; font-size: 17px; justify-content: center; }
