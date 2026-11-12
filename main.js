@@ -13,7 +13,7 @@ const tmdb = require('./lib/tmdb');
 const anilist = require('./lib/anilist');
 const { Igdb } = require('./lib/igdb');
 const steam = require('./lib/steam');
-const { novoFilme, juntar, resumo, acharRepetido, mesmoFilme, ehSerie, passoSerie, definirSerie, alternarEpisodio, statusSerie, comDia, comEpisodiosDoDia, vistoSerie } = require('./lib/filmes');
+const { novoFilme, novoJogo, ehJogo, juntar, resumo, acharRepetido, mesmoFilme, ehSerie, passoSerie, definirSerie, alternarEpisodio, statusSerie, comDia, comEpisodiosDoDia, vistoSerie } = require('./lib/filmes');
 const letterboxd = require('./lib/letterboxd');
 const importar = require('./lib/importar');
 const stremio = require('./lib/stremio');
@@ -350,8 +350,9 @@ async function buscarCapasQueFaltam({ incluirNaoEncontradas = false } = {}) {
   if (buscaEmAndamento) return buscaEmAndamento;
   if (!config.tmdbKey) return { pulada: 'chave' };
 
-  const consultar = filmes.filter((f) => !f.tmdbEm || (incluirNaoEncontradas && !f.tmdbId));
-  const semArquivo = filmes.filter((f) => f.tmdbEm && f.poster && !f.capaPersonalizada && !capaLocalExiste(f) && !consultar.includes(f));
+  // Jogo (nandplay) não tem nada no TMDB: nem entra na fila.
+  const consultar = filmes.filter((f) => !ehJogo(f) && (!f.tmdbEm || (incluirNaoEncontradas && !f.tmdbId)));
+  const semArquivo = filmes.filter((f) => !ehJogo(f) && f.tmdbEm && f.poster && !f.capaPersonalizada && !capaLocalExiste(f) && !consultar.includes(f));
   const fila = [
     ...consultar.map((f) => ({ f, consultar: true })),
     ...semArquivo.map((f) => ({ f, consultar: false })),
@@ -425,6 +426,15 @@ const igdb = new Igdb({
 });
 ipcMain.handle('jogos:buscar', (_e, termo) => chamar(() => igdb.buscarJogos(termo)));
 ipcMain.handle('jogos:detalhes', (_e, id) => chamar(() => igdb.detalhesJogo(id)));
+// Sem as chaves da IGDB: a loja da Steam (sem chave) responde a busca e os detalhes.
+ipcMain.handle('jogos:buscarSteam', (_e, termo) => chamar(async () => (await steam.buscarLoja(termo)).filter(steam.ehJogoDaLoja).map(steam.resultadoDaLoja)));
+ipcMain.handle('jogos:detalhesSteam', (_e, appid) => chamar(async () => {
+  const det = await steam.detalhesLoja(appid);
+  if (!det) throw Object.assign(new Error('A Steam não tem esse jogo à venda.'), { tipo: 'rede' });
+  let imagens = null;
+  try { imagens = (await steam.imagensLoja([appid]))[det.appid] || null; } catch { /* fica o caminho simples */ }
+  return steam.itemDeLoja(det, imagens);
+}));
 ipcMain.handle('jogos:doDesenvolvedor', (_e, empresaId, opcoes) => chamar(() => igdb.jogosDoDesenvolvedor(empresaId, opcoes || {})));
 
 // A pasta da Steam: a do registro (Windows) ou a padrão. Lida uma vez por abertura.
@@ -832,11 +842,13 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
 });
 
 ipcMain.handle('filme:atualizar', (_e, id, mudancas) => {
-  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa', 'pagina', 'paginaEm', 'story', 'listas', 'shots', 'paginaOutra', 'epDias'];
+  const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa', 'pagina', 'paginaEm', 'story', 'listas', 'shots', 'paginaOutra', 'epDias', 'status', 'tags', 'zeradoEm'];
   const limpo = {};
   for (const k of permitidas) if (k in mudancas) limpo[k] = mudancas[k];
   // Mudar a busca da capa faz o filme ser procurado de novo no TMDB por ela.
   const atual = filmes.find((f) => f.id === id);
+  // Jogo: zerar (ou 100%) é o "visto" dele (filtros, sorteio e contagens leem f.visto).
+  if (ehJogo(atual) && 'status' in limpo) limpo.visto = limpo.status === 'zerado' || limpo.status === 'cem';
   if (ehSerie(atual)) {
     delete limpo.buscaCapa; // a capa das séries vem da AniList
     // O ✓ numa série acompanha o status (completar marca todos os episódios).
@@ -898,6 +910,13 @@ ipcMain.handle('filme:repetido', (_e, dados, ignorarId) => acharRepetido(filmes,
 
 ipcMain.handle('filme:adicionar', async (_e, dados) => {
   const ordem = filmes.reduce((m, f) => Math.max(m, f.ordem || 0), 0) + 1;
+  // nandplay: o item de jogo já vem completo da IGDB/Steam (adicionarJogo, na interface).
+  if (dados.tipo === 'jogo') {
+    const jogo = novoJogo(dados, ordem);
+    filmes.push(jogo);
+    gravarDepois();
+    return jogo;
+  }
   const anilistId = Number(dados.anilistId) || '';
   const serie = Boolean(anilistId) && !dados.filme;
   const filme = novoFilme({
@@ -1324,6 +1343,7 @@ const trailersEmBusca = new Map();
 ipcMain.handle('trailer:obter', async (_e, id) => {
   const filme = filmes.find((f) => f.id === id);
   if (!filme) return null;
+  if (ehJogo(filme)) return filme.trailerId && filme.trailerId !== 'nenhum' ? filme.trailerId : null; // o trailer do jogo vem da IGDB
   if (filme.trailerId) return filme.trailerId === 'nenhum' ? null : filme.trailerId;
   if (!trailersEmBusca.has(id)) {
     trailersEmBusca.set(id, trailer.buscarTrailer(filme)

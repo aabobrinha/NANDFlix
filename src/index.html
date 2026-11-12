@@ -96,6 +96,12 @@
           <button class="chip" data-filtro="favoritos" role="radio" aria-checked="false">★ Favoritos</button>
           <button class="chip" data-filtro="animes" role="radio" aria-checked="false">Animes</button>
           <button class="chip" data-filtro="assistindo" role="radio" aria-checked="false">Assistindo</button>
+          <!-- nandplay (jogos-lista.js): os status do jogo; só aparecem no nandplay -->
+          <button class="chip" data-filtro="status:jogando" data-so-jogos role="radio" aria-checked="false" hidden>Jogando</button>
+          <button class="chip" data-filtro="status:quero" data-so-jogos role="radio" aria-checked="false" hidden>Quero jogar</button>
+          <button class="chip" data-filtro="status:pausado" data-so-jogos role="radio" aria-checked="false" hidden>Pausados</button>
+          <button class="chip" data-filtro="status:cem" data-so-jogos role="radio" aria-checked="false" hidden>100%</button>
+          <button class="chip" data-filtro="status:larguei" data-so-jogos role="radio" aria-checked="false" hidden>Largados</button>
         </div>
         <button class="chip chip-diretor" id="chip-diretor" title="Tirar o filtro de diretor" hidden></button>
         <button class="chip chip-diretor" id="chip-pais" title="Tirar o filtro de país" hidden></button>
@@ -208,5 +214,6 @@
   <script src="premios.js"></script>
   <script src="retro.js"></script>
   <script src="busca.js"></script>
+  <script src="jogos-lista.js"></script>
 </body>
 </html>

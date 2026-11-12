@@ -94,7 +94,8 @@ function aplicarFiltroDaBarra() {
 }
 
 // Plataformas: seções de recursos que a plataforma não tem (prêmios no nandanimes) somem.
-const secoesFiltroVisiveis = () => SECOES_FILTRO.filter((s) => !s.recurso || plataformaTem(s.recurso));
+// `fora: [ids]`: plataformas em que a seção não faz sentido (onde assistir, no nandplay).
+const secoesFiltroVisiveis = () => SECOES_FILTRO.filter((s) => (!s.recurso || plataformaTem(s.recurso)) && !(s.fora || []).includes(plataformaAtual().id));
 
 function abrirMenuFiltros(botao) {
   const menu = abrirFlutuante(botao, secoesFiltroVisiveis().map((s) => `
@@ -117,6 +118,7 @@ const itemMenuHTML = (atual, attrs, nome, qtd) => `
 
 SECOES_FILTRO.push({
   titulo: 'Onde assistir',
+  fora: ['nandplay'],
   ativa: () => Boolean(estado.onde),
   atualizarChip: () => {
     if (estado.onde && !filtrosOndeDisponiveis().includes(estado.onde)) estado.onde = '';

@@ -217,3 +217,18 @@ html[data-tema="mistura"] .cel-titulo.marca-nandflix {
 .cel-plataformas button.cel-plat-hub.ativo { background: linear-gradient(100deg, rgba(109, 74, 168, .5), rgba(194, 94, 28, .45)); }
 .cel-plat-icone { width: 30px; height: 30px; flex: none; }
 .plat-emoji.cel-plat-icone { font-size: 26px; }
+
+/* nandplay no celular (jogos-celular.js): status na capa, estado vazio e o título do nandhub com verde */
+.cel-capa .selo-status-jogo { position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px); }
+.cel-capa .cel-selo { bottom: 30px; }
+.cel-vazio { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; margin: 14vh 8px 0; padding: 0 12px; }
+.cel-vazio-icone { display: grid; place-items: center; width: 88px; height: 88px; border-radius: 28px; background: rgba(var(--acento-rgb), .14); }
+.cel-vazio-icone .cel-vazio-emoji { font-size: 44px; line-height: 1; width: auto; height: auto; }
+.cel-vazio-icone img.cel-vazio-emoji { width: 52px; height: 52px; object-fit: contain; }
+.cel-vazio h2 { margin: 6px 0 0; font: 800 26px/1.15 var(--display); letter-spacing: -.01em; }
+.cel-vazio p { margin: 0; max-width: 28ch; color: var(--texto-2); font-size: 14.5px; line-height: 1.45; }
+.cel-vazio .cel-btn { margin-top: 10px; }
+/* a caixa do título é mais larga que o texto: o degradê é encurtado para o verde aparecer nas letras */
+html[data-tema="mistura"][data-com-verde] .cel-titulo.marca-nandflix {
+  background-image: linear-gradient(90deg, #CDB6FF 0%, #FFB27A 30%, #7DEBAE 58%);
+}

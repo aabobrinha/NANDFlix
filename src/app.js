@@ -141,6 +141,13 @@ document.addEventListener('error', (e) => {
     img.src = remoto;
     return;
   }
+  // nandplay: a capa em pé da Steam não existe em jogos novos; o cabeçalho sim (jogos-lista.js).
+  const alt = img.dataset.alt;
+  if (alt && img.src !== alt && navigator.onLine) {
+    img.dataset.alt = '';
+    img.src = alt;
+    return;
+  }
   const vazia = document.createElement('div');
   vazia.className = 'capa-vazia';
   vazia.innerHTML = `<strong>${esc(img.dataset.titulo)}</strong><span>${esc(img.dataset.ano)}</span>`;
@@ -210,7 +217,7 @@ function filtrados() {
     if (estado.onde && !passaOnde(f, estado.onde)) return false;
     if (estado.premio && !passaPremio(f, estado.premio)) return false;
     if (!palavras.length) return true;
-    const alvo = normalizar([f.titulo, f.ano, f.diretor, f.notas, f.buscaCapa, ...paisesDe(f)].join(' '));
+    const alvo = normalizar([f.titulo, f.ano, f.diretor, f.notas, f.buscaCapa, ...paisesDe(f), ...extraBuscaJogo(f)].join(' '));
     return palavras.every((p) => alvo.includes(p));
   });
 
@@ -481,7 +488,7 @@ function agendarRender() {
 function render() {
   aplicarNandroll(); // NANDRoll: chips de anime só com ele ligado
   const lista = $('#lista');
-  const vazio = estado.filmes.length === 0;
+  const vazio = itensDaPlataforma().length === 0; // Plataformas: vazia a plataforma, mesmo que as outras tenham itens
   const vazioAntes = !$('#vazio').hidden;
   const semResultadosAntes = !$('#sem-resultados').hidden;
   $('#vazio').hidden = !vazio;
@@ -1538,8 +1545,14 @@ function montarBuscaTmdb({ termoInicial, atualTmdb, aoEscolher, fonte = () => 'f
 
   async function buscar() {
     const termo = input.value.trim();
-    // Sem termo, a busca fica em branco (animes e filmes).
+    // Sem termo, a busca fica em branco (animes, filmes e jogos).
     if (!termo) { area.innerHTML = ''; return; }
+    // nandplay: jogos na IGDB (ou, sem as chaves, na loja da Steam): jogos-lista.js
+    if (fonte() === 'jogo') {
+      const minhaJogo = ++geracao;
+      itens = await buscarJogosBusca(termo, area, () => minhaJogo === geracao && modal.open);
+      return;
+    }
     // NANDRoll: animes são buscados na AniList (sem chave); filmes, no TMDB.
     const anime = fonte() === 'anime';
     if (!anime && !estado.config.tmdbKey) { geracao++; area.innerHTML = '<p class="mensagem">Coloque a chave do TMDB em Configurações para buscar.</p>'; return; }
@@ -1553,7 +1566,7 @@ function montarBuscaTmdb({ termoInicial, atualTmdb, aoEscolher, fonte = () => 'f
       ? `<div class="resultados">${resultadosHTML(itens, atualTmdb)}</div>`
       : `<p class="mensagem">${anime ? 'Nada encontrado. Tente o título em inglês ou em japonês (romaji).' : 'Nada encontrado. Tente o título original ou o código do IMDb (tt…).'}</p>`;
   }
-  ligarFontesBusca(modal, () => { input.placeholder = fonte() === 'anime' ? 'Digite o nome do anime e tecle Enter' : 'Digite o título e tecle Enter'; itens = []; area.innerHTML = ''; buscar(); input.focus(); });
+  ligarFontesBusca(modal, () => { input.placeholder = textosBuscaAdicionar(fonte()).placeholder; itens = []; area.innerHTML = ''; buscar(); input.focus(); });
 
   input.value = termoInicial || '';
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); buscar(); } });
@@ -1621,8 +1634,8 @@ async function abrirAdicionar(termo = '') {
   abrirModal(`${cabecalhoModal(voc('Adicionar'))}
     <div class="modal-corpo">
       ${fontesBuscaHTML()}
-      <div class="busca-linha"><input id="busca-tmdb" placeholder="${fonteAtual() === 'anime' ? 'Digite o nome do anime e tecle Enter' : 'Digite o título e tecle Enter'}" spellcheck="false"><button class="btn btn-laranja" id="btn-busca-tmdb">Buscar</button></div>
-      <div id="resultados-tmdb"><p class="mensagem">${plataformaAtual().hub ? 'Busque e clique no resultado certo. Filmes vêm do TMDB; animes, da AniList.' : fonteAtual() === 'anime' ? 'Busque o anime na AniList e clique no resultado certo.' : 'Busque o filme no TMDB e clique no resultado certo.'}</p></div>
+      <div class="busca-linha"><input id="busca-tmdb" placeholder="${textosBuscaAdicionar().placeholder}" spellcheck="false"><button class="btn btn-laranja" id="btn-busca-tmdb">Buscar</button></div>
+      <div id="resultados-tmdb"><p class="mensagem">${textosBuscaAdicionar().dica}</p></div>
     </div>
     <div class="modal-rodape"><button class="btn btn-fantasma" id="btn-sem-buscar">Adicionar sem buscar</button></div>`);
 
@@ -1651,6 +1664,7 @@ async function abrirAdicionar(termo = '') {
   $('#btn-sem-buscar', modal).onclick = () => {
     const titulo = $('#busca-tmdb', modal).value.trim();
     if (!titulo) { $('#busca-tmdb', modal).focus(); aviso('Digite o título primeiro.'); return; }
+    if (fonteAtual() === 'jogo') { adicionarJogoSemBuscar(titulo); return; } // nandplay
     adicionar({ titulo });
   };
 
@@ -1658,6 +1672,7 @@ async function abrirAdicionar(termo = '') {
     termoInicial: termo,
     fonte: fonteAtual,
     aoEscolher: async (escolha, botao) => {
+      if (fonteAtual() === 'jogo') { escolherJogoNaBusca(escolha, botao); return; } // nandplay (jogos-lista.js)
       botao.classList.add('carregando');
       // NANDRoll: um resultado da AniList. Série entra com episódios; filme de
       // anime entra como filme (o TMDB completa) e leva junto onde assistir.
@@ -2148,7 +2163,7 @@ function sortear({ rolar = true, avisarSeVazio = true } = {}) {
   if (!candidatos.length) {
     if (!avisarSeVazio) return;
     if (filtrosSorteioAtivos(fs)) aviso(vocTexto('Nenhum {item} não visto passa nos filtros do sorteio.'), { acao: { rotulo: 'Ajustar filtros', fn: abrirFiltrosSorteio } });
-    else aviso('Você já viu todos! 🎉', { tipo: 'ok' });
+    else aviso(ehPlataformaJogos() ? 'Você já zerou todos! 🎉' : 'Você já viu todos! 🎉', { tipo: 'ok' });
     return;
   }
   // Evita repetir os últimos sorteados quando há outras opções.
@@ -5224,7 +5239,8 @@ $('#btn-estatisticas').addEventListener('click', () => abrirEstatisticas());
   }
   // Plataformas: quais sistemas (primeiro uso) e onde entrar (com mais de uma).
   await escolherPlataformaAoAbrir();
-  if (!estado.config.tmdbKey) pedirChaveTmdb();
+  // nandplay: jogos não usam o TMDB, então abrir direto nele não pede a chave.
+  if (!estado.config.tmdbKey) { if (!ehPlataformaJogos()) pedirChaveTmdb(); }
   else if (estado.filmes.length) buscarCapas({ automatica: true });
 })();
 
