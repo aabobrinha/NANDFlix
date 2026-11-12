@@ -1,0 +1,11 @@
+[
+ {"id": 14593, "name": "Hollow Knight", "slug": "hollow-knight", "first_release_date": 1487894400, "cover": {"id": 85106, "image_id": "co1rgi"},
+  "platforms": [{"id": 6, "name": "PC (Microsoft Windows)", "abbreviation": "PC"}, {"id": 130, "name": "Nintendo Switch", "abbreviation": "Switch"}, {"id": 48, "name": "PlayStation 4", "abbreviation": "PS4"}],
+  "game_type": 0,
+  "external_games": [{"id": 1, "uid": "367520", "url": "https://store.steampowered.com/app/367520", "external_game_source": 1}, {"id": 2, "uid": "1308320186", "external_game_source": 5}]},
+ {"id": 115289, "name": "Hollow Knight: Silksong", "slug": "hollow-knight-silksong", "first_release_date": 1756944000, "cover": {"id": 1, "image_id": "co9abc"},
+  "platforms": [{"id": 6, "name": "PC (Microsoft Windows)", "abbreviation": "PC"}],
+  "game_type": 0,
+  "external_games": [{"id": 3, "uid": "1030300", "category": 1}]},
+ {"id": 999, "name": "Hollow Knight Fan Thing", "slug": "hk-fan", "game_type": 5}
+]

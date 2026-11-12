@@ -1,0 +1,5 @@
+{"response": {"game_count": 3, "games": [
+ {"appid": 367520, "name": "Hollow Knight", "playtime_forever": 2710, "playtime_2weeks": 30, "rtime_last_played": 1762300000},
+ {"appid": 292030, "name": "The Witcher 3: Wild Hunt", "playtime_forever": 0},
+ {"appid": 6200, "name": "Ghost Master", "playtime_forever": 125, "rtime_last_played": 0}
+]}}

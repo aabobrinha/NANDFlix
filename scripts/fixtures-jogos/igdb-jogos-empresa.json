@@ -1,0 +1,7 @@
+[
+ {"id": 115289, "name": "Hollow Knight: Silksong", "slug": "hollow-knight-silksong", "first_release_date": 1756944000, "total_rating_count": 300, "hypes": 900, "game_type": 0, "external_games": [{"uid": "1030300", "external_game_source": 1}]},
+ {"id": 5000, "name": "Hungry Knight", "slug": "hungry-knight", "first_release_date": 1400000000, "total_rating_count": 5, "game_type": 0},
+ {"id": 5001, "name": "Hollow Knight: Godmaster", "slug": "hk-godmaster", "first_release_date": 1534000000, "total_rating_count": 80, "game_type": 1},
+ {"id": 5002, "name": "Hollow Knight Voidheart Edition", "slug": "hk-voidheart", "first_release_date": 1537000000, "total_rating_count": 60, "game_type": 0, "version_parent": 14593},
+ {"id": 5003, "name": "Jogo antigo sem game_type", "slug": "antigo", "first_release_date": 1300000000, "total_rating_count": 10, "category": 0}
+]

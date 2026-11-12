@@ -1,6 +1,6 @@
 'use strict';
 
-// ---------- Plataformas: nandflix, nandchan e nandhub ----------
+// ---------- Plataformas: nandflix, nandchan, nandplay e nandhub ----------
 //
 // O app é um "hub" de plataformas. Cada uma mostra uma parte da lista (filmes,
 // animes…) com o seu nome, ícone, vocabulário e cor; o hub (nandhub) junta as
@@ -15,6 +15,8 @@
 // (carregadas antes) precisam saber.
 const ehSerie = (f) => Boolean(f) && f.tipo === 'serie';
 const ehAnime = (f) => Boolean(f) && (f.anime === true || ehSerie(f));
+// Jogo (nandplay): um item com tipo 'jogo' na mesma lista (contrato em lib/igdb.js, lerDetalhes).
+const ehJogo = (f) => Boolean(f) && f.tipo === 'jogo';
 
 // rotulos: o vocabulário de cada plataforma (use pelo voc(), abaixo).
 //   item/itens: "filme"/"filmes"; todos: o título da lista inteira;
@@ -29,7 +31,7 @@ const PLATAFORMAS = [
   {
     id: 'nandflix', nome: 'nandflix', imagem: 'icone.png', emoji: '🎬',
     descricao: 'Seus filmes: watchlist, notas, calendário e tierlists.',
-    pertence: (f) => !ehAnime(f),
+    pertence: (f) => !ehAnime(f) && !ehJogo(f),
     rotulos: { item: 'filme', itens: 'filmes', todos: 'Todos os filmes', nenhum: 'Nenhum filme', artigo: 'o', genero: 'm', de: 'do filme', deste: 'deste filme', um: 'um filme', este: 'este filme', adicionar: 'Adicionar filme', sortear: 'Sortear um filme' },
     recursos: ['premios', 'retrospectiva'], // telas só de filme (a retrospectiva em stories é de filmes)
     doMes: { chave: 'filmesDoMes', rotulo: 'Filme do mês' },
@@ -45,6 +47,15 @@ const PLATAFORMAS = [
     recursos: ['retrospectiva'], // a retrospectiva em stories (de animes: episódios, horas, anime do mês)
     porEpisodio: true, // o que se registra num dia é episódio assistido (epDias), não "vi o filme"
     tema: 'laranja',
+  },
+  {
+    id: 'nandplay', nome: 'nandplay', emoji: '🎮',
+    descricao: 'Seus jogos: o que jogar, o que já zerou e a Steam a um clique.',
+    pertence: ehJogo,
+    rotulos: { item: 'jogo', itens: 'jogos', todos: 'Todos os jogos', nenhum: 'Nenhum jogo', artigo: 'o', genero: 'm', de: 'do jogo', deste: 'deste jogo', um: 'um jogo', este: 'este jogo', adicionar: 'Adicionar jogo', sortear: 'Sortear um jogo' },
+    doMes: { chave: 'jogosDoMes', rotulo: 'Jogo do mês' },
+    recursos: [],
+    tema: 'verde',
   },
   {
     id: 'nandhub', nome: 'nandhub', emoji: '🍿', hub: true,
@@ -130,7 +141,7 @@ const vocTexto = (modelo, p = plataformaAtual()) => String(modelo).replace(/\{(\
 
 // A plataforma "de verdade" de um item (o hub não conta): um anime aberto no
 // painel é "anime" mesmo no nandhub. Textos sobre UM item usam estes.
-const plataformaDoItem = (f) => plataformaPorId(ehAnime(f) ? 'nandanimes' : 'nandflix');
+const plataformaDoItem = (f) => plataformaPorId(ehJogo(f) ? 'nandplay' : ehAnime(f) ? 'nandanimes' : 'nandflix');
 const vocDe = (f, chave, n) => voc(chave, n, plataformaDoItem(f));
 const vocTextoDe = (f, modelo) => vocTexto(modelo, plataformaDoItem(f));
 

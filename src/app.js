@@ -2647,6 +2647,7 @@ function abrirConfiguracoes() {
       </div>
 ${plataformasConfigHTML()}
 ${nandrollConfigHTML()}
+${nandplayConfigHTML()}
       <div class="secao" id="cfg-onde"></div>
       <div class="secao">
         <h3>Nota nas capas</h3>
@@ -2713,6 +2714,7 @@ ${nandrollConfigHTML()}
   $('#cfg-como-chave', modal).onclick = pedirChaveOmdb;
   ligarPlataformasConfig(modal); // Plataformas
   ligarNandrollConfig(modal); // NANDRoll
+  ligarNandplayConfig(modal); // nandplay
   $$('input[name="stremio"]', modal).forEach((r) => {
     r.onchange = async () => { estado.config = await api.salvarConfig({ stremio: r.value }); };
   });

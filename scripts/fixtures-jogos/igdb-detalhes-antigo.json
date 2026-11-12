@@ -1,0 +1,13 @@
+[
+ {"id": 1942, "name": "The Witcher 3: Wild Hunt", "slug": "the-witcher-3-wild-hunt", "first_release_date": 1431993600,
+  "storyline": "Geralt procura Ciri.",
+  "cover": {"id": 1, "image_id": "co1wyy"},
+  "involved_companies": [
+   {"id": 1, "company": {"id": 908, "name": "CD Projekt RED"}, "developer": true, "publisher": false},
+   {"id": 2, "company": {"id": 99, "name": "CD Projekt"}, "developer": false, "publisher": true},
+   {"id": 3, "company": {"id": 100, "name": "Bandai Namco"}, "developer": false, "publisher": true}
+  ],
+  "websites": [{"id": 1, "url": "https://www.gog.com/game/the_witcher_3", "category": 17}, {"id": 2, "url": "https://thewitcher.com", "category": 1}],
+  "category": 0,
+  "external_games": [{"id": 5, "uid": "abc", "category": 5}, {"id": 6, "uid": "292030", "category": 1}]}
+]

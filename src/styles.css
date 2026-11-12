@@ -3140,6 +3140,28 @@ html[data-tema="laranja"] {
   --acento-brilho-2: #F0944A;
 }
 
+/* Tema do nandplay: verde (como o laranja, só as variáveis do acento). O acento sólido é
+   um verde mais fechado, para o texto claro dos botões ter contraste; o verde vivo
+   (#2FBF71) fica no fim dos gradientes e nos selos; o texto de acento é um verde claro. */
+html[data-tema="verde"] {
+  --acento: #1C8A4D;
+  --acento-hover: #22A05A;
+  --acento-texto: #6BE0A2;
+  --sobre-acento: #F0FFF6;
+  --anel-foco: #3DD285;
+  --gradiente-acento: linear-gradient(135deg, #0F5A31 0%, #1C8A4D 55%, #2FBF71 100%);
+  --gradiente-acento-hover: linear-gradient(135deg, #136B3B 0%, #22A05A 55%, #3DCF80 100%);
+  --acento-rgb: 28, 138, 77;
+  --anel-rgb: 61, 210, 133;
+  --acento-texto-rgb: 107, 224, 162;
+  --acento-vivo: #2FBF71;
+  --acento-claro: #D2F7E2;
+  --acento-claro-2: #E3FBEE;
+  --acento-suave: #9BE9BE;
+  --acento-brilho: #B4F0CE;
+  --acento-brilho-2: #45C985;
+}
+
 /* Tema do nandhub: a MISTURA das plataformas que ele junta (roxo do nandflix + laranja do
    nandchan). Os tons sólidos são o ponto médio de cada par roxo/laranja (rosa-vinho, com
    contraste ok sobre o fundo escuro); os gradientes vão do roxo ao laranja, para os botões
@@ -3214,6 +3236,7 @@ html[data-tema="mistura"] #marca-nome {
 /* Cada plataforma habilitada mostra a SUA cor (até no nandhub, cujo acento é a mistura) */
 .cfg-plat.ativo[data-plataforma="nandflix"] { background: linear-gradient(135deg, #4C2E7A 0%, #6D4AA8 55%, #7D56B8 100%); }
 .cfg-plat.ativo[data-plataforma="nandanimes"] { background: linear-gradient(135deg, #7A3510 0%, #BD5A1A 55%, #DB7430 100%); }
+.cfg-plat.ativo[data-plataforma="nandplay"] { background: linear-gradient(135deg, #0F5A31 0%, #1C8A4D 55%, #2FBF71 100%); }
 .cfg-plat-icone { width: 20px; height: 20px; }
 .plat-emoji.cfg-plat-icone { font-size: 17px; }
 .cfg-plat-hub { display: flex; align-items: center; gap: 12px; margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; font-size: 13.5px; background: linear-gradient(90deg, rgba(109, 74, 168, .18), rgba(194, 94, 28, .14)); }
@@ -3237,6 +3260,7 @@ html[data-tema="mistura"] #marca-nome {
   transition: transform .22s var(--saida), box-shadow .22s ease-out;
 }
 .plat-opcao[data-tema="laranja"] { --plat-fundo: linear-gradient(160deg, rgba(194, 94, 28, .45), rgba(14, 16, 18, .7) 72%); --plat-borda: #FFA766; }
+.plat-opcao[data-tema="verde"] { --plat-fundo: linear-gradient(160deg, rgba(28, 138, 77, .45), rgba(14, 16, 18, .7) 72%); --plat-borda: #6BE0A2; }
 .plat-opcao[data-hub] { --plat-fundo: linear-gradient(160deg, rgba(109, 74, 168, .4), rgba(194, 94, 28, .28) 55%, rgba(14, 16, 18, .7)); --plat-borda: #E8EBF0; }
 .plat-opcao:hover, .plat-opcao:focus-visible { transform: translateY(-3px); box-shadow: inset 0 0 0 1.5px var(--plat-borda), 0 20px 44px rgba(0, 0, 0, .5); outline: none; }
 .plat-opcao:active { transform: translateY(-1px) scale(.99); }
@@ -3383,3 +3407,22 @@ html.celular .ep-sinopse { -webkit-line-clamp: 2; }
 .cal-topo:has(.escopo-seletor) { flex-wrap: wrap; }
 .cal-topo:has(.escopo-seletor) .cal-stats { order: 3; width: 100%; }
 .cal-topo:has(.escopo-seletor) .cal-fechar { margin-left: auto; }
+
+/* Configurações: nandplay (chaves do IGDB e da Steam) */
+.cfg-jogos-intro { line-height: 1.5; }
+.cfg-jogos-intro b { color: var(--texto); font-weight: 600; }
+.cfg-jogos-campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 12px; margin: 14px 0 12px; }
+.cfg-jogos-campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 12.5px; color: var(--texto-2); }
+.cfg-jogos-campo input {
+  min-height: 40px; padding: 0 14px; border-radius: 999px;
+  background: var(--canvas); border: 1px solid var(--divisor); color: var(--texto); font: 500 13.5px var(--ui); outline: none;
+}
+.cfg-jogos-campo input:focus { border-color: var(--acento); }
+.secao .cfg-jogos-status { margin-top: 10px; line-height: 1.45; }
+.cfg-jogos-status.ok { color: var(--acento-texto); }
+.cfg-jogos-ajuda { margin-top: 6px; font-size: 13px; color: var(--texto-2); }
+.cfg-jogos-ajuda summary { display: inline; list-style: none; }
+.cfg-jogos-ajuda summary::-webkit-details-marker { display: none; }
+.cfg-jogos-ajuda ol { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.5; }
+.cfg-jogos-ajuda b { color: var(--texto); font-weight: 600; }
+.cfg-jogos-ajuda code { padding: 1px 6px; border-radius: 4px; background: var(--canvas); font-size: 12.5px; }

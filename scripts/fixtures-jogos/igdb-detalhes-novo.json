@@ -1,0 +1,26 @@
+[
+ {"id": 14593, "name": "Hollow Knight", "slug": "hollow-knight", "first_release_date": 1487894400,
+  "summary": "Forge your own path in Hollow Knight!",
+  "cover": {"id": 85106, "image_id": "co1rgi"},
+  "artworks": [{"id": 10, "image_id": "ar5xy"}],
+  "screenshots": [{"id": 11, "image_id": "sc6ab"}, {"id": 12, "image_id": "sc6ac"}],
+  "genres": [{"id": 8, "name": "Platform"}, {"id": 31, "name": "Adventure"}],
+  "themes": [{"id": 1, "name": "Action"}],
+  "game_modes": [{"id": 1, "name": "Single player"}],
+  "platforms": [{"id": 6, "name": "PC (Microsoft Windows)", "abbreviation": "PC"}, {"id": 130, "name": "Nintendo Switch", "abbreviation": "Switch"}],
+  "involved_companies": [
+   {"id": 1, "company": {"id": 9091, "name": "Team Cherry"}, "developer": true, "publisher": true},
+   {"id": 2, "company": {"id": 70, "name": "Fangamer"}, "developer": false, "publisher": true},
+   {"id": 3, "company": {"id": 71, "name": "Porting House"}, "developer": false, "publisher": false}
+  ],
+  "videos": [{"id": 1, "name": "Gameplay", "video_id": "UAO2urG23S4"}, {"id": 2, "name": "Launch Trailer", "video_id": "pFAknD_AHXs"}],
+  "websites": [
+   {"id": 1, "url": "https://hollowknight.com", "type": 1},
+   {"id": 2, "url": "https://store.steampowered.com/app/367520", "type": 13},
+   {"id": 3, "url": "https://www.gog.com/game/hollow_knight", "type": 17},
+   {"id": 4, "url": "https://www.nintendo.com/store/products/hollow-knight-switch/", "type": 18},
+   {"id": 5, "url": "http://inseguro.example.com", "type": 1}
+  ],
+  "total_rating": 89.7, "total_rating_count": 1500, "game_type": 0,
+  "external_games": [{"id": 1, "uid": "367520", "url": "https://store.steampowered.com/app/367520", "external_game_source": 1}, {"id": 9, "uid": "1308320186", "external_game_source": 5}]}
+]

@@ -1,0 +1,65 @@
+{
+ "367520": {
+  "success": true,
+  "data": {
+   "type": "game",
+   "name": "Hollow Knight",
+   "steam_appid": 367520,
+   "is_free": false,
+   "short_description": "Forge your own path in Hollow Knight! An epic action adventure through a vast ruined kingdom of insects and heroes. Explore twisting caverns, battle tainted creatures and befriend bizarre bugs, all in a classic, hand-drawn 2D style.",
+   "header_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/3c3489495136b26b34f8a9543c7f5645b99d388c/header.jpg?t=1776125684",
+   "website": "http://hollowknight.com",
+   "developers": [
+    "Team Cherry"
+   ],
+   "publishers": [
+    "Team Cherry"
+   ],
+   "price_overview": {
+    "currency": "BRL",
+    "initial": 4699,
+    "final": 4699,
+    "discount_percent": 0,
+    "initial_formatted": "",
+    "final_formatted": "R$ 46,99"
+   },
+   "platforms": {
+    "windows": true,
+    "mac": true,
+    "linux": true
+   },
+   "metacritic": {
+    "score": 87,
+    "url": "https://www.metacritic.com/game/pc/hollow-knight?ftag=MCD-06-10aaa1f"
+   },
+   "genres": [
+    {
+     "id": "1",
+     "description": "Ação"
+    },
+    {
+     "id": "25",
+     "description": "Aventura"
+    },
+    {
+     "id": "23",
+     "description": "Indie"
+    }
+   ],
+   "release_date": {
+    "coming_soon": false,
+    "date": "24 fev. 2017"
+   },
+   "screenshots": [
+    {
+     "id": 0,
+     "path_full": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/ss_5384f9f8b96a0b9934b2bc35a4058376211636d2.1920x1080.jpg?t=1776125684"
+    },
+    {
+     "id": 1,
+     "path_full": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/ss_d5b6edd94e77ba6db31c44d8a3c09d807ab27751.1920x1080.jpg?t=1776125684"
+    }
+   ]
+  }
+ }
+}

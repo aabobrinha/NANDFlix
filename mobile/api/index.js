@@ -18,6 +18,8 @@ import { Nuvem } from '../../lib/nuvem.js';
 import { novoFilme, acharRepetido, ehSerie, passoSerie, definirSerie, alternarEpisodio, statusSerie, comDia, comEpisodiosDoDia, vistoSerie } from '../../lib/filmes.js';
 import tmdb from '../../lib/tmdb.js';
 import anilist from '../../lib/anilist.js';
+import { Igdb } from '../../lib/igdb.js';
+import steam from '../../lib/steam.js';
 import omdb from '../../lib/omdb.js';
 import trailer from '../../lib/trailer.js';
 import { Episodios } from '../../lib/episodios.js';
@@ -35,13 +37,18 @@ const nuvemConfig = NUVEM_CONFIG;
 
 // A busca do trailer lê a página de resultados do YouTube e a nota do Letterboxd
 // vem da página do filme, que o WebView não deixa ler (CORS): no aparelho, esses
-// pedidos vão pela rede nativa do Android.
+// pedidos vão pela rede nativa do Android. O mesmo para o nandplay: o IGDB (e o
+// token da Twitch) e a Steam (loja e Web API) não aceitam pedidos do WebView.
+const PELA_REDE_NATIVA = ['https://www.youtube.com/results', 'https://letterboxd.com/', 'https://id.twitch.tv/oauth2/', 'https://api.igdb.com/', 'https://store.steampowered.com/api/', 'https://api.steampowered.com/'];
 if (Capacitor.isNativePlatform()) {
   const fetchOriginal = window.fetch.bind(window);
   window.fetch = async (url, opcoes = {}) => {
     const u = String((url && url.url) || url);
-    if (!u.startsWith('https://www.youtube.com/results') && !u.startsWith('https://letterboxd.com/')) return fetchOriginal(url, opcoes);
-    const r = await CapacitorHttp.get({ url: u, headers: opcoes.headers || {}, responseType: 'text' });
+    if (!PELA_REDE_NATIVA.some((inicio) => u.startsWith(inicio))) return fetchOriginal(url, opcoes);
+    const metodo = String(opcoes.method || 'GET').toUpperCase();
+    const r = metodo === 'GET'
+      ? await CapacitorHttp.get({ url: u, headers: opcoes.headers || {}, responseType: 'text' })
+      : await CapacitorHttp.request({ url: u, method: metodo, headers: opcoes.headers || {}, data: opcoes.body, responseType: 'text' });
     return new Response(typeof r.data === 'string' ? r.data : JSON.stringify(r.data), { status: r.status });
   };
 }
@@ -55,6 +62,8 @@ const C = {
   capas: `${PASTA}/capas`,
   premios: `${PASTA}/premios.json`,
   episodios: `${PASTA}/episodios.json`,
+  igdbToken: `${PASTA}/igdb-token.json`,
+  steamBiblioteca: `${PASTA}/steam-biblioteca.json`,
 };
 // A versão do app (mobile/package.json), posta pelo montar.js.
 // eslint-disable-next-line no-undef
@@ -450,6 +459,48 @@ const trailersEmBusca = new Map();
 const relacionadosCache = new Map();
 const soNoPc = async () => ({ erro: 'Isso só funciona no app do computador.' });
 
+// ---------- nandplay: jogos (IGDB) e Steam (como no main.js) ----------
+//
+// No celular não há pastas da Steam (nada está "instalado") e os links da Steam
+// viram a página da loja (https), que o app da Steam abre se estiver instalado.
+
+const igdb = new Igdb({
+  credenciais: () => ({ clientId: config.igdbClientId, clientSecret: config.igdbClientSecret }),
+  lerToken: () => lerJSON(C.igdbToken, null),
+  gravarToken: (d) => gravarJSON(C.igdbToken, d),
+});
+
+let atualizandoBiblioteca = null;
+function atualizarBibliotecaSteam() {
+  if (atualizandoBiblioteca) return atualizandoBiblioteca;
+  atualizandoBiblioteca = (async () => {
+    const { steamid, jogos } = await steam.jogosDaConta(config.steamKey, config.steamId);
+    const dados = { perfil: String(config.steamId || '').trim(), steamid, em: new Date().toISOString(), jogos };
+    gravarJSON(C.steamBiblioteca, dados);
+    avisar('steam:biblioteca', dados);
+    return dados;
+  })().finally(() => { atualizandoBiblioteca = null; });
+  return atualizandoBiblioteca;
+}
+async function bibliotecaSteam(opcoes) {
+  if (!config.steamKey || !config.steamId) return null;
+  const cache = lerJSON(C.steamBiblioteca, null);
+  const doPerfil = Boolean(cache) && cache.perfil === String(config.steamId).trim();
+  if ((opcoes && opcoes.forcar) || !doPerfil) return atualizarBibliotecaSteam();
+  if (Date.now() - Date.parse(cache.em) > 6 * 3600 * 1000) atualizarBibliotecaSteam().catch(() => {});
+  return cache;
+}
+async function testarJogos() {
+  const r = { igdb: null, steam: null };
+  if (config.igdbClientId || config.igdbClientSecret) {
+    try { const t = await igdb.testar(); r.igdb = { ok: true, exemplo: t.exemplo }; } catch (e) { r.igdb = { ok: false, tipo: e.tipo || 'rede', mensagem: e.message }; }
+  }
+  if (config.steamKey || config.steamId) {
+    try { const d = await atualizarBibliotecaSteam(); r.steam = { ok: true, jogos: d.jogos.length }; } catch (e) { r.steam = { ok: false, tipo: e.tipo || 'rede', mensagem: e.message }; }
+  }
+  return r;
+}
+
 let pronto = null;
 // Importar de outros apps (lib/importar.js): procura no TMDB o que não está na lista
 // e aplica tudo de uma vez na lista atual.
@@ -533,15 +584,17 @@ window.api = {
   carregar: async () => {
     await iniciar();
     setTimeout(atualizarSeriesEmExibicao, 5000);
+    if (config.steamKey && config.steamId) setTimeout(() => atualizarBibliotecaSteam().catch(() => {}), 8000);
     return { filmes, config: configPublica(), pastaDados: '', versao: VERSAO };
   },
   salvarConfig: async (mudancas) => {
-    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial', 'animesDoMes'];
+    const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial', 'animesDoMes', 'jogosDoMes', 'igdbClientId', 'igdbClientSecret', 'steamKey', 'steamId'];
     for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
     if ('nandroll' in mudancas) { config.nandroll = Boolean(mudancas.nandroll); if (config.nandroll) atualizarSeriesEmExibicao(); }
     gravarConfig();
     if ('tmdbKey' in mudancas && config.tmdbKey) buscarCapasQueFaltam();
     if ('pais' in mudancas) extras.atualizar();
+    if (('steamKey' in mudancas || 'steamId' in mudancas) && config.steamKey && config.steamId) atualizarBibliotecaSteam().catch(() => {});
     return configPublica();
   },
   atualizarFilme: async (id, mudancas) => {
@@ -751,6 +804,21 @@ window.api = {
     return { ok: true, url: l.app };
   },
   abrirLink: async (url) => { if (String(url).startsWith('https://')) abrirFora(String(url)); },
+  // nandplay
+  buscarJogos: (termo) => chamar(() => igdb.buscarJogos(termo)),
+  detalhesJogo: (id) => chamar(() => igdb.detalhesJogo(id)),
+  jogosDoDesenvolvedor: (empresaId, opcoes) => chamar(() => igdb.jogosDoDesenvolvedor(empresaId, opcoes || {})),
+  testarJogos,
+  steamLocal: async () => ({ steamNoPc: false, instalados: [] }),
+  steamBiblioteca: (opcoes) => chamar(() => bibliotecaSteam(opcoes)),
+  // Qualquer ação vira a página da loja (o celular não abre steam://).
+  abrirSteam: async (appid) => {
+    const url = steam.linkSteam('web', appid);
+    if (!url) return { ok: false };
+    abrirFora(url);
+    return { ok: true, url };
+  },
+  aoBibliotecaSteam: ouvir('steam:biblioteca'),
   extrasAgora: (id, opcoes) => extras.agora(id, opcoes || {}),
   listaPremios: async () => listaPremios(),
   premios: async (id) => { await iniciar(); return pegarAcervo().dados(id); },

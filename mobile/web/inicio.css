@@ -187,6 +187,9 @@ html.cel-coberto .cel-nav, html.cel-coberto .cel-topo { opacity: 0; pointer-even
 html[data-tema="laranja"] .cel-titulo.marca-nandflix {
   background-image: linear-gradient(90deg, #FFF5EC 0%, #FFC59A 60%, #F08E45 100%);
 }
+html[data-tema="verde"] .cel-titulo.marca-nandflix {
+  background-image: linear-gradient(90deg, #F0FFF6 0%, #9BE9BE 60%, #2FBF71 100%);
+}
 /* O título do nandhub: degradê do roxo ao laranja, as duas plataformas que ele junta */
 html[data-tema="mistura"] .cel-titulo.marca-nandflix {
   background-image: linear-gradient(90deg, #CDB6FF 0%, #E9B7C9 50%, #FFB27A 100%);

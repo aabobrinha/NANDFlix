@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net, screen, sessi
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const { pathToFileURL } = require('url');
 
 const armazem = require('./lib/armazem');
@@ -11,6 +11,8 @@ const omdb = require('./lib/omdb');
 const trailer = require('./lib/trailer');
 const tmdb = require('./lib/tmdb');
 const anilist = require('./lib/anilist');
+const { Igdb } = require('./lib/igdb');
+const steam = require('./lib/steam');
 const { novoFilme, juntar, resumo, acharRepetido, mesmoFilme, ehSerie, passoSerie, definirSerie, alternarEpisodio, statusSerie, comDia, comEpisodiosDoDia, vistoSerie } = require('./lib/filmes');
 const letterboxd = require('./lib/letterboxd');
 const importar = require('./lib/importar');
@@ -79,7 +81,7 @@ function gravarConfig() {
 // ficam os 30 dias mais recentes. Se houver uma pasta extra (a do Google
 // Drive, por exemplo), a mesma cópia vai para lá também.
 const MAX_DIARIOS = 30;
-const CONFIG_NO_BACKUP = ['stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'animesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial'];
+const CONFIG_NO_BACKUP = ['stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'animesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial', 'jogosDoMes'];
 const RE_DIARIO = /^diario-\d{4}-\d{2}-\d{2}\.json$/;
 let mudouDesdeBackup = true;
 let ultimoBackup = { em: null, erroExtra: null };
@@ -413,6 +415,92 @@ ipcMain.handle('premios:atualizar', (_e, id, opcoes) => chamar(() => acervo.atua
 ipcMain.handle('tmdb:provedores', () => chamar(() => tmdb.provedores(config.tmdbKey, config.pais || 'BR')));
 ipcMain.handle('abrir:link', (_e, url) => { if (String(url).startsWith('https://')) shell.openExternal(String(url)); });
 
+// ---------- nandplay: jogos (IGDB) e Steam ----------
+
+// O token do IGDB fica na pasta de dados, com a validade (lib/igdb.js renova).
+const igdb = new Igdb({
+  credenciais: () => ({ clientId: config.igdbClientId, clientSecret: config.igdbClientSecret }),
+  lerToken: () => armazem.lerJSON(path.join(PASTA, 'igdb-token.json'), null),
+  gravarToken: (d) => armazem.gravarJSON(path.join(PASTA, 'igdb-token.json'), d),
+});
+ipcMain.handle('jogos:buscar', (_e, termo) => chamar(() => igdb.buscarJogos(termo)));
+ipcMain.handle('jogos:detalhes', (_e, id) => chamar(() => igdb.detalhesJogo(id)));
+ipcMain.handle('jogos:doDesenvolvedor', (_e, empresaId, opcoes) => chamar(() => igdb.jogosDoDesenvolvedor(empresaId, opcoes || {})));
+
+// A pasta da Steam: a do registro (Windows) ou a padrão. Lida uma vez por abertura.
+let pastaSteam = null;
+function acharPastaSteam() {
+  if (pastaSteam !== null) return Promise.resolve(pastaSteam);
+  const padrao = () => steam.pastasPadrao(process.platform, app.getPath('home')).find((p) => steam.ehPastaSteam(p)) || '';
+  if (process.platform !== 'win32') return Promise.resolve((pastaSteam = padrao()));
+  return new Promise((ok) => {
+    execFile('reg', ['query', 'HKCU\\Software\\Valve\\Steam', '/v', 'SteamPath'], { windowsHide: true, timeout: 5000 }, (_erro, saida) => {
+      const p = steam.pastaDoRegistro(saida);
+      pastaSteam = steam.ehPastaSteam(p) ? p : padrao();
+      ok(pastaSteam);
+    });
+  });
+}
+
+// Os jogos instalados (só lendo os arquivos da Steam), guardados por 30 s.
+let instaladosCache = null;
+async function steamLocal({ forcar = false } = {}) {
+  if (!forcar && instaladosCache && Date.now() - instaladosCache.em < 30000) return instaladosCache.dados;
+  const pasta = await acharPastaSteam();
+  let instalados = [];
+  if (pasta) { try { instalados = steam.jogosInstalados(pasta).map(({ appid, nome, completo }) => ({ appid, nome, completo })); } catch (e) { console.error('steam', e.message); } }
+  const dados = { steamNoPc: Boolean(pasta), instalados };
+  instaladosCache = { em: Date.now(), dados };
+  return dados;
+}
+ipcMain.handle('steam:local', (_e, opcoes) => steamLocal(opcoes || {}));
+
+// Os jogos da conta (Web API), num cache em disco: a interface lê na hora e a
+// lista é atualizada ao abrir o app (e quando passa de 6 horas).
+const ARQ_BIBLIOTECA = path.join(PASTA, 'steam-biblioteca.json');
+let atualizandoBiblioteca = null;
+function atualizarBibliotecaSteam() {
+  if (atualizandoBiblioteca) return atualizandoBiblioteca;
+  atualizandoBiblioteca = (async () => {
+    const { steamid, jogos } = await steam.jogosDaConta(config.steamKey, config.steamId);
+    const dados = { perfil: String(config.steamId || '').trim(), steamid, em: new Date().toISOString(), jogos };
+    armazem.gravarJSON(ARQ_BIBLIOTECA, dados);
+    avisar('steam:biblioteca', dados);
+    return dados;
+  })().finally(() => { atualizandoBiblioteca = null; });
+  return atualizandoBiblioteca;
+}
+ipcMain.handle('steam:biblioteca', (_e, opcoes) => chamar(async () => {
+  if (!config.steamKey || !config.steamId) return null; // sem a conta: a interface trata como "não sabemos"
+  const cache = armazem.lerJSON(ARQ_BIBLIOTECA, null);
+  const doPerfil = Boolean(cache) && cache.perfil === String(config.steamId).trim();
+  if ((opcoes && opcoes.forcar) || !doPerfil) return atualizarBibliotecaSteam();
+  if (Date.now() - Date.parse(cache.em) > 6 * 3600 * 1000) atualizarBibliotecaSteam().catch(() => {}); // devolve o cache e atualiza por trás
+  return cache;
+}));
+
+// Abre a Steam: o link é montado AQUI, só a partir do appid numérico (lib/steam.js).
+// Sem Steam no PC, qualquer ação vira a página da loja no navegador.
+ipcMain.handle('steam:abrir', async (_e, appid, acao) => {
+  const { steamNoPc } = await steamLocal();
+  const url = steam.linkSteam(steamNoPc ? acao : 'web', appid);
+  if (!url) return { ok: false };
+  await shell.openExternal(url);
+  return { ok: true, url };
+});
+
+// O botão "Testar" das Configurações (nandplay): diz o que funcionou, sem devolver as chaves.
+ipcMain.handle('jogos:testar', async () => {
+  const r = { igdb: null, steam: null };
+  if (config.igdbClientId || config.igdbClientSecret) {
+    try { const t = await igdb.testar(); r.igdb = { ok: true, exemplo: t.exemplo }; } catch (e) { r.igdb = { ok: false, tipo: e.tipo || 'rede', mensagem: e.message }; }
+  }
+  if (config.steamKey || config.steamId) {
+    try { const d = await atualizarBibliotecaSteam(); r.steam = { ok: true, jogos: d.jogos.length }; } catch (e) { r.steam = { ok: false, tipo: e.tipo || 'rede', mensagem: e.message }; }
+  }
+  return r;
+});
+
 // ---------- OMDb: notas do IMDb, Metascore e Rotten Tomatoes (opcional) ----------
 
 // Só com a chave do OMDb. Busca as notas dos filmes que ainda não têm (2 por vez)
@@ -528,8 +616,9 @@ function criarJanela() {
   janela.on('unmaximize', lembrar);
 
   // Links nunca abrem dentro do app.
+  // steam://: só os links montados por lib/steam.js (appid numérico; nada mais passa).
   janela.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) shell.openExternal(url);
+    if (/^https?:/.test(url) || steam.ehLinkSteam(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
   janela.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -729,7 +818,7 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
   // (watchlistHoje é o formato antigo, de um dia só; o app o apaga ao salvar o novo).
   // filmesDoMes: { 'AAAA-MM': id }, o filme favorito de cada mês (só aparece no calendário).
   // tierlist: [{ id, nome, cor, filmes: [ids] }], as tiers de cima para baixo.
-  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial', 'animesDoMes'];
+  const permitidas = ['tmdbKey', 'omdbKey', 'stremio', 'visualizacao', 'ordenacao', 'watchlists', 'watchlistHoje', 'filmesDoMes', 'tierlist', 'tierlists', 'tierlistAtiva', 'filtrosSorteio', 'listas', 'nandroll', 'nandrollTodasPlataformas', 'nandrollPlataforma', 'pais', 'meusServicos', 'notaNaCapa', 'premios', 'plataformas', 'plataformaInicial', 'animesDoMes', 'jogosDoMes', 'igdbClientId', 'igdbClientSecret', 'steamKey', 'steamId'];
   for (const k of permitidas) if (k in mudancas) config[k] = mudancas[k];
   if ('nandroll' in mudancas) { config.nandroll = Boolean(mudancas.nandroll); if (config.nandroll) atualizarSeriesEmExibicao(); }
   if ('omdbKey' in mudancas) config.limiteAtingidoEm = null;
@@ -737,6 +826,8 @@ ipcMain.handle('config:salvar', (_e, mudancas) => {
   if ('tmdbKey' in mudancas && config.tmdbKey) buscarCapasQueFaltam();
   if ('omdbKey' in mudancas) buscarNotasQueFaltam();
   if ('pais' in mudancas) extras.atualizar();
+  // Outra conta da Steam: a lista de jogos dela é buscada de novo.
+  if (('steamKey' in mudancas || 'steamId' in mudancas) && config.steamKey && config.steamId) atualizarBibliotecaSteam().catch(() => {});
   return configPublica();
 });
 
@@ -1483,6 +1574,8 @@ if (!travaUnica) {
     marcas.iniciar(filmes, config);
     iniciarNuvem();
     setTimeout(atualizarSeriesEmExibicao, 5000);
+    // nandplay: a lista de jogos da conta da Steam, atualizada a cada abertura.
+    if (config.steamKey && config.steamId) setTimeout(() => atualizarBibliotecaSteam().catch(() => {}), 8000);
 
     // capa://img/<arquivo> → arquivo da pasta de capas (sem sair dela);
     // capa://foto/<arquivo> → imagem colada numa página ou shot favorito.

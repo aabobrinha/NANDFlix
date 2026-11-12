@@ -1,0 +1,15 @@
+"AppState"
+{
+	"appid"		"367520"
+	"name"		"Hollow Knight"
+	"StateFlags"		"4"
+	"installdir"		"Hollow Knight"
+	"SizeOnDisk"		"9000"
+	"InstalledDepots"
+	{
+		"367521"
+		{
+			"manifest"		"1"
+		}
+	}
+}
