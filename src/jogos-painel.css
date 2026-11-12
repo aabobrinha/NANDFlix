@@ -14,7 +14,7 @@
 /* O botão da Steam: o ícone de Jogar é cheio (como o ▶ Assistir); os outros, de traço. */
 .jogo-steam-btn .ico { fill: none; stroke: currentColor; }
 .jogo-steam-btn[data-acao="jogar"] .ico { fill: currentColor; stroke: none; }
-.jogo-steam-btn .steam-marca { width: 20px; height: 20px; --steam-marca-fundo: #1C8A4D; }
+.jogo-steam-btn .steam-marca { width: 20px; height: 20px; }
 .steam-marca { flex: none; }
 .jogo-adicionar { min-height: 48px; padding: 0 22px; font-size: 15px; }
 .jogo-steam-linha { margin: -8px 0 0; font: 500 13px/1.4 var(--ui); color: var(--texto-2); text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
@@ -84,7 +84,7 @@
   box-shadow: inset 0 0 0 1px rgba(102, 192, 244, .35);
 }
 .jogo-loja-steam:hover, .jogo-loja-steam:focus-visible { background: linear-gradient(135deg, #22344A 0%, #31577A 100%); box-shadow: inset 0 0 0 1px rgba(102, 192, 244, .7); }
-.jogo-loja-steam .steam-marca { width: 30px; height: 30px; color: #FFFFFF; --steam-marca-fundo: #1E3246; }
+.jogo-loja-steam .steam-marca { width: 30px; height: 30px; color: #FFFFFF; }
 .jogo-loja-steam span { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
 .jogo-loja-steam b { font-size: 15px; font-weight: 700; }
 .jogo-loja-steam small { font-size: 12px; color: #A9C6DD; }
@@ -110,7 +110,7 @@ html.celular .painel-jogo .titulo-logo img { max-width: 72vw; max-height: 76px; 
 html.celular .painel-botoes .jogo-adicionar { width: 100%; min-height: 46px; border-radius: 6px; font-size: 17px; }
 html.celular .painel-botoes .jogo-steam-btn { background: #fff; color: #0B0C0E; }
 html.celular .painel-botoes .jogo-steam-btn .ico { color: #0B0C0E; }
-html.celular .painel-botoes .jogo-steam-btn .steam-marca { color: #0B0C0E; --steam-marca-fundo: #FFFFFF; }
+html.celular .painel-botoes .jogo-steam-btn .steam-marca { color: #0B0C0E; }
 html.celular .jogo-steam-linha { margin: 0; text-shadow: none; }
 html.celular .jogo-tag-nova { width: 100%; min-height: 40px; }
 html.celular .jogo-loja-steam { width: 100%; }
