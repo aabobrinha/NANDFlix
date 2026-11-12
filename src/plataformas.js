@@ -483,7 +483,7 @@ function plataformasConfigHTML() {
           ${sistemasPlataforma().map((p) => `<button class="chip cfg-plat${plataformaHabilitada(p.id) ? ' ativo' : ''}" data-plataforma="${p.id}" aria-pressed="${plataformaHabilitada(p.id)}">${iconePlataformaHTML(p, 'cfg-plat-icone')} ${p.nome}</button>`).join('')}
         </div>
         <p>O que você acompanha. Com mais de uma, o ${plataformaPorId('nandhub').nome} junta tudo; troque de plataforma pela marca, no alto da tela.</p>
-        <label class="ordenar cfg-plat-inicial">Ao abrir o app
+        <label class="ordenar cfg-plat-inicial"><span class="cfg-plat-rotulo">Ao abrir o app</span>
           <span class="ordenar-caixa">
             <select id="cfg-plat-inicial">
               <option value="">Perguntar onde entrar</option>

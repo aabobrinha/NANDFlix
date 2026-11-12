@@ -834,7 +834,7 @@ function renderPainel() {
   const campo = (nome, rotulo, extra = '') =>
     `<div class="campo"><label for="c-${nome}">${rotulo}</label><input id="c-${nome}" data-campo="${nome}" value="${esc(f[nome])}" ${extra}></div>`;
   $('#painel-resto').innerHTML = `
-    <div class="painel-corpo">
+    <div class="painel-corpo${ehSerie(f) ? ' corpo-serie' : ''}">
       <div>
         <p class="painel-meta" data-info="meta-painel">${painelMetaHTML(f)}</p>
         ${animeNoPainelHTML(f)}
@@ -886,7 +886,7 @@ function renderPainel() {
     <div class="salvo" id="salvo"></div>
     <div class="painel-rodape">
       <button class="btn" data-p="trocar">${icone('Image')} Trocar capa</button>
-      <button class="btn btn-perigo" data-p="excluir">${icone('Trash2')} Remover da lista</button>
+      ${serie ? '' : `<button class="btn btn-perigo" data-p="excluir">${icone('Trash2')} Remover da lista</button>`}
     </div>`;
 
   carregarRelacionados(f);
@@ -1604,7 +1604,7 @@ async function abrirTrocarCapa(id) {
   const r = await api.capasTmdb(id);
   const area = $('#outras-capas', modal);
   if (!area) return;
-  if (!r.ok || !r.dados.length) { area.innerHTML = `<p class="mensagem">${r.ok ? 'O TMDB não tem outras capas deste filme.' : esc(mensagemErroTmdb(r.erro))}</p>`; return; }
+  if (!r.ok || !r.dados.length) { area.innerHTML = `<p class="mensagem">${r.ok ? vocTextoDe(f, 'O TMDB não tem outras capas {deste}.') : esc(mensagemErroTmdb(r.erro))}</p>`; return; }
   const capas = r.dados.slice(0, 40);
   area.innerHTML = `<div class="resultados outras-capas">${capas.map((c, i) => `
     <button class="resultado${c.poster === f.poster ? ' atual' : ''}" data-i="${i}" title="${c.idioma ? `Idioma: ${esc(c.idioma)}` : 'Sem texto'}">
@@ -2661,7 +2661,7 @@ ${nandrollConfigHTML()}
           <button class="btn" id="cfg-capas" ${pendentes || naoEncontrados ? '' : 'disabled'} title="Capas, logos, trailers e informações pelo TMDB">${icone('RefreshCw')} Atualizar pelo TMDB${pendentes ? ` (${pendentes})` : ''}</button>
           ${c.omdbKey ? `<button class="btn" id="cfg-infos" ${semNotas() ? '' : 'disabled'} title="Notas do IMDb, Metascore e Rotten Tomatoes">${icone('Star')} Buscar notas que faltam (${semNotas()})</button>` : ''}
         </div>
-        <p>${naoEncontrados ? `${naoEncontrados} filme(s) não foram encontrados no TMDB. Use “Trocar capa” ou preencha “Busca da capa” com o título original ou o código do IMDb (tt…).` : 'A atualização roda sozinha ao abrir o app.'}</p>
+        <p>${naoEncontrados ? `${voc('qtd', naoEncontrados)} não ${naoEncontrados === 1 ? 'foi encontrado' : 'foram encontrados'} no TMDB. Use “Trocar capa” ou preencha “Busca da capa” com o título original ou o código do IMDb (tt…).` : 'A atualização roda sozinha ao abrir o app.'}</p>
       </div>
       <div class="secao">
         <h3>Planilha e backup</h3>
@@ -3156,7 +3156,7 @@ api.aoFimCapas((r) => {
     const acao = r.erro.tipo === 'chave' ? { rotulo: 'Configurações', fn: abrirConfiguracoes } : undefined;
     aviso(r.erro.mensagem, { tipo: 'erro', duracao: 9000, acao });
   } else if (r.total > 1) {
-    aviso(`Atualização pelo TMDB concluída: ${r.encontradas} filme(s) atualizados.`, { tipo: 'ok' });
+    aviso(`Atualização pelo TMDB concluída: ${voc('qtd', r.encontradas)} atualizado${r.encontradas === 1 ? '' : 's'}.`, { tipo: 'ok' });
   }
 });
 
@@ -4279,7 +4279,7 @@ function renderTierlist() {
         <div class="tl-filmes" data-soltar="${t.id}">${filmes.map(capaTlHTML).join('')}</div>
         <div class="tl-acoes">
           <button class="tl-acao" data-t="cor" title="Trocar a cor" aria-label="Trocar a cor">${icone('Palette')}</button>
-          <button class="tl-acao" data-t="apagar" title="Apagar a tier (os filmes voltam para Sem tier)" aria-label="Apagar a tier">${icone('Trash2')}</button>
+          <button class="tl-acao" data-t="apagar" title="Apagar a tier (${voc('itens', undefined, pl)} voltam para Sem tier)" aria-label="Apagar a tier">${icone('Trash2')}</button>
         </div>
       </div>`;
   }).join('');
@@ -4551,6 +4551,7 @@ function renomearTierlist() {
 // Filtros desta tierlist: gênero, diretor, país, década e mês em que viu. Ficam
 // salvos com a tierlist (uma tierlist "Terror" pode guardar o filtro de terror).
 function abrirFiltrosTl(botao) {
+  const plTl = plataformaDaTl(listaAtiva());
   const vistos = itensTl();
   const grupos = FILTROS_TL.map(({ chave, titulo, valores }) => {
     const contagem = new Map();
@@ -4571,7 +4572,7 @@ function abrirFiltrosTl(botao) {
         }).join('')}</div>
       </div>`).join('');
     const n = vistos.filter((f) => passaFiltroTl(f)).length;
-    $('.tl-filtros-contagem', menu).textContent = n === 1 ? '1 filme visto aparece' : `${n} filmes vistos aparecem`;
+    $('.tl-filtros-contagem', menu).textContent = porEpisodio(plTl) ? (n === 1 ? '1 anime assistido aparece' : `${n} animes assistidos aparecem`) : (n === 1 ? '1 filme visto aparece' : `${n} filmes vistos aparecem`);
     $('[data-acao="limpar"]', menu).disabled = !qtdFiltrosTl();
   };
   const menu = abrirMenuTl(botao, `

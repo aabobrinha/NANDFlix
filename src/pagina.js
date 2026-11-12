@@ -725,7 +725,7 @@ function abrirPaginas() {
         <h2>Suas páginas</h2>
       </div>
       <span class="cal-stat" id="pgs-resumo"></span>
-      <label class="pgs-busca">${icone('Search')}<input id="paginas-busca" type="search" placeholder="Buscar por filme ou pelo que você escreveu" autocomplete="off" spellcheck="false" aria-label="Buscar nas suas páginas"></label>
+      <label class="pgs-busca">${icone('Search')}<input id="paginas-busca" type="search" placeholder="${esc(`Buscar por ${voc('item')} ou pelo que você escreveu`)}" autocomplete="off" spellcheck="false" aria-label="Buscar nas suas páginas"></label>
       <button class="redondo cal-fechar" data-pp="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
     </div>
     <div id="paginas-lista"></div>`;

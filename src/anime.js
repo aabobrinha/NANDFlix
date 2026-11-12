@@ -443,14 +443,16 @@ const dataEpisodio = (iso) => {
 
 function episodioHTML(e, indice, visto, saiu) {
   const meta = [e.duracao ? `${e.duracao} min` : '', e.data ? dataEpisodio(e.data) : ''].filter(Boolean).join(' · ');
-  const longa = (e.sinopse || '').length > 130;
+  // O "mais" nasce escondido e só aparece se a sinopse foi cortada de verdade
+  // (o corte depende da largura): ver ajustarMaisEpisodios.
+  const longa = Boolean(e.sinopse);
   return `<li class="ep-item${visto ? ' visto' : ''}${saiu ? '' : ' futuro'}">
     <div class="ep-imagem">${e.imagem ? `<img src="${esc(e.imagem)}" alt="" loading="lazy">` : `<span>${e.n}</span>`}</div>
     <div class="ep-texto">
       <b class="ep-titulo">${e.n}. ${esc(e.titulo || `Episódio ${e.n}`)}</b>
       ${meta ? `<span class="ep-meta">${esc(meta)}</span>` : ''}
       ${e.sinopse ? `<p class="ep-sinopse">${esc(e.sinopse)}</p>` : ''}
-      ${longa ? '<button class="ep-mais" data-serie="ep-mais" aria-expanded="false">mais</button>' : ''}
+      ${longa ? '<button class="ep-mais" data-serie="ep-mais" aria-expanded="false" hidden>mais</button>' : ''}
     </div>
     <button class="ep-check" data-serie="ep" data-t="${indice}" data-n="${e.n}" aria-pressed="${visto}" aria-label="Episódio ${e.n}: ${visto ? 'visto, desmarcar' : 'marcar como visto'}"${saiu || visto ? '' : ' disabled'}>${icone('Check')}</button>
   </li>`;
@@ -939,4 +941,22 @@ async function abrirTrocarCapaSerie(id) {
     if (filmeNoDestaque() === id) mostrarDestaque({ rapido: true });
     aviso('Capa trocada.', { tipo: 'ok' });
   });
+}
+
+// Mostra o "mais" só nas sinopses de episódio que o corte de 3 linhas (2 no
+// celular) escondeu de fato. Roda quando o painel muda.
+function ajustarMaisEpisodios() {
+  for (const b of document.querySelectorAll('#painel .ep-mais[aria-expanded="false"]')) {
+    const p = b.previousElementSibling;
+    b.hidden = !p || p.scrollHeight <= p.clientHeight + 1;
+  }
+}
+{
+  let pendente = 0;
+  const painelEps = document.getElementById('painel');
+  if (painelEps) new MutationObserver(() => {
+    if (pendente) return;
+    pendente = requestAnimationFrame(() => { pendente = 0; ajustarMaisEpisodios(); });
+  }).observe(painelEps, { childList: true, subtree: true });
+  window.addEventListener('resize', () => ajustarMaisEpisodios());
 }

@@ -104,3 +104,7 @@ html.celular #painel-relacionados .relacionados h3 { display: none; }
 html.celular #painel-relacionados .rel-fileira { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 8px; overflow: visible; padding: 8px 16px 0; }
 html.celular #painel-relacionados .rel-filme { width: auto; }
 html.celular .painel-fechar:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+
+/* As margens de 48px do PC somavam com o recuo de 16px e empurravam os botões do rodapé para fora da tela */
+html.celular .capa-acoes, html.celular .painel-rodape { margin-left: 0; margin-right: 0; }
+html.celular .painel-rodape { flex-wrap: wrap; }

@@ -97,3 +97,7 @@ html.celular #premios::before {
   content: ""; position: fixed; z-index: 4; top: 0; left: 0; right: 0; height: calc(60px + env(safe-area-inset-top, 0px));
   background: linear-gradient(180deg, var(--canvas) 70%, rgba(5, 6, 8, 0)); pointer-events: none;
 }
+
+/* Configurações: campo + botão (chave, usuário da AniList) passavam da largura do diálogo e criavam rolagem de lado */
+html.celular .busca-linha { flex-wrap: wrap; }
+html.celular .busca-linha input { flex: 1 1 150px; min-width: 0; }

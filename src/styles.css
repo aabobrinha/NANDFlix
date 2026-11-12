@@ -1675,6 +1675,11 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
 .painel-meta .classificacao { padding: 2px 6px; border: 1px solid rgba(232, 235, 240, .55); border-radius: 4px; font-size: 12px; color: var(--texto); }
 .painel-sinopse { margin: 14px 0 0; font-size: 15px; line-height: 1.6; }
 .painel-fichas { display: flex; flex-direction: column; gap: 12px; font-size: 14px; line-height: 1.5; }
+/* Série de anime: uma coluna só, para a lista de episódios usar a largura toda
+   (com duas colunas, a da direita ficava vazia ao lado dos episódios). As
+   fichas (estúdio, país, gêneros) sobem para uma linha compacta no alto. */
+.painel-corpo.corpo-serie { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.painel-corpo.corpo-serie > .painel-fichas { order: -1; flex-direction: row; flex-wrap: wrap; gap: 4px 22px; font-size: 13.5px; }
 .painel-ficha { margin: 0; }
 .painel-ficha > b { font-weight: 500; color: var(--texto-2); }
 .painel-ficha .btn-icone { min-height: 32px; width: 32px; background: transparent; color: var(--texto-2); }
@@ -3171,7 +3176,9 @@ html[data-tema="laranja"] {
 .cfg-plat { text-transform: lowercase; font-weight: 600; }
 .cfg-plat-icone { width: 20px; height: 20px; }
 .plat-emoji.cfg-plat-icone { font-size: 17px; }
-.cfg-plat-inicial { margin-top: 12px; font-size: 14px; }
+.cfg-plat-inicial { margin-top: 12px; font-size: 14px; flex-wrap: wrap; }
+/* Em tela estreita o app esconde o 1º span dos menus .ordenar; aqui ele é o rótulo e precisa ficar */
+.ordenar.cfg-plat-inicial > .cfg-plat-rotulo { display: inline; }
 
 /* Tela de início do nandhub e escolha de sistemas (mesma base da entrada) */
 .plat-tela .plat-cartao { width: min(780px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; }
