@@ -13,7 +13,7 @@ const cel = {
   destaqueId: null,
 };
 
-const ROTULOS_FILTRO = { 'nao-vistos': 'Não vistos', vistos: 'Vistos', favoritos: 'Favoritos' };
+const ROTULOS_FILTRO = { 'nao-vistos': 'Não vistos', vistos: 'Vistos', favoritos: 'Favoritos', animes: 'Animes', assistindo: 'Assistindo' };
 
 // ---- Estrutura (criada uma vez) ----
 
@@ -59,6 +59,7 @@ function filmesDoModo() {
     if (m.filtro === 'nao-vistos') return todos.filter((f) => !f.visto);
     if (m.filtro === 'vistos') return todos.filter((f) => f.visto);
     if (m.filtro === 'favoritos') return todos.filter((f) => f.favorito);
+    if (m.filtro === 'animes' || m.filtro === 'assistindo') return todos.filter((f) => passaFiltroAnime(f, m.filtro)); // NANDRoll
   }
   if (m.tipo === 'genero') return todos.filter((f) => generos(f.info).includes(m.genero));
   return todos;
@@ -70,6 +71,8 @@ function fileirasDoModo(lista) {
   const naoVistos = lista.filter((f) => !f.visto);
   const hojeIds = idsWatchlist();
 
+  // NANDRoll: os animes em andamento vêm primeiro, com o "+1" no cartão.
+  if (cel.modo.tipo === 'inicio' || (cel.modo.tipo === 'filtro' && ['animes', 'assistindo'].includes(cel.modo.filtro))) add('Continue assistindo', seriesAssistindo(), { continuar: true });
   if (cel.modo.tipo === 'inicio') add('Para ver hoje', hojeIds.map(porId).filter(Boolean));
   if (cel.modo.tipo !== 'filtro' || cel.modo.filtro !== 'favoritos') add('Seus favoritos', lista.filter((f) => f.favorito && !f.visto));
   add('Na sua lista', naoVistos.slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0)), { minimo: 3 });
@@ -113,7 +116,7 @@ function capaCelHTML(f, { nota = false } = {}) {
     : nota && f.minhaNota ? `<span class="cel-selo cel-selo-nota">${icone('Star', { preenchido: true })}${notaLegivel(f.minhaNota)}</span>` : '';
   return `<button class="cel-capa" data-cel="filme" data-id="${f.id}" aria-label="${esc(f.titulo)}">
     ${src ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">` : `<span class="cel-capa-vazia">${esc(f.titulo)}</span>`}
-    ${f.visto && !nota ? `<span class="cel-visto">${icone('Check')}</span>` : ''}${selo}
+    ${f.visto && !nota ? `<span class="cel-visto">${icone('Check')}</span>` : ''}${selo || seloSerieHTML(f)}
   </button>`;
 }
 
@@ -140,7 +143,7 @@ function pilulasHTML() {
   const m = cel.modo;
   const ativo = (tipo, valor) => (m.tipo === tipo && (m.filtro === valor || m.genero === valor) ? ' ativa' : '');
   const fechar = m.tipo !== 'inicio' ? `<button class="cel-pilula cel-pilula-x" data-cel="inicio" aria-label="Voltar ao início">${icone('X')}</button>` : '';
-  const filtros = Object.entries(ROTULOS_FILTRO).map(([k, r]) => `<button class="cel-pilula${ativo('filtro', k)}" data-cel="filtro" data-filtro="${k}">${r}</button>`).join('');
+  const filtros = Object.entries(ROTULOS_FILTRO).filter(([k]) => nandrollLigado() || (k !== 'animes' && k !== 'assistindo')).map(([k, r]) => `<button class="cel-pilula${ativo('filtro', k)}" data-cel="filtro" data-filtro="${k}">${r}</button>`).join('');
   return `<div class="cel-pilulas">${fechar}${filtros}
     <button class="cel-pilula${m.tipo === 'genero' ? ' ativa' : ''}" data-cel="generos">${m.tipo === 'genero' ? esc(m.genero) : 'Gêneros'} ${icone('ChevronDown')}</button>
     <button class="cel-pilula${m.tipo === 'todos' ? ' ativa' : ''}" data-cel="todos">Todos</button>
@@ -150,7 +153,7 @@ function pilulasHTML() {
 function fileiraHTML(r) {
   return `<section class="cel-fileira${r.grande ? ' grande' : ''}">
     <h2>${r.genero ? `<button data-cel="genero" data-genero="${esc(r.genero)}">${esc(r.titulo)} ${icone('ChevronRight')}</button>` : esc(r.titulo)}</h2>
-    <div class="cel-trilho">${r.filmes.map((f) => capaCelHTML(f, r)).join('')}</div>
+    <div class="cel-trilho">${r.filmes.map((f) => (r.continuar ? cartaoContinuarHTML(f, capaCelHTML(f, r)) : capaCelHTML(f, r))).join('')}</div>
   </section>`;
 }
 
@@ -223,7 +226,8 @@ function abrirMais() {
     ${item('estatisticas', 'ChartColumn', 'Estatísticas')}
     ${item('sortear', 'Dices', 'Sortear um filme')}
     ${item('sortear-filtro', 'SlidersHorizontal', 'Sortear com filtro')}
-    ${item('adicionar', 'Plus', 'Adicionar filme')}
+    ${nandrollLigado() ? item('agenda', 'CalendarClock', 'Agenda de episódios') : ''}
+    ${item('adicionar', 'Plus', nandrollLigado() ? 'Adicionar filme ou anime' : 'Adicionar filme')}
     ${item('todos', 'LayoutGrid', 'Todos os filmes')}
     ${item('config', 'Settings', 'Configurações')}
   </div>`, 'cel-folha-mais');

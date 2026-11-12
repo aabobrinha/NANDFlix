@@ -2742,3 +2742,128 @@ body.com-entrada { overflow: hidden; }
   .entrada-coluna { animation: none; }
   .entrada-aba-marca { transition: none; }
 }
+
+/* ==========================================================================
+   NANDRoll — animes: episódios, status e onde assistir
+   ========================================================================== */
+
+.sr-so { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Progresso na capa das séries em andamento: "3/12" */
+.selo-serie {
+  position: absolute; left: 6px; bottom: 6px; z-index: 1;
+  padding: 3px 7px; border-radius: 999px;
+  background: rgba(5, 6, 8, .82); color: var(--texto);
+  font: 600 11px/1.2 var(--ui); font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* Bloco do painel */
+.serie { display: flex; flex-direction: column; gap: 12px; margin: 6px 0 16px; }
+.serie:empty { display: none; }
+.serie-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.serie-conta { min-width: 9ch; font-size: 15px; color: var(--texto-2); font-variant-numeric: tabular-nums; }
+.serie-conta b { font-size: 20px; font-weight: 700; color: var(--texto); }
+.serie-menos:disabled, .serie-mais:disabled { opacity: .4; cursor: default; }
+.serie-status { position: relative; margin-left: auto; }
+.serie-status select {
+  appearance: none; -webkit-appearance: none;
+  min-height: 44px; padding: 0 18px; border-radius: 999px;
+  background: transparent; border: 1px solid var(--divisor); color: var(--texto);
+  font: 500 14px/1 var(--ui); cursor: pointer;
+  transition: border-color .15s ease-out;
+}
+.serie-status select:hover { border-color: var(--borda-controle); }
+.serie-status select:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--anel-foco); }
+.serie-status select option { background: var(--superficie); color: var(--texto); }
+.serie-barra { height: 6px; border-radius: 999px; background: var(--superficie-2); overflow: hidden; }
+.serie-barra span { display: block; height: 100%; border-radius: inherit; background: var(--gradiente-acento); transition: width .25s var(--saida); }
+.serie-proximo { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; color: var(--acento-texto); }
+.serie-proximo .ico { width: 16px; height: 16px; flex: none; }
+.onde-assistir { display: flex; flex-direction: column; gap: 8px; }
+.onde-assistir > b { font-size: 13px; font-weight: 600; color: var(--texto-2); }
+.chip-plataforma { min-height: 40px; padding: 0 14px; font-size: 13px; }
+.chip-plataforma .ico { width: 14px; height: 14px; fill: currentColor; stroke: none; }
+.chip-anilist { color: var(--texto-2); }
+
+/* Adicionar: Filmes | Animes */
+.fontes-busca { margin-bottom: 12px; }
+
+@media (max-width: 520px) {
+  .serie-status { margin-left: 0; flex: 1 1 100%; }
+  .serie-status select { width: 100%; }
+}
+
+/* NANDRoll — temporadas */
+.temporadas { gap: 6px; }
+.chip-temporada { min-height: 36px; padding: 0 14px; font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.chip-temporada .ico { width: 14px; height: 14px; flex: none; }
+.chip-temporada.nao-lancada { border-style: dashed; color: var(--texto-2); }
+.serie-temporada { display: flex; align-items: center; gap: 12px; }
+.serie-temporada p { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.3; }
+.serie-temporada p span { color: var(--texto-2); font-size: 13px; }
+.serie-da-vez { margin: 0; font-size: 13px; color: var(--texto-2); }
+.serie-da-vez b { color: var(--texto); font-weight: 600; }
+.onde-nota { font-size: 13px; color: var(--texto-2); }
+/* A capa da temporada: quadro menor e do formato da própria imagem (sem faixas nem corte). */
+.destaque-poster.de-temporada, .painel-cabecalho .destaque-poster.de-temporada { width: clamp(56px, 6vw, 84px); align-self: flex-end; }
+.capa.capa-temporada { aspect-ratio: auto; }
+.capa.capa-temporada img { height: auto; }
+/* No celular a capa do painel fica escondida: a da temporada aparece no próprio bloco. */
+.serie-capa-temporada { display: none; width: 56px; height: auto; border-radius: 6px; flex: none; }
+html.celular .serie-capa-temporada { display: block; }
+
+/* NANDRoll — episódios novos, digitar, "+1" e agenda */
+.selo-serie.novo { background: var(--gradiente-acento); color: #fff; }
+button.serie-conta { background: none; border: 0; padding: 4px 6px; margin: -4px -6px; border-radius: 8px; cursor: text; text-align: left; font-family: inherit; transition: background .15s ease-out; }
+button.serie-conta:hover { background: var(--superficie-2); }
+button.serie-conta:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--anel-foco); }
+.serie-digitar { width: 9ch; min-height: 44px; padding: 0 12px; border-radius: 10px; background: var(--superficie-2); border: 1px solid var(--borda-controle); color: var(--texto); font: 700 18px/1 var(--ui); font-variant-numeric: tabular-nums; }
+.serie-digitar:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--anel-foco); }
+.serie-falta { margin: 0; font-size: 13px; color: var(--texto-2); }
+.serie-novos { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; color: var(--acento-texto); }
+.serie-novos .ico { width: 16px; height: 16px; flex: none; }
+.acao.acao-ep { font: 700 13px/1 var(--ui); font-variant-numeric: tabular-nums; }
+.marca-anilist { font-weight: 700; color: var(--texto-2); margin-right: 6px; }
+.chip-agenda { display: inline-flex; align-items: center; gap: 8px; }
+.chip-agenda .ico { width: 15px; height: 15px; }
+.nandroll-importar { margin-top: 12px; }
+.agenda { display: flex; flex-direction: column; gap: 8px; }
+.agenda-dia { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--texto-2); }
+.agenda-dia:first-child { margin-top: 0; }
+.agenda-dia-novos { color: var(--acento-texto); }
+.agenda-dia .ico { width: 15px; height: 15px; }
+.agenda-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.agenda-item { display: flex; align-items: center; gap: 12px; }
+.agenda-abrir { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 8px; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background .15s ease-out; }
+.agenda-abrir:hover { background: var(--superficie-2); }
+.agenda-abrir:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--anel-foco); }
+.agenda-capa { width: 32px; aspect-ratio: 2 / 3; border-radius: 4px; overflow: hidden; background: var(--superficie-2); flex: none; }
+.agenda-capa img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.agenda-texto { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.agenda-texto b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agenda-texto small { font-size: 13px; color: var(--texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agenda-hora { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--texto-2); padding-right: 8px; }
+.agenda-mais { min-height: 40px; padding: 0 14px; font-size: 13px; flex: none; }
+/* Celular: a fileira "Continue assistindo" */
+.cel-continuar { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.cel-ep-mais { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 40px; border: 0; border-radius: 8px; background: var(--superficie-2); color: var(--texto); font: 600 13px/1 var(--ui); font-variant-numeric: tabular-nums; cursor: pointer; }
+.cel-ep-mais:active { transform: scale(.97); }
+.cel-ep-mais.novo { background: var(--gradiente-acento); color: #fff; }
+.cel-ep-mais .ico { width: 14px; height: 14px; }
+.cel-capa .selo-serie { left: 6px; bottom: 6px; }
+.cel-continuar { scroll-snap-align: start; }
+.nandroll-opcoes { flex-direction: column; align-items: flex-start; gap: 10px; }
+
+/* NANDRoll — grade de episódios e filmes na ordem */
+.serie-grade-abrir { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; font-size: 13px; }
+.serie-grade-abrir .ico { width: 15px; height: 15px; }
+.serie-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; max-height: 232px; overflow-y: auto; padding: 2px; }
+.serie-grade .ep { min-height: 44px; border-radius: 10px; border: 1px solid var(--divisor); background: transparent; color: var(--texto-2); font: 600 14px/1 var(--ui); font-variant-numeric: tabular-nums; cursor: pointer; transition: background .15s ease-out, border-color .15s ease-out, color .15s ease-out; }
+.serie-grade .ep:hover { border-color: var(--borda-controle); color: var(--texto); }
+.serie-grade .ep:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--anel-foco); }
+.serie-grade .ep.visto { background: var(--gradiente-acento); border-color: transparent; color: #fff; }
+.serie-grade .ep.futuro { border-style: dashed; opacity: .45; cursor: default; }
+.chip-temporada .ico { margin-right: 2px; }
+span.serie-conta { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; color: var(--texto); }
+span.serie-conta .ico { width: 16px; height: 16px; }

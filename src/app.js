@@ -126,7 +126,8 @@ function capaHTML(f, { tamanho = 'normal' } = {}) {
   const img = src
     ? `<img src="${esc(src)}" alt="" loading="${tamanho === 'grande' ? 'eager' : 'lazy'}" decoding="async" data-remoto="${esc(f.poster)}" data-titulo="${esc(f.titulo)}" data-ano="${esc(f.ano)}">`
     : vazia;
-  return `<div class="capa">${img}</div>`;
+  // NANDRoll: séries em andamento mostram o progresso na capa.
+  return `<div class="capa">${img}${seloSerieHTML(f)}</div>`;
 }
 
 // Se a capa local sumir, tenta a URL original; se também falhar, mostra o quadro com o título.
@@ -200,6 +201,7 @@ function filtrados() {
     if (estado.filtro === 'nao-vistos' && f.visto) return false;
     if (estado.filtro === 'vistos' && !f.visto) return false;
     if (estado.filtro === 'favoritos' && !f.favorito) return false;
+    if (!passaFiltroAnime(f, estado.filtro)) return false; // NANDRoll: 'animes' e 'assistindo'
     if (diretores.length && !diretoresDe(f.diretor).some((d) => diretores.includes(d))) return false;
     if (estado.pais && !paisesDe(f).includes(estado.pais)) return false;
     if (estado.lista && !listasDe(f).includes(estado.lista)) return false;
@@ -319,7 +321,7 @@ function cartaoHTML(f) {
         <button class="acao${f.favorito ? ' fav-on' : ''}" data-acao="favorito" title="${tituloFav}" aria-label="${tituloFav}">${icone('Star', { preenchido: f.favorito })}</button>
         <button class="acao${hojeNaLista ? ' hoje-on' : ''}" data-acao="hoje" title="${tituloHoje(hojeNaLista)}" aria-label="${tituloHoje(hojeNaLista)}">${icone('CalendarClock')}</button>
         <button class="acao acao-stremio" data-acao="stremio" title="Abrir no Stremio" aria-label="Abrir no Stremio">${icone('Play')}</button>
-        <button class="acao acao-lb" data-acao="letterboxd" title="Abrir no Letterboxd" aria-label="Abrir no Letterboxd">${LB_PONTOS}</button>
+        ${ehSerie(f) ? acaoEpisodioHTML(f) : `<button class="acao acao-lb" data-acao="letterboxd" title="Abrir no Letterboxd" aria-label="Abrir no Letterboxd">${LB_PONTOS}</button>`}
       </div>
     </article>`;
 }
@@ -335,7 +337,7 @@ const cacheFileira = new Map();
 function assinatura(f) {
   return [f.titulo, f.ano, f.diretor, f.capaLocal, f.poster].join('\u0001');
 }
-const estadoCartao = (f) => `${Boolean(f.visto)}|${Boolean(f.favorito)}|${naWatchlist(f.id)}`;
+const estadoCartao = (f) => `${Boolean(f.visto)}|${Boolean(f.favorito)}|${naWatchlist(f.id)}|${estadoCartaoAnime(f)}`; // NANDRoll: progresso das séries
 
 function atualizarCartao(el, f) {
   el.classList.toggle('visto', Boolean(f.visto));
@@ -362,6 +364,7 @@ function atualizarCartao(el, f) {
   botaoHoje.classList.toggle('hoje-on', hojeNaLista);
   botaoHoje.title = tituloHoje(hojeNaLista);
   botaoHoje.setAttribute('aria-label', tituloHoje(hojeNaLista));
+  atualizarCartaoAnime(el, f); // NANDRoll
 }
 
 function elementoCartao(f, cache = cacheCartoes) {
@@ -464,6 +467,7 @@ function agendarRender() {
 }
 
 function render() {
+  aplicarNandroll(); // NANDRoll: chips de anime só com ele ligado
   const lista = $('#lista');
   const vazio = estado.filmes.length === 0;
   const vazioAntes = !$('#vazio').hidden;
@@ -617,7 +621,8 @@ function aposMudarDia(id) {
 async function salvarVistoEm(f, dias) {
   f.vistoEm = [...dias].sort();
   aposMudarDia(f.id);
-  await api.atualizarFilme(f.id, { vistoEm: f.vistoEm, visto: f.visto });
+  const novo = await api.atualizarFilme(f.id, { vistoEm: f.vistoEm, visto: f.visto });
+  if (novo && ehSerie(f)) { Object.assign(f, novo); aposMudarDia(f.id); } // NANDRoll
 }
 
 // "Vi de novo hoje": mais uma data para um filme que já foi visto antes.
@@ -650,10 +655,14 @@ async function alternar(id, campo, valor) {
     mudancas.vistoEm = f.vistoEm;
   }
   aposMudarDia(id);
-  await api.atualizarFilme(id, mudancas);
+  const novo = await api.atualizarFilme(id, mudancas);
+  // NANDRoll: numa série, o ✓ muda também o status e os episódios.
+  if (novo && ehSerie(f)) { Object.assign(f, novo); aposMudarDia(id); }
 }
 
-async function abrirStremio(id) {
+async function abrirStremio(id, { stremio = false } = {}) {
+  // NANDRoll: o Assistir de um anime abre a plataforma oficial, se houver.
+  if (!stremio && await assistirAnime(id)) return;
   const r = await api.abrirStremio(id);
   if (r.semApp) {
     const escolha = await perguntar({
@@ -772,6 +781,7 @@ function renderPainel() {
     carregarTrailerPainel(f);
   }
 
+  const serie = ehSerie(f); // NANDRoll: séries não têm Letterboxd nem busca de capa no TMDB
   const sinopse = f.info && f.info.sinopse ? f.info.sinopse : '';
   const elenco = f.info && f.info.elenco ? f.info.elenco.split(',').slice(0, 4).map((n) => n.trim()).join(', ') : '';
   const campo = (nome, rotulo, extra = '') =>
@@ -780,6 +790,7 @@ function renderPainel() {
     <div class="painel-corpo">
       <div>
         <p class="painel-meta" data-info="meta-painel">${painelMetaHTML(f)}</p>
+        ${animeNoPainelHTML(f)}
         <div class="minha-nota-linha"><b>Sua nota</b>${estrelasHTML(f)}</div>
         <div class="painel-listas">${listasDoFilmeHTML(f)}</div>
         <div class="painel-vistos">${vistosEmHTML(f)}</div>
@@ -788,7 +799,7 @@ function renderPainel() {
         <p class="painel-sinopse" data-info="sinopse-painel"${sinopse ? '' : ' hidden'}>${esc(sinopse)}</p>
       </div>
       <div class="painel-fichas">
-        ${f.diretor ? `<p class="painel-ficha"><b>Direção:</b> <span>${esc(f.diretor)}</span></p>` : ''}
+        ${f.diretor ? `<p class="painel-ficha"><b>${serie ? 'Estúdio' : 'Direção'}:</b> <span>${esc(f.diretor)}</span></p>` : ''}
         <p class="painel-ficha" data-info="pais-painel"${paisesDe(f).length ? '' : ' hidden'}><b>País:</b> <span>${paisesHTML(f)}</span></p>
         <p class="painel-ficha" data-info="elenco-painel"${elenco ? '' : ' hidden'}><b>Elenco:</b> <span>${esc(elenco)}</span></p>
         <p class="painel-ficha" data-info="generos-painel"${generos(f.info).length ? '' : ' hidden'}><b>Gêneros:</b> <span>${esc(generos(f.info).join(', '))}</span></p>
@@ -804,16 +815,16 @@ function renderPainel() {
     ${campo('titulo', 'Título')}
     ${campo('ano', 'Ano')}
     <div class="campo">
-      <label for="c-diretor">Diretor</label>
+      <label for="c-diretor">${serie ? 'Estúdio' : 'Diretor'}</label>
       <div class="campo-com-botoes">
         <input id="c-diretor" data-campo="diretor" value="${esc(f.diretor)}">
         <button class="btn btn-icone" data-p="mesmo-diretor" title="Ver os filmes deste diretor na sua lista" aria-label="Ver os filmes deste diretor na sua lista"${f.diretor ? '' : ' disabled'}>${icone('Search')}</button>
-        <button class="btn btn-icone" data-p="diretor-letterboxd" title="Ver todos os filmes do diretor no Letterboxd" aria-label="Ver todos os filmes do diretor no Letterboxd"${f.diretor ? '' : ' disabled'}>${LB_PONTOS}</button>
+        ${serie ? '' : `<button class="btn btn-icone" data-p="diretor-letterboxd" title="Ver todos os filmes do diretor no Letterboxd" aria-label="Ver todos os filmes do diretor no Letterboxd"${f.diretor ? '' : ' disabled'}>${LB_PONTOS}</button>`}
       </div>
     </div>
     <div class="campo"><label for="c-notas">Notas</label><textarea id="c-notas" data-campo="notas">${esc(f.notas)}</textarea></div>
-    ${campo('linkLetterboxd', 'Link do Letterboxd', 'placeholder="https://letterboxd.com/film/…" spellcheck="false"')}
-    <div class="campo">
+    ${serie ? '' : campo('linkLetterboxd', 'Link do Letterboxd', 'placeholder="https://letterboxd.com/film/…" spellcheck="false"')}
+    <div class="campo"${serie ? ' hidden' : ''}>
       <label for="c-buscaCapa">Busca da capa</label>
       <input id="c-buscaCapa" data-campo="buscaCapa" value="${esc(f.buscaCapa)}" placeholder="Título em inglês ou código tt…" spellcheck="false">
       <span class="ajuda">${f.imdbID ? `IMDb: ${esc(f.imdbID)}` : 'Sem código do IMDb ainda.'}${f.capaPersonalizada ? ' · Capa escolhida por você.' : f.tmdbEm && !f.tmdbId ? ' · Não encontrado no TMDB.' : ''}</span>
@@ -830,6 +841,7 @@ function renderPainel() {
     </div>`;
 
   carregarRelacionados(f);
+  ajustarCapaTemporada(f); // NANDRoll: numa temporada, a capa dela
 
   if (!f.info) {
     const id = f.id;
@@ -853,6 +865,7 @@ function renderPainel() {
 
 // "2001  1h 56m  [PG-13]", como a linha de dados do modal da Netflix.
 function painelMetaHTML(f) {
+  if (ehSerie(f)) return serieMetaHTML(f); // NANDRoll
   const info = f.info || {};
   const partes = [f.ano, duracaoDe(f)].filter(Boolean).map((p) => `<span>${esc(p)}</span>`);
   if (info.classificacao && info.classificacao !== 'N/A') partes.push(`<span class="classificacao">${esc(info.classificacao)}</span>`);
@@ -863,6 +876,9 @@ function atualizarBotoesPainel(f) {
   const visto = $('#painel .painel-botoes [data-p="visto"]');
   const fav = $('#painel .painel-botoes [data-p="favorito"]');
   if (!visto || !fav) return;
+  // NANDRoll: o Letterboxd só tem filmes.
+  const lb = $('#painel .painel-botoes [data-p="letterboxd"]');
+  if (lb) lb.hidden = ehSerie(f);
   const tituloVisto = f.visto ? 'Desmarcar visto' : 'Marcar como visto';
   const tituloFav = f.favorito ? 'Tirar dos favoritos' : 'Favoritar';
   visto.classList.toggle('visto-on', Boolean(f.visto));
@@ -1440,7 +1456,7 @@ function resultadosHTML(itens, atualTmdb) {
   return itens.map((r, i) => `
     <button class="resultado${r.tmdbId && String(r.tmdbId) === String(atualTmdb) ? ' atual' : ''}" data-i="${i}">
       <div class="capa">${r.poster ? `<img src="${esc(r.poster)}" alt="" loading="lazy" data-titulo="${esc(r.titulo)}" data-ano="${esc(r.ano)}">` : `<div class="capa-vazia"><strong>${esc(r.titulo)}</strong></div>`}</div>
-      <strong>${esc(r.titulo)}</strong><span>${esc(r.ano)}${r.imdbID ? ` · ${esc(r.imdbID)}` : ''}</span>
+      <strong>${esc(r.titulo)}</strong><span>${esc(r.ano)}${r.imdbID ? ` · ${esc(r.imdbID)}` : ''}${r.detalhe ? `${r.ano ? ' · ' : ''}${esc(r.detalhe)}` : ''}</span>
     </button>`).join('');
 }
 
@@ -1450,7 +1466,7 @@ function mensagemErroTmdb(erro) {
 }
 
 // Caixa de busca no TMDB usada por "Trocar capa" e "Adicionar".
-function montarBuscaTmdb({ termoInicial, atualTmdb, aoEscolher }) {
+function montarBuscaTmdb({ termoInicial, atualTmdb, aoEscolher, fonte = () => 'filme' }) {
   const input = $('#busca-tmdb', modal);
   const area = $('#resultados-tmdb', modal);
   let itens = [];
@@ -1458,18 +1474,21 @@ function montarBuscaTmdb({ termoInicial, atualTmdb, aoEscolher }) {
 
   async function buscar() {
     const termo = input.value.trim();
-    if (!termo) { area.innerHTML = ''; return; }
-    if (!estado.config.tmdbKey) { area.innerHTML = '<p class="mensagem">Coloque a chave do TMDB em Configurações para buscar.</p>'; return; }
+    // NANDRoll: animes são buscados na AniList (sem chave); sem termo, o que está em alta.
+    const anime = fonte() === 'anime';
+    if (!termo && !anime) { area.innerHTML = ''; return; }
+    if (!anime && !estado.config.tmdbKey) { geracao++; area.innerHTML = '<p class="mensagem">Coloque a chave do TMDB em Configurações para buscar.</p>'; return; }
     const minha = ++geracao;
-    area.innerHTML = '<p class="mensagem carregando">Buscando no TMDB</p>';
-    const r = await api.pesquisarTmdb(termo);
+    area.innerHTML = `<p class="mensagem carregando">Buscando ${anime ? 'na AniList' : 'no TMDB'}</p>`;
+    const r = anime ? await api.pesquisarAnilist(termo) : await api.pesquisarTmdb(termo);
     if (minha !== geracao || !modal.open) return;
-    if (!r.ok) { area.innerHTML = `<p class="mensagem">${esc(mensagemErroTmdb(r.erro))}</p>`; return; }
+    if (!r.ok) { area.innerHTML = `<p class="mensagem">${esc(anime ? 'Sem conexão com a AniList. Verifique a internet e tente de novo.' : mensagemErroTmdb(r.erro))}</p>`; return; }
     itens = r.dados;
     area.innerHTML = itens.length
-      ? `<div class="resultados">${resultadosHTML(itens, atualTmdb)}</div>`
-      : '<p class="mensagem">Nada encontrado. Tente o título original ou o código do IMDb (tt…).</p>';
+      ? `${anime && !termo ? '<h3 class="trocar-subtitulo">Em alta nesta temporada</h3>' : ''}<div class="resultados">${resultadosHTML(itens, atualTmdb)}</div>`
+      : `<p class="mensagem">${anime ? 'Nada encontrado. Tente o título em inglês ou em japonês (romaji).' : 'Nada encontrado. Tente o título original ou o código do IMDb (tt…).'}</p>`;
   }
+  ligarFontesBusca(modal, () => { input.placeholder = fonte() === 'anime' ? 'Digite o nome do anime e tecle Enter' : 'Digite o título e tecle Enter'; itens = []; area.innerHTML = ''; buscar(); input.focus(); });
 
   input.value = termoInicial || '';
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); buscar(); } });
@@ -1480,13 +1499,14 @@ function montarBuscaTmdb({ termoInicial, atualTmdb, aoEscolher }) {
   });
   input.focus();
   input.select();
-  if (termoInicial) buscar();
+  if (termoInicial || fonte() === 'anime') buscar();
 }
 
 // Duas partes: as outras capas deste mesmo filme no TMDB (idioma original
 // primeiro) e, embaixo, a busca para quando o filme achado é o errado.
 async function abrirTrocarCapa(id) {
   const f = porId(id);
+  if (ehSerie(f)) { abrirTrocarCapaSerie(id); return; } // NANDRoll
   const trocar = async (escolha, botao, mensagem) => {
     botao.disabled = true;
     botao.classList.add('carregando');
@@ -1533,10 +1553,11 @@ async function abrirTrocarCapa(id) {
 }
 
 async function abrirAdicionar(termo = '') {
-  abrirModal(`${cabecalhoModal('Adicionar filme')}
+  abrirModal(`${cabecalhoModal(nandrollLigado() ? 'Adicionar à lista' : 'Adicionar filme')}
     <div class="modal-corpo">
-      <div class="busca-linha"><input id="busca-tmdb" placeholder="Digite o título e tecle Enter" spellcheck="false"><button class="btn btn-laranja" id="btn-busca-tmdb">Buscar</button></div>
-      <div id="resultados-tmdb"><p class="mensagem">Busque o filme no TMDB e clique no resultado certo.</p></div>
+      ${fontesBuscaHTML()}
+      <div class="busca-linha"><input id="busca-tmdb" placeholder="${fonteAtual() === 'anime' ? 'Digite o nome do anime e tecle Enter' : 'Digite o título e tecle Enter'}" spellcheck="false"><button class="btn btn-laranja" id="btn-busca-tmdb">Buscar</button></div>
+      <div id="resultados-tmdb"><p class="mensagem">${nandrollLigado() ? 'Busque e clique no resultado certo. Filmes vêm do TMDB; animes, da AniList.' : 'Busque o filme no TMDB e clique no resultado certo.'}</p></div>
     </div>
     <div class="modal-rodape"><button class="btn btn-fantasma" id="btn-sem-buscar">Adicionar sem buscar</button></div>`);
 
@@ -1570,8 +1591,16 @@ async function abrirAdicionar(termo = '') {
 
   montarBuscaTmdb({
     termoInicial: termo,
+    fonte: fonteAtual,
     aoEscolher: async (escolha, botao) => {
       botao.classList.add('carregando');
+      // NANDRoll: um resultado da AniList. Série entra com episódios; filme de
+      // anime entra como filme (o TMDB completa) e leva junto onde assistir.
+      if (escolha.anilistId) {
+        await adicionar({ titulo: escolha.titulo, ano: escolha.ano, poster: escolha.poster, anilistId: escolha.anilistId, filme: escolha.filme, tipo: escolha.filme ? undefined : 'serie' });
+        botao.classList.remove('carregando');
+        return;
+      }
       const r = await api.detalhesTmdb(escolha.tmdbId);
       const d = r.ok && r.dados ? r.dados : null;
       await adicionar({
@@ -1793,6 +1822,7 @@ function metaCurtaHTML(f) {
 function notasHTML(info) {
   if (!info) return '';
   const chips = [];
+  if (info.anilist) chips.push(`<span class="nota-chip" title="Nota média na AniList"><span class="marca-anilist">AniList</span>${esc(info.anilist)}%</span>`); // NANDRoll
   if (info.imdb) chips.push(`<span class="nota-chip" title="Nota no IMDb"><span class="marca-imdb">IMDb</span>${esc(info.imdb)}</span>`);
   if (info.metascore) {
     const n = Number(info.metascore);
@@ -2458,6 +2488,7 @@ function abrirConfiguracoes() {
           <label><input type="radio" name="stremio" value="web" ${c.stremio === 'web' ? 'checked' : ''}> Stremio Web</label>
         </div>
       </div>
+${nandrollConfigHTML()}
       <div class="secao">
         <h3>Capas e informações</h3>
         <div class="linha-botoes">
@@ -2514,6 +2545,7 @@ function abrirConfiguracoes() {
   $('#cfg-salvar-chave', modal).onclick = salvarDoCampo('omdb', '#cfg-chave');
   $('#cfg-como-tmdb', modal).onclick = pedirChaveTmdb;
   $('#cfg-como-chave', modal).onclick = pedirChaveOmdb;
+  ligarNandrollConfig(modal); // NANDRoll
   $$('input[name="stremio"]', modal).forEach((r) => {
     r.onchange = async () => { estado.config = await api.salvarConfig({ stremio: r.value }); };
   });
@@ -2888,6 +2920,11 @@ api.aoMudarFilme((novo) => {
   const logoAntes = srcLogo(f);
   for (const k of ['imdbID', 'tmdbId', 'tmdbEm', 'poster', 'capaLocal', 'capaNaoEncontrada', 'capaPersonalizada', 'logo', 'logoLocal', 'info', 'duracao', 'duracaoDe', 'trailerId', 'trailerManual']) f[k] = novo[k];
   if (!f.diretor && novo.diretor) f.diretor = novo.diretor;
+  // NANDRoll: o que a AniList trouxe (episódios, próximo episódio, onde assistir).
+  const anilistAntes = f.anilistEm;
+  for (const k of ['tipo', 'anime', 'anilistId', 'malId', 'formato', 'anilistEm', 'estudio', 'episodios', 'exibicao', 'proximoEpisodio', 'ondeAssistir', 'temporadas', 'episodiosVistos', 'status', 'capaTmdb', 'tmdbTvId', 'tmdbTvEm']) if (k in novo) f[k] = novo[k];
+  if (novo.anilistEm !== anilistAntes) { if (novo.titulo) f.titulo = novo.titulo; if (novo.ano) f.ano = novo.ano; if (novo.diretor) f.diretor = novo.diretor; }
+  if (novo.anilistEm !== anilistAntes && estado.painelId === f.id && !$('#painel-resto :focus')) { renderPainel(); $('#painel .destaque-titulo h2')?.replaceWith(htmlParaNo(tituloHTML(f))); }
   // A logo chegou (ou mudou): troca o título em texto por ela.
   if (srcLogo(f) !== logoAntes) {
     if (filmeNoDestaque() === f.id) $('#destaque .destaque-titulo h2')?.replaceWith(htmlParaNo(tituloHTML(f)));
@@ -4700,3 +4737,6 @@ $('#btn-estatisticas').addEventListener('click', () => abrirEstatisticas());
   if (!estado.config.tmdbKey) pedirChaveTmdb();
   else if (estado.filmes.length) buscarCapas({ automatica: true });
 })();
+
+// NANDRoll: liga o bloco de anime do painel (episódios, status, onde assistir).
+ligarAnimeNoPainel();
