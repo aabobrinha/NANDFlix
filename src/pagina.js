@@ -762,7 +762,7 @@ function cartaoPaginaHTML(f) {
 
 // Filmes vistos que ainda não têm página: do visto mais recente para o mais antigo.
 const ultimoVisto = (f) => (f.vistoEm || []).slice().sort().pop() || '';
-const filmesSemPagina = () => estado.filmes.filter((f) => f.visto && !temPagina(f))
+const filmesSemPagina = () => itensDaPlataforma().filter((f) => f.visto && !temPagina(f)) // Plataformas: cada uma vê as suas páginas (o hub, todas)
   .sort((a, b) => ultimoVisto(b).localeCompare(ultimoVisto(a)) || a.titulo.localeCompare(b.titulo, 'pt'));
 
 function cartaoPendenteHTML(f) {
@@ -798,7 +798,7 @@ function atualizarSetasPendentes() {
 function renderListaPaginas() {
   const area = $('#paginas-lista');
   if (!area) return;
-  const todas = estado.filmes.filter(temPagina)
+  const todas = itensDaPlataforma().filter(temPagina)
     .sort((a, b) => String(b.paginaEm || '').localeCompare(String(a.paginaEm || '')));
   const palavras = todas.reduce((n, f) => n + palavrasDaPagina(f.pagina), 0);
   $('#pgs-resumo').innerHTML = todas.length
@@ -810,7 +810,7 @@ function renderListaPaginas() {
   const fileira = pendentes.length ? fileiraPendentesHTML(pendentes) : '';
 
   if (!todas.length) {
-    area.innerHTML = `<p class="cal-vazio pgs-vazio">Você ainda não escreveu sobre nenhum filme.${pendentes.length ? ' Escolha um dos vistos abaixo para começar a primeira página.' : ' Marque um filme como visto e use “Escrever sobre o filme” nos detalhes.'}</p>` + fileira;
+    area.innerHTML = `<p class="cal-vazio pgs-vazio">${vocTexto('Você ainda não escreveu sobre nenhum {item}.')}${pendentes.length ? ' Escolha um dos vistos abaixo para começar a primeira página.' : vocTexto(' Marque {um} como visto e use “Escrever” nos detalhes.')}</p>` + fileira;
     atualizarSetasPendentes();
     return;
   }
