@@ -54,6 +54,8 @@ contextBridge.exposeInMainWorld('api', {
   steamBiblioteca: chamar('steam:biblioteca'),
   abrirSteam: chamar('steam:abrir'),
   aoBibliotecaSteam: ouvir('steam:biblioteca'),
+  imagensSteam: chamar('steam:imagens'),
+  hltbJogo: chamar('jogos:hltb'),
   extrasAgora: chamar('extras:agora'),
   provedoresTmdb: chamar('tmdb:provedores'),
   listaPremios: chamar('premios:lista'),

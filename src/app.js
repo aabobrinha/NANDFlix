@@ -783,6 +783,7 @@ function fecharPainel() {
 function renderPainel() {
   const f = porId(estado.painelId);
   if (!f) { fecharPainel(); return; }
+  if (ehJogo(f)) { renderPainelJogo(f); return; } // nandplay: a página do jogo (jogos-painel.js), da lista ou de fora
   if (f.externo) { renderPainelExterno(f); return; }
   $('#painel').setAttribute('aria-label', `Detalhes ${vocDe(f, 'de')}`); // o do próprio item: um anime é "anime" até no nandhub
   // Ao marcar visto/favorito o painel é redesenhado; o foco volta ao mesmo botão.
@@ -1752,6 +1753,8 @@ window.addEventListener('message', (e) => {
 // quando o mouse chega na capa, antes de abrir.
 const buscasTrailer = new Map();
 function trailerDe(id) {
+  const jogo = porId(id);
+  if (ehJogo(jogo)) return Promise.resolve(jogo.trailer || null); // nandplay: o trailer vem da IGDB
   const ext = filmesExternos.get(id);
   if (ext) return Promise.resolve(ext.trailerId && ext.trailerId !== 'nenhum' ? ext.trailerId : null);
   if (!buscasTrailer.has(id)) {
@@ -1808,7 +1811,7 @@ async function abrirFoco(id, tempo = 0) {
     <div class="foco-cabecalho">
       <h2>${esc(f.titulo)}${f.ano ? ` <span style="color:var(--texto-3);font-weight:600">${esc(f.ano)}</span>` : ''}</h2>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-assistir" data-f="stremio">${icone('Play')} Assistir</button>
+        ${ehJogo(f) ? botaoSteamFocoHTML(f) : `<button class="btn btn-assistir" data-f="stremio">${icone('Play')} Assistir</button>`}
         <button class="btn" data-f="fechar" title="Fechar (Esc)">${icone('X')} Fechar</button>
       </div>
     </div>
@@ -1839,6 +1842,7 @@ foco.addEventListener('click', (e) => {
   if (!b) return;
   if (b.dataset.f === 'fechar') fecharFoco();
   if (b.dataset.f === 'stremio') abrirStremio(foco.dataset.id);
+  if (b.dataset.f === 'steam') usarBotaoSteam(porId(foco.dataset.id)); // nandplay
 });
 
 // Botão de tela cheia do painel: continua de onde o trailer de fundo estava.

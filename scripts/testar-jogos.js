@@ -384,3 +384,146 @@ test('fila: no máximo ~4 pedidos por segundo', async () => {
   // Quaisquer 5 pedidos seguidos ocupam pelo menos ~1 segundo.
   assert.ok(momentos[4] - momentos[0] >= 1000 - 30, `5 pedidos em ${momentos[4] - momentos[0]} ms`);
 });
+
+// ---------- Lote 4: página do jogo (botão da Steam, HowLongToBeat, status/tags) ----------
+
+const vm = require('vm');
+const hltb = require('../lib/hltb');
+const jogoUsuario = require('../lib/jogo-usuario');
+
+// As funções puras de src/jogos-painel.js, carregadas sem DOM (o arquivo só liga
+// os eventos quando há documento).
+function painelJogo() {
+  const ctx = vm.createContext({ window: {}, console });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'jogos-painel.js'), 'utf8'), ctx, { filename: 'jogos-painel.js' });
+  return ctx;
+}
+// Objeto do vm → objeto daqui (deepStrictEqual compara o protótipo).
+const daqui = (o) => JSON.parse(JSON.stringify(o));
+
+test('botão da Steam: mesmo resultado de acaoSteam em todas as combinações', () => {
+  const p = painelJogo();
+  const f = { steam: 367520, titulo: 'Hollow Knight' };
+  const locais = [{ steamNoPc: false, instalados: [] }, { steamNoPc: true, instalados: [] }, { steamNoPc: true, instalados: [{ appid: 367520, completo: true }] }];
+  const bibs = [null, { jogos: [] }, { jogos: [{ appid: 367520, minutos: 2530 }] }];
+  for (const local of locais) for (const biblioteca of bibs) for (const celular of [false, true]) {
+    const e = p.estadoBotaoSteam(f, { local, biblioteca, celular });
+    const esperado = steam.acaoSteam(367520, { instalados: local && local.instalados, biblioteca: biblioteca && biblioteca.jogos, steamNoPc: local ? local.steamNoPc : true, celular });
+    // acaoSteam chama de 'loja' a loja na web (com url https): aqui é 'web'.
+    const acao = esperado.url.startsWith('https://') ? 'web' : esperado.acao;
+    assert.strictEqual(e.acao, acao, JSON.stringify({ local, biblioteca, celular }));
+    assert.strictEqual(e.tipo, 'steam');
+    assert.strictEqual(e.appid, 367520);
+  }
+  // Antes de ler a pasta da Steam: só "não tem" é certo; o resto fica com a Steam.
+  assert.strictEqual(p.estadoBotaoSteam(f, { local: null, biblioteca: { jogos: [] } }).acao, 'loja');
+  assert.strictEqual(p.estadoBotaoSteam(f, { local: null, biblioteca: { jogos: [{ appid: 367520 }] } }).acao, 'abrir');
+  assert.strictEqual(p.estadoBotaoSteam(f, { local: null }).acao, 'abrir');
+  assert.strictEqual(p.estadoBotaoSteam(f, { local: null, celular: true }).acao, 'web');
+});
+
+test('botão da Steam: rótulos, biblioteca e horas', () => {
+  const p = painelJogo();
+  const f = { steam: '1145360', titulo: 'Hades' };
+  const pc = { steamNoPc: true, instalados: [] };
+  assert.strictEqual(p.estadoBotaoSteam(f, { local: { steamNoPc: true, instalados: [1145360] } }).rotulo, 'Jogar');
+  assert.strictEqual(p.estadoBotaoSteam(f, { local: pc, biblioteca: { jogos: [{ appid: 1145360, minutos: 600 }] } }).rotulo, 'Instalar');
+  assert.strictEqual(p.estadoBotaoSteam(f, { local: pc, biblioteca: { jogos: [{ appid: 1, minutos: 5 }] } }).rotulo, 'Ver na loja');
+  assert.strictEqual(p.estadoBotaoSteam(f, { local: pc, biblioteca: null }).rotulo, 'Abrir na Steam');
+  assert.strictEqual(p.estadoBotaoSteam(f, { local: pc, celular: true }).rotulo, 'Ver na loja da Steam');
+  assert.strictEqual(p.estadoBotaoSteam(f, { local: { steamNoPc: false } }).acao, 'web');
+  // Biblioteca que não veio (erro, sem conta) não vira "não tem".
+  assert.strictEqual(p.estadoBotaoSteam(f, { local: pc, biblioteca: { erro: 1 } }).acao, 'abrir');
+  // A linha embaixo do botão.
+  const inst = p.estadoBotaoSteam(f, { local: { steamNoPc: true, instalados: [{ appid: 1145360 }] }, biblioteca: { jogos: [{ appid: 1145360, minutos: 2530 }] } });
+  assert.strictEqual(p.linhaSteamJogo(inst), 'Instalado · 42 h jogadas');
+  assert.strictEqual(p.linhaSteamJogo(p.estadoBotaoSteam(f, { local: pc, biblioteca: { jogos: [{ appid: 1145360, minutos: 30 }] } })), 'Na sua biblioteca · menos de 1 h jogadas');
+  assert.strictEqual(p.linhaSteamJogo(p.estadoBotaoSteam(f, { local: pc, biblioteca: { jogos: [{ appid: 1145360, minutos: 0 }] } })), 'Na sua biblioteca');
+  assert.strictEqual(p.linhaSteamJogo(p.estadoBotaoSteam(f, { local: pc, biblioteca: { jogos: [] } })), 'Ainda não está na sua biblioteca da Steam');
+  assert.strictEqual(p.linhaSteamJogo(p.estadoBotaoSteam(f, { local: pc })), '');
+});
+
+test('botão da Steam: sem appid vira a loja principal, o site ou a busca', () => {
+  const p = painelJogo();
+  const gog = p.estadoBotaoSteam({ titulo: 'X', steam: null, lojas: [{ loja: 'gog', url: 'https://www.gog.com/game/x' }, { loja: 'epic', url: 'https://store.epicgames.com/x' }] });
+  assert.deepStrictEqual([gog.tipo, gog.url, gog.rotulo], ['link', 'https://www.gog.com/game/x', 'Ver na GOG']);
+  // appid inválido não é usado; link que não é https é ignorado.
+  const site = p.estadoBotaoSteam({ titulo: 'X', steam: '1;calc', lojas: [{ loja: 'gog', url: 'javascript:alert(1)' }], site: 'https://x.com/' });
+  assert.deepStrictEqual([site.tipo, site.url], ['link', 'https://x.com/']);
+  const busca = p.estadoBotaoSteam({ titulo: 'Zelda & Link' });
+  assert.strictEqual(busca.url, 'https://store.steampowered.com/search/?term=Zelda%20%26%20Link');
+  // Com appid, a Steam vem primeiro nas lojas (mesmo se não estiver em `lojas`).
+  assert.deepStrictEqual(daqui(p.lojasDoJogo({ steam: 504230, lojas: [{ loja: 'epic', url: 'https://store.epicgames.com/c' }] }).map((l) => l.loja)), ['steam', 'epic']);
+});
+
+test('HowLongToBeat: tempos e link', () => {
+  const p = painelJogo();
+  assert.strictEqual(p.horasHltb(12.5), '12½ h');
+  assert.strictEqual(p.horasHltb(0.5), '½ h');
+  assert.strictEqual(p.horasHltb(40), '40 h');
+  assert.strictEqual(p.horasHltb(null), '');
+  assert.deepStrictEqual(daqui(p.temposHltb({ tempoZerarRapido: 20, tempoZerar: 30, tempoZerarCompleto: 60 })), { historia: 20, extras: 30, cem: 60 });
+  // tempoZerar que caiu para o rápido não aparece duas vezes.
+  assert.deepStrictEqual(daqui(p.temposHltb({ tempoZerarRapido: 20, tempoZerar: 20 })), { historia: 20, extras: null, cem: null });
+  assert.strictEqual(p.linkHltbJogo({ hltb: 62941, titulo: 'Hades' }), 'https://howlongtobeat.com/game/62941');
+  assert.strictEqual(p.linkHltbJogo({ hltb: '12x', titulo: 'Hades II' }), 'https://howlongtobeat.com/?q=Hades%20II');
+  assert.strictEqual(hltb.linkOuBuscaHltb({ hltb: 62941 }), p.linkHltbJogo({ hltb: 62941 }));
+});
+
+test('Wikidata: a consulta do id do HowLongToBeat', () => {
+  const q = hltb.consultaWikidata({ igdbSlug: 'hollow-knight', steam: 367520 });
+  assert.match(q, /wdt:P5794 "hollow-knight"/);
+  assert.match(q, /wdt:P1733 "367520"/);
+  assert.match(q, /wdt:P2816 \?hltb/);
+  assert.ok(q.indexOf('P5794') < q.indexOf('P1733'), 'o IGDB vem antes');
+  // Só um dos dois; nada que possa escapar da consulta.
+  assert.doesNotMatch(hltb.consultaWikidata({ igdbSlug: 'x" } ?a ?b ?c . { "', steam: 504230 }), /P5794/);
+  assert.strictEqual(hltb.consultaWikidata({ igdbSlug: '', steam: '1;2' }), '');
+  assert.strictEqual(hltb.consultaWikidata({}), '');
+  assert.ok(hltb.urlWikidata(q).startsWith('https://query.wikidata.org/sparql?format=json&query=SELECT'));
+  const r = { results: { bindings: [{ hltb: { value: 'abc' } }, { hltb: { value: '26286' }, ordem: { value: '1' } }] } };
+  assert.strictEqual(hltb.lerRespostaWikidata(r), 26286);
+  assert.strictEqual(hltb.lerRespostaWikidata({ results: { bindings: [] } }), null);
+  assert.strictEqual(hltb.lerRespostaWikidata(null), null);
+});
+
+test('Wikidata: acharHltb sem internet (fetch falso) e o cache', async () => {
+  const f = fetchFalso(() => resposta(200, { results: { bindings: [{ hltb: { value: '62941' } }] } }));
+  assert.strictEqual(await hltb.acharHltb({ igdbSlug: 'hades--1', steam: 1145360 }, { fetchFn: f, cabecalhos: { 'User-Agent': 'teste' } }), 62941);
+  assert.strictEqual(f.pedidos.length, 1);
+  assert.strictEqual(f.pedidos[0].headers['User-Agent'], 'teste');
+  // Sem slug nem appid: nem pergunta.
+  const f2 = fetchFalso(() => resposta(200, {}));
+  assert.strictEqual(await hltb.acharHltb({ titulo: 'x' }, { fetchFn: f2 }), null);
+  assert.strictEqual(f2.pedidos.length, 0);
+  await assert.rejects(hltb.acharHltb({ steam: 1 }, { fetchFn: fetchFalso(() => resposta(500, {})) }), { tipo: 'rede' });
+  const agora = Date.parse('2026-11-12T12:00:00Z');
+  const j = { igdbSlug: 'hades--1', steam: 1145360 };
+  const k = hltb.chaveCacheHltb(j);
+  assert.strictEqual(hltb.doCacheHltb({ [k]: { id: 62941, em: '2026-10-01T00:00:00Z' } }, j, agora), 62941);
+  assert.strictEqual(hltb.doCacheHltb({ [k]: { id: null, em: '2026-11-10T00:00:00Z' } }, j, agora), null);
+  assert.strictEqual(hltb.doCacheHltb({ [k]: { id: null, em: '2026-10-01T00:00:00Z' } }, j, agora), undefined, '"não tem" vence em 14 dias');
+  assert.strictEqual(hltb.doCacheHltb({}, j, agora), undefined);
+});
+
+test('jogo: status, zeradoEm, tags e hltb gravados só se válidos', () => {
+  const { camposDoJogo, limparTags } = jogoUsuario;
+  assert.deepStrictEqual(camposDoJogo({ status: 'zerado', zeradoEm: '2026-11-12', tags: [' jogar  nas férias ', 'Coop', 'coop', ''], hltb: '62941', titulo: 'x' }),
+    { status: 'zerado', zeradoEm: '2026-11-12', tags: ['jogar nas férias', 'Coop'], hltb: 62941 });
+  assert.deepStrictEqual(camposDoJogo({ status: 'completo', zeradoEm: '2026-02-30', tags: 'x', hltb: '1;2' }), {});
+  assert.deepStrictEqual(camposDoJogo({ zeradoEm: '', hltb: '' }), { zeradoEm: '', hltb: '' });
+  assert.strictEqual(limparTags(Array.from({ length: 50 }, (_, i) => `t${i}`)).length, 30);
+  assert.strictEqual(limparTags(['x'.repeat(80)])[0].length, 40);
+});
+
+test('página do jogo: status grava zeradoEm e tags sugeridas', () => {
+  const p = painelJogo();
+  assert.deepStrictEqual(daqui(p.mudancasDoStatusJogo({}, 'zerado', '2026-11-12')), { status: 'zerado', zeradoEm: '2026-11-12' });
+  assert.deepStrictEqual(daqui(p.mudancasDoStatusJogo({ zeradoEm: '2026-01-02' }, 'cem', '2026-11-12')), { status: 'cem' }, 'zerado → 100% mantém o dia');
+  assert.deepStrictEqual(daqui(p.mudancasDoStatusJogo({ zeradoEm: '2026-01-02' }, 'jogando', '2026-11-12')), { status: 'jogando', zeradoEm: '' });
+  assert.deepStrictEqual(daqui(p.mudancasDoStatusJogo({}, 'quero', 'x')), { status: 'quero' });
+  assert.strictEqual(p.mudancasDoStatusJogo({}, 'completo', 'x'), null);
+  const a = { id: 'a', tipo: 'jogo', tags: ['coop'] };
+  const lista = [a, { id: 'b', tipo: 'jogo', tags: ['Férias', 'coop'] }, { id: 'c', tipo: 'jogo', tags: ['férias', 'curto'] }, { id: 'd', tags: ['filme'] }];
+  assert.deepStrictEqual(daqui(p.sugestoesTagsJogo(a, lista)), ['Férias', 'curto']);
+});

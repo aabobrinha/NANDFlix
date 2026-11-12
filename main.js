@@ -13,6 +13,8 @@ const tmdb = require('./lib/tmdb');
 const anilist = require('./lib/anilist');
 const { Igdb } = require('./lib/igdb');
 const steam = require('./lib/steam');
+const hltb = require('./lib/hltb');
+const { camposDoJogo } = require('./lib/jogo-usuario');
 const { novoFilme, juntar, resumo, acharRepetido, mesmoFilme, ehSerie, passoSerie, definirSerie, alternarEpisodio, statusSerie, comDia, comEpisodiosDoDia, vistoSerie } = require('./lib/filmes');
 const letterboxd = require('./lib/letterboxd');
 const importar = require('./lib/importar');
@@ -489,6 +491,31 @@ ipcMain.handle('steam:abrir', async (_e, appid, acao) => {
   return { ok: true, url };
 });
 
+// As imagens certas da Steam (o fundo dos jogos novos fica num caminho com código), guardadas até fechar.
+const imagensSteamCache = new Map();
+ipcMain.handle('steam:imagens', (_e, appids) => chamar(async () => {
+  const ids = [...new Set([].concat(appids || []).map(steam.appidValido).filter(Boolean))];
+  const faltam = ids.filter((id) => !imagensSteamCache.has(id));
+  if (faltam.length) {
+    const r = await steam.imagensLoja(faltam);
+    for (const id of faltam) imagensSteamCache.set(id, r[id] || steam.imagensSteam(id));
+  }
+  return Object.fromEntries(ids.map((id) => [id, imagensSteamCache.get(id)]));
+}));
+
+// O id do HowLongToBeat pelo Wikidata (lib/hltb.js), com cache em disco.
+const ARQ_HLTB = path.join(PASTA, 'hltb-cache.json');
+ipcMain.handle('jogos:hltb', (_e, jogo) => chamar(async () => {
+  const j = { igdbSlug: jogo && jogo.igdbSlug, steam: jogo && jogo.steam };
+  const cache = armazem.lerJSON(ARQ_HLTB, {}) || {};
+  const guardado = hltb.doCacheHltb(cache, j);
+  if (guardado !== undefined) return guardado;
+  const id = await hltb.acharHltb(j, { cabecalhos: { 'User-Agent': `NANDFlix/${app.getVersion()} (app de catalogo pessoal)` } });
+  const chave = hltb.chaveCacheHltb(j);
+  if (chave !== '|') armazem.gravarJSON(ARQ_HLTB, { ...cache, [chave]: { id, em: new Date().toISOString() } });
+  return id;
+}));
+
 // O botão "Testar" das Configurações (nandplay): diz o que funcionou, sem devolver as chaves.
 ipcMain.handle('jogos:testar', async () => {
   const r = { igdb: null, steam: null };
@@ -837,6 +864,8 @@ ipcMain.handle('filme:atualizar', (_e, id, mudancas) => {
   for (const k of permitidas) if (k in mudancas) limpo[k] = mudancas[k];
   // Mudar a busca da capa faz o filme ser procurado de novo no TMDB por ela.
   const atual = filmes.find((f) => f.id === id);
+  // nandplay: status, tags, data em que zerou e id do HowLongToBeat (só em jogo).
+  if (atual && atual.tipo === 'jogo') Object.assign(limpo, camposDoJogo(mudancas));
   if (ehSerie(atual)) {
     delete limpo.buscaCapa; // a capa das séries vem da AniList
     // O ✓ numa série acompanha o status (completar marca todos os episódios).

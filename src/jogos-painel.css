@@ -1,0 +1,118 @@
+/* ---------- nandplay: a página do jogo (jogos-painel.js) ----------
+   O mesmo painel dos filmes; o que muda: o fundo é a arte do jogo (hero da
+   Steam ou arte da IGDB, sem desfoque), o botão principal é o da Steam, e o
+   corpo tem status/tags, "Onde jogar" e os tempos do HowLongToBeat. */
+
+/* Fundo: a imagem por cima da capa desfocada (que fica se a imagem não carregar);
+   o trailer, quando toca, entra por cima dos dois. */
+.painel-jogo .jogo-fundo-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center 30%;
+}
+.painel-jogo .titulo-logo img { max-height: clamp(70px, 11vw, 140px); max-width: min(440px, 60%); }
+
+/* O botão da Steam: o ícone de Jogar é cheio (como o ▶ Assistir); os outros, de traço. */
+.jogo-steam-btn .ico { fill: none; stroke: currentColor; }
+.jogo-steam-btn[data-acao="jogar"] .ico { fill: currentColor; stroke: none; }
+.jogo-steam-btn .steam-marca { width: 20px; height: 20px; --steam-marca-fundo: #1C8A4D; }
+.steam-marca { flex: none; }
+.jogo-adicionar { min-height: 48px; padding: 0 22px; font-size: 15px; }
+.jogo-steam-linha { margin: -8px 0 0; font: 500 13px/1.4 var(--ui); color: var(--texto-2); text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
+
+/* Corpo */
+.jogo-meta-tempo { display: inline-flex; align-items: center; gap: 6px; }
+.jogo-meta-tempo .ico { width: 15px; height: 15px; }
+.jogo-secao { margin: 22px 0 0; }
+.jogo-secao h3 { margin: 0 0 10px; font: 700 15px/1.2 var(--display); }
+
+/* Status, data em que zerou, tags */
+.jogo-usuario { display: flex; flex-direction: column; gap: 4px; margin: 0 0 6px; }
+.jogo-status-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 0 0 10px; }
+.jogo-status { margin-left: 0; }
+.jogo-zerado { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--acento-texto); }
+.jogo-zerado .ico { width: 16px; height: 16px; }
+.jogo-zerado input {
+  min-height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--divisor);
+  background: transparent; color: var(--texto); font: 500 13px var(--ui); color-scheme: dark;
+}
+.jogo-zerado input:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--anel-foco); }
+
+.jogo-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 6px; }
+.jogo-tags > b { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--texto-2); margin-right: 4px; }
+.jogo-tags > b .ico { width: 15px; height: 15px; }
+.jogo-tag {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 30px; padding: 0 4px 0 12px;
+  border-radius: 999px; background: rgba(var(--acento-rgb), .22); color: var(--acento-claro); font-size: 13px; font-weight: 500;
+}
+.jogo-tag button {
+  display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: inherit; cursor: pointer; opacity: .75;
+}
+.jogo-tag button:hover, .jogo-tag button:focus-visible { opacity: 1; background: rgba(255, 255, 255, .12); outline: none; }
+.jogo-tag button .ico { width: 14px; height: 14px; }
+.jogo-tag-nova {
+  min-width: 0; width: 220px; min-height: 32px; padding: 0 12px; border-radius: 999px;
+  border: 1px dashed var(--divisor); background: transparent; color: var(--texto); font: 500 13px var(--ui);
+}
+.jogo-tag-nova:focus { outline: none; border-style: solid; border-color: var(--anel-foco); }
+.jogo-tags-sugeridas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 12px; color: var(--texto-2); }
+.jogo-tag-sugerida {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 0 10px; border-radius: 999px;
+  border: 1px solid var(--divisor); background: transparent; color: var(--texto-2); font: 500 12px var(--ui); cursor: pointer;
+}
+.jogo-tag-sugerida:hover, .jogo-tag-sugerida:focus-visible { color: var(--texto); border-color: var(--borda-controle); outline: none; }
+.jogo-tag-sugerida .ico { width: 13px; height: 13px; }
+
+/* Fora da lista */
+.jogo-aviso-detalhes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; font-size: 13px; color: var(--texto-2); }
+.jogo-dev-aviso { display: flex; align-items: center; gap: 8px; margin: 28px 48px 0; font-size: 13px; color: var(--texto-2); }
+.jogo-dev-aviso .ico { width: 16px; height: 16px; flex: none; }
+
+/* Onde jogar: a Steam primeiro, maior e com a cor dela */
+.jogo-lojas { display: flex; flex-wrap: wrap; gap: 8px; }
+.jogo-loja {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px;
+  border-radius: 10px; border: 1px solid var(--divisor); background: transparent;
+  color: var(--texto); font: 500 13px var(--ui); cursor: pointer;
+  transition: border-color .15s ease-out, background-color .15s ease-out;
+}
+.jogo-loja:hover, .jogo-loja:focus-visible { border-color: var(--borda-controle); background: rgba(255, 255, 255, .04); outline: none; }
+.jogo-loja .ico { width: 15px; height: 15px; color: var(--texto-2); }
+.jogo-loja-steam {
+  min-height: 56px; padding: 0 18px 0 12px; gap: 12px; border-color: transparent;
+  background: linear-gradient(135deg, #1B2838 0%, #2A475E 100%); color: #FFFFFF;
+  box-shadow: inset 0 0 0 1px rgba(102, 192, 244, .35);
+}
+.jogo-loja-steam:hover, .jogo-loja-steam:focus-visible { background: linear-gradient(135deg, #22344A 0%, #31577A 100%); box-shadow: inset 0 0 0 1px rgba(102, 192, 244, .7); }
+.jogo-loja-steam .steam-marca { width: 30px; height: 30px; color: #FFFFFF; --steam-marca-fundo: #1E3246; }
+.jogo-loja-steam span { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.jogo-loja-steam b { font-size: 15px; font-weight: 700; }
+.jogo-loja-steam small { font-size: 12px; color: #A9C6DD; }
+.jogo-plataformas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.jogo-plataforma { padding: 4px 9px; border-radius: 6px; background: var(--superficie-2); font: 600 12px/1.2 var(--ui); color: var(--texto-2); }
+
+/* HowLongToBeat: três blocos como no site (azul, roxo, vermelho) */
+.hltb-tempos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-width: 520px; }
+.hltb-tempo {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 72px; padding: 10px 8px; border-radius: 10px; text-align: center; color: #FFFFFF;
+}
+.hltb-tempo span { font-size: 12px; font-weight: 600; opacity: .9; }
+.hltb-tempo b { font: 700 20px/1 var(--display); font-variant-numeric: tabular-nums; }
+.hltb-historia { background: linear-gradient(160deg, #2E78C2, #1F5A94); }
+.hltb-extras { background: linear-gradient(160deg, #6A55B8, #4B3A8C); }
+.hltb-cem { background: linear-gradient(160deg, #B9424C, #8C2F37); }
+.hltb-fonte { margin: 8px 0 6px; font-size: 12px; color: var(--texto-2); }
+.jogo-hltb .btn { padding: 0 14px; }
+
+/* Celular: uma coluna, botões largos como o Assistir */
+html.celular .painel-jogo .titulo-logo img { max-width: 72vw; max-height: 76px; }
+html.celular .painel-botoes .jogo-adicionar { width: 100%; min-height: 46px; border-radius: 6px; font-size: 17px; }
+html.celular .painel-botoes .jogo-steam-btn { background: #fff; color: #0B0C0E; }
+html.celular .painel-botoes .jogo-steam-btn .ico { color: #0B0C0E; }
+html.celular .painel-botoes .jogo-steam-btn .steam-marca { color: #0B0C0E; --steam-marca-fundo: #FFFFFF; }
+html.celular .jogo-steam-linha { margin: 0; text-shadow: none; }
+html.celular .jogo-tag-nova { width: 100%; min-height: 40px; }
+html.celular .jogo-loja-steam { width: 100%; }
+html.celular .hltb-tempo b { font-size: 18px; }
+html.celular .jogo-dev-aviso { margin: 24px 16px 0; }
