@@ -345,24 +345,13 @@ async function adicionarJogoFora(f, botao) {
   const { id, externo, detalhado, semDetalhes, pedindo, trailerId, ...dados } = f;
   let novo = null;
   try {
-    // adicionarJogo é do Lote 3 (busca/Adicionar); até lá, a versão de teste abaixo.
-    novo = typeof adicionarJogo === 'function' ? await adicionarJogo(dados) : await adicionarJogoProvisorio(dados);
+    novo = await adicionarJogo(dados); // src/jogos-lista.js: grava e devolve o item (ou o que já estava)
   } catch (e) {
     console.error('adicionar jogo', e);
   }
   if (!novo || !novo.id) { if (botao) botao.disabled = false; aviso('Não deu para adicionar o jogo.', { tipo: 'erro' }); return; }
   filmesExternos.delete(id);
   abrirPainel(novo.id, { voltarPara: estado.painelAnterior });
-}
-
-// PROVISÓRIO (só para testar este lote sem o Lote 3): põe o jogo na lista em
-// memória, sem gravar. Sai quando adicionarJogo (Lote 3) existir.
-async function adicionarJogoProvisorio(dados) {
-  const novo = { ...dados, id: `jogo-teste-${Date.now()}`, tipo: 'jogo', status: 'quero', tags: [], minhaNota: 0, adicionadoEm: new Date().toISOString() };
-  estado.filmes.push(novo);
-  render();
-  aviso(`“${novo.titulo}” entrou na lista (provisório: ainda não grava).`, { tipo: 'ok' });
-  return novo;
 }
 
 // ---------- Desenho ----------

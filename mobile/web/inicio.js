@@ -174,6 +174,16 @@ function tituloDoModo() {
   return 'Início';
 }
 
+// "Nenhum jogo ainda" e o botão de adicionar, para qualquer plataforma sem itens.
+function vazioCelHTML() {
+  return `<section class="cel-vazio">
+    <span class="cel-vazio-icone" aria-hidden="true">${iconePlataformaHTML(plataformaAtual(), 'cel-vazio-emoji')}</span>
+    <h2>${esc(voc('nenhum'))} ainda</h2>
+    <p>${esc(vocTexto('Busque e adicione {itens} para começar.'))}</p>
+    <button class="cel-btn cel-btn-branco" data-cel="adicionar">${icone('Plus')} ${esc(voc('Adicionar'))}</button>
+  </section>`;
+}
+
 function renderCelular() {
   const el = $('#cel-inicio');
   if (!el) return;
@@ -189,7 +199,8 @@ function renderCelular() {
   if (marca.dataset.p !== chaveMarca) { marca.innerHTML = iconePlataformaHTML(plat, 'cel-marca-icone'); marca.dataset.p = chaveMarca; }
   document.documentElement.classList.toggle('cel-modo-todos', cel.modo.tipo === 'todos');
   for (const b of $$('.cel-nav-item')) b.classList.toggle('ativo', b.dataset.cel === 'inicio');
-  if (!estado.filmes.length) { el.innerHTML = pilulasHTML(); return; }
+  // A plataforma não tem nada ainda (mesmo que as outras tenham): convida a adicionar.
+  if (!itensDaPlataforma().length) { el.innerHTML = vazioCelHTML(); return; }
   if (cel.modo.tipo === 'todos') { el.innerHTML = pilulasHTML(); return; }
   const lista = filmesDoModo();
   const destaque = escolherDestaque(cel.modo.tipo === 'inicio' ? lista.filter((f) => !f.visto) : lista);

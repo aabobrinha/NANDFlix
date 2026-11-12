@@ -54,14 +54,14 @@ const PLATAFORMAS = [
     pertence: ehJogo,
     rotulos: { item: 'jogo', itens: 'jogos', todos: 'Todos os jogos', nenhum: 'Nenhum jogo', artigo: 'o', genero: 'm', de: 'do jogo', deste: 'deste jogo', um: 'um jogo', este: 'este jogo', adicionar: 'Adicionar jogo', sortear: 'Sortear um jogo' },
     doMes: { chave: 'jogosDoMes', rotulo: 'Jogo do mês' },
-    recursos: ['premios'], // The Game Awards e BAFTA Games
+    recursos: ['premios', 'jogos'], // prêmios (The Game Awards, BAFTA Games); console, tags e Steam no menu Filtros (jogos-lista.js)
     tema: 'verde',
   },
   {
     id: 'nandhub', nome: 'nandhub', emoji: '🍿', hub: true,
     descricao: 'Tudo junto, numa lista só.', // o texto de verdade vem de descricaoPlataforma()
     rotulos: { item: 'título', itens: 'títulos', todos: 'Todos', nenhum: 'Nada', artigo: 'o', genero: 'm', de: 'do título', deste: 'deste título', um: 'um título', este: 'este título', adicionar: 'Adicionar à lista', sortear: 'Sortear um título' },
-    tema: 'mistura', // roxo + laranja: o acento é a mistura das cores das plataformas que junta
+    tema: 'mistura', // roxo + laranja (+ verde com o nandplay): o acento é a mistura das cores das plataformas que junta
   },
 ];
 
@@ -217,6 +217,8 @@ function marcarPlataformaNoHtml() {
   const raiz = document.documentElement;
   if (raiz.dataset.plataforma !== p.id) raiz.dataset.plataforma = p.id;
   if (raiz.dataset.tema !== p.tema) raiz.dataset.tema = p.tema;
+  // O nandhub com o nandplay habilitado ganha o verde no degradê (roxo, laranja e verde): só variáveis de CSS.
+  raiz.toggleAttribute('data-com-verde', Boolean(p.hub) && plataformaHabilitada('nandplay'));
 }
 
 // Fecha as telas por cima da lista (detalhes, calendário…): o que estava

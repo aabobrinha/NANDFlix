@@ -102,9 +102,14 @@ function ligarNandrollConfig(raiz) {
 // AniList, nandflix no TMDB); só o hub deixa escolher e lembra a última.
 function fonteAtual() {
   const p = plataformaAtual();
-  if (!p.hub) return p.id === 'nandanimes' ? 'anime' : 'filme';
-  return nandrollLigado() ? fonteBusca : 'filme';
+  if (!p.hub) return p.id === 'nandanimes' ? 'anime' : p.id === 'nandplay' ? 'jogo' : 'filme';
+  const fontes = fontesDoHub();
+  return fontes.includes(fonteBusca) ? fonteBusca : fontes[0];
 }
+
+// As fontes que o hub oferece: uma por plataforma habilitada (filmes, animes, jogos).
+const FONTES_PLATAFORMA = { nandflix: 'filme', nandanimes: 'anime', nandplay: 'jogo' };
+const fontesDoHub = () => plataformasHabilitadas().map((id) => FONTES_PLATAFORMA[id]).filter(Boolean);
 
 // ehSerie e ehAnime: em plataformas.js (Plataformas).
 
@@ -772,13 +777,14 @@ document.addEventListener('keydown', (e) => {
 // ---- Adicionar: buscar entre filmes (TMDB) ou animes (AniList) ----
 
 let fonteBusca = 'filme';
-try { fonteBusca = localStorage.getItem('fonteBusca') === 'anime' ? 'anime' : 'filme'; } catch { /* fica filme */ }
+try { const guardada = localStorage.getItem('fonteBusca'); fonteBusca = guardada === 'anime' || guardada === 'jogo' ? guardada : 'filme'; } catch { /* fica filme */ }
 
 function fontesBuscaHTML() {
-  if (!nandrollLigado() || !plataformaAtual().hub) return ''; // só o hub tem as duas fontes
+  if (!plataformaAtual().hub || fontesDoHub().length < 2) return ''; // só o hub tem mais de uma fonte
   const atual = fonteAtual();
-  const chip = (k, r) => `<button class="chip${atual === k ? ' ativo' : ''}" data-fonte="${k}" role="radio" aria-checked="${atual === k}">${r}</button>`;
-  return `<div class="chips fontes-busca" role="radiogroup" aria-label="Onde buscar">${chip('filme', 'Filmes')}${chip('anime', 'Animes')}</div>`;
+  const rotulos = { filme: 'Filmes', anime: 'Animes', jogo: 'Jogos' };
+  const chip = (k) => `<button class="chip${atual === k ? ' ativo' : ''}" data-fonte="${k}" role="radio" aria-checked="${atual === k}">${rotulos[k]}</button>`;
+  return `<div class="chips fontes-busca" role="radiogroup" aria-label="Onde buscar">${fontesDoHub().map(chip).join('')}</div>`;
 }
 
 // Liga os chips "Filmes | Animes" do modal; `aoTrocar` refaz a busca.

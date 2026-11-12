@@ -527,3 +527,55 @@ test('página do jogo: status grava zeradoEm e tags sugeridas', () => {
   const lista = [a, { id: 'b', tipo: 'jogo', tags: ['Férias', 'coop'] }, { id: 'c', tipo: 'jogo', tags: ['férias', 'curto'] }, { id: 'd', tags: ['filme'] }];
   assert.deepStrictEqual(daqui(p.sugestoesTagsJogo(a, lista)), ['Férias', 'curto']);
 });
+
+
+// ---------- Lote 3: o jogo na lista (lib/filmes.js) e a busca sem as chaves da IGDB (lib/steam.js) ----------
+
+const filmesLib = require('../lib/filmes');
+
+test('novoJogo: só o contrato, status "quero", sem tags; capa e trailer também nos campos que a lista lê', () => {
+  const j = filmesLib.novoJogo({ igdb: 1942, steam: 367520, titulo: ' Hollow Knight ', ano: 2017, capa: 'https://x/capa.jpg', trailer: 'abcdefghijk', tempoZerar: 27, lixo: 'x', status: 'invalido', tags: ['ferias', ''] }, 7);
+  assert.strictEqual(j.tipo, 'jogo');
+  assert.strictEqual(j.titulo, 'Hollow Knight');
+  assert.strictEqual(j.ano, '2017');
+  assert.strictEqual(j.status, 'quero');
+  assert.deepStrictEqual(j.tags, ['ferias']);
+  assert.strictEqual(j.poster, 'https://x/capa.jpg');
+  assert.strictEqual(j.trailerId, 'abcdefghijk');
+  assert.strictEqual(j.ordem, 7);
+  assert.strictEqual(j.lixo, undefined);
+  assert.ok(j.id);
+});
+
+test('mesmoFilme: jogo só repete com jogo (IGDB, Steam ou título e ano); filme de mesmo nome é outro item', () => {
+  const a = filmesLib.novoJogo({ igdb: 1, steam: 10, titulo: 'Portal', ano: '2007' });
+  assert.ok(filmesLib.mesmoFilme(a, filmesLib.novoJogo({ igdb: 1, titulo: 'Outro nome' })));
+  assert.ok(filmesLib.mesmoFilme(a, filmesLib.novoJogo({ steam: '10', titulo: 'x' })));
+  assert.ok(filmesLib.mesmoFilme(a, filmesLib.novoJogo({ titulo: 'portal', ano: '2007' })));
+  assert.ok(!filmesLib.mesmoFilme(a, filmesLib.novoJogo({ igdb: 2, steam: 11, titulo: 'Portal 2', ano: '2011' })));
+  assert.ok(!filmesLib.mesmoFilme(a, { titulo: 'Portal', ano: '2007', tmdbId: 5 }));
+});
+
+test('busca da loja da Steam → resultado no formato da IGDB; trilhas sonoras ficam de fora', () => {
+  const itens = steam.lerBuscaLoja({ items: [
+    { type: 'app', id: 367520, name: 'Hollow Knight', tiny_image: 'https://x/h.jpg', platforms: { windows: true, mac: true, linux: false } },
+    { type: 'app', id: 1, name: 'Hollow Knight Original Soundtrack' },
+    { type: 'sub', id: 2, name: 'Pacote' },
+  ] }).filter(steam.ehJogoDaLoja).map(steam.resultadoDaLoja);
+  assert.strictEqual(itens.length, 1);
+  assert.deepStrictEqual({ igdb: itens[0].igdb, steam: itens[0].steam, plataformas: itens[0].plataformas }, { igdb: null, steam: 367520, plataformas: ['PC', 'Mac'] });
+  assert.ok(/library_600x900/.test(itens[0].capa));
+  assert.strictEqual(itens[0].capaAlternativa, 'https://x/h.jpg');
+});
+
+test('detalhes da loja da Steam → item de jogo do contrato (sem IGDB)', () => {
+  const det = steam.lerDetalhesLoja({ 620: { success: true, data: { steam_appid: 620, type: 'game', name: 'Portal 2', short_description: 'Puzzle <b>co-op</b>', developers: ['Valve'], publishers: ['Valve'], genres: [{ description: 'Ação' }], release_date: { coming_soon: false, date: '19 de abr. de 2011' }, platforms: { windows: true, mac: false, linux: true }, header_image: 'https://x/cab.jpg', website: '' } } }, 620);
+  const item = steam.itemDeLoja(det, null);
+  assert.strictEqual(item.tipo, 'jogo');
+  assert.strictEqual(item.steam, 620);
+  assert.strictEqual(item.ano, '2011');
+  assert.deepStrictEqual(item.desenvolvedores, [{ id: null, nome: 'Valve' }]);
+  assert.deepStrictEqual(item.plataformasJogo.map((p) => p.abrev), ['PC', 'Linux']);
+  assert.ok(/library_600x900/.test(item.capa) && /logo\.png/.test(item.logo));
+  assert.strictEqual(steam.itemDeLoja(null), null);
+});

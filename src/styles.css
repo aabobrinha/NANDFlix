@@ -3428,3 +3428,68 @@ html.celular .ep-sinopse { -webkit-line-clamp: 2; }
 .cfg-jogos-ajuda ol { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.5; }
 .cfg-jogos-ajuda b { color: var(--texto); font-weight: 600; }
 .cfg-jogos-ajuda code { padding: 1px 6px; border-radius: 4px; background: var(--canvas); font-size: 12.5px; }
+
+/* ==========================================================================
+   nandplay: o gradiente do nandhub, cartões, selos e busca de jogos (jogos-lista.js)
+   ========================================================================== */
+
+/* O nandhub com o nandplay habilitado: o degradê passa pelo verde (roxo, laranja e verde). */
+html[data-tema="mistura"][data-com-verde] {
+  --gradiente-acento: linear-gradient(135deg, #5A3390 0%, #B5601F 50%, #1C8A4D 100%);
+  --gradiente-acento-hover: linear-gradient(135deg, #6A40A4 0%, #C56D2A 50%, #22A05A 100%);
+}
+html[data-tema="mistura"][data-com-verde] #marca-nome {
+  background: linear-gradient(90deg, #CDB6FF 0%, #FFB27A 52%, #7DEBAE 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none;
+}
+html[data-com-verde] .marca-menu-hub { background: linear-gradient(90deg, rgba(109, 74, 168, .16), rgba(194, 94, 28, .14), rgba(28, 138, 77, .16)); }
+html[data-com-verde] .marca-menu-hub[aria-checked="true"] { background: linear-gradient(90deg, rgba(109, 74, 168, .32), rgba(194, 94, 28, .28), rgba(28, 138, 77, .3)); }
+html[data-com-verde] .cfg-plat-hub { background: linear-gradient(90deg, rgba(109, 74, 168, .18), rgba(194, 94, 28, .14), rgba(28, 138, 77, .16)); }
+
+/* Selo do status e tags na capa do jogo (na grade); na lista compacta vão numa coluna. */
+.selos-jogo { position: absolute; left: 6px; bottom: 6px; right: 6px; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
+.selo-status-jogo {
+  display: inline-block; max-width: 100%; padding: 3px 8px; border-radius: 999px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 700 11px/1.2 var(--ui); letter-spacing: .01em; background: rgba(5, 6, 8, .84); color: #C9D1DC;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.selo-status-jogo.st-jogando { background: rgba(8, 44, 26, .9); color: #6BE0A2; box-shadow: inset 0 0 0 1px rgba(107, 224, 162, .3); }
+.selo-status-jogo.st-pausado { background: rgba(58, 40, 8, .9); color: #F5C469; box-shadow: inset 0 0 0 1px rgba(245, 196, 105, .28); }
+.selo-status-jogo.st-zerado { background: rgba(10, 36, 58, .9); color: #86CCFF; box-shadow: inset 0 0 0 1px rgba(134, 204, 255, .28); }
+.selo-status-jogo.st-cem { background: rgba(62, 46, 0, .92); color: #FFD25E; box-shadow: inset 0 0 0 1px rgba(255, 210, 94, .35); }
+.selo-status-jogo.st-larguei { background: rgba(58, 16, 16, .9); color: #FF9F9F; box-shadow: inset 0 0 0 1px rgba(255, 159, 159, .26); }
+.tag-jogo {
+  display: inline-block; max-width: 100%; padding: 2px 7px; border-radius: 999px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 10.5px/1.25 var(--ui); background: rgba(5, 6, 8, .72); color: var(--texto-2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+}
+.tags-jogo-linha { display: flex; flex-wrap: wrap; gap: 5px; }
+.tags-jogo-linha .tag-jogo { background: var(--superficie-2); }
+.fileira .cartao-jogo:hover .selos-jogo, .lista.grade .cartao-jogo:hover .selos-jogo { opacity: 0; }
+.selos-jogo { transition: opacity .2s ease-out; }
+.info-status-jogo, .info-dev { display: none; }
+
+/* Lista compacta do jogo: nome, desenvolvedor, status e tags, ano. */
+.lista.compacta .cartao-jogo { grid-template-columns: 40px minmax(0, 1fr) minmax(100px, 220px) minmax(150px, 300px) 64px auto; }
+.lista.compacta .cartao-jogo .selos-jogo { display: none; }
+.lista.compacta .cartao-jogo .info-dev { display: block; grid-column: 3; grid-row: 1; min-height: 0; font-size: 14px; color: var(--texto-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.lista.compacta .cartao-jogo .info-status-jogo { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; grid-column: 4; grid-row: 1; min-width: 0; }
+.lista.compacta .cartao-jogo .info-status-jogo .selo-status-jogo { box-shadow: none; }
+.lista.compacta .cartao-jogo .info-ano { grid-column: 5; }
+.lista.compacta .cartao-jogo .acoes { grid-column: 6; }
+.lista.compacta .acao-steam { color: var(--texto); }
+.acao-steam { color: var(--texto); }
+
+/* Busca de jogos (Adicionar) */
+.resultados-jogos { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); }
+.resultado-jogo .capa { aspect-ratio: 2 / 3; }
+.resultado-jogo .capa img { object-fit: cover; width: 100%; height: 100%; }
+.selo-steam {
+  position: absolute; top: 6px; left: 6px; z-index: 2; padding: 2px 7px; border-radius: 999px;
+  font: 700 10.5px/1.25 var(--ui); background: rgba(5, 6, 8, .84); color: #C9D1DC; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+}
+.plats-jogo { display: block; margin-top: 3px; font-size: 11px; color: var(--texto-2); }
+.resultado-jogo .plats-jogo { color: var(--acento-texto); opacity: .9; }
+.vazio-acoes.so-adicionar { justify-content: flex-start; }
+.vazio-acoes.so-adicionar .vazio-dir { align-items: flex-start; text-align: left; }
+.aviso-fonte-jogo { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: rgba(var(--acento-rgb), .12); font-size: 13px; line-height: 1.4; color: var(--texto); }

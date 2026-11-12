@@ -30,7 +30,7 @@ const itemEhJogo = (f) => (typeof ehJogo === 'function' ? ehJogo(f) : Boolean(f)
 const premioEhDeJogo = (id) => infoPremio(id).tipo === 'jogo';
 // "Já jogou": começou o jogo (jogando, pausado, zerado, 100% ou largou). "Quero jogar" ainda não é jogar.
 const jogoJogado = (f) => Boolean(f) && ['jogando', 'pausado', 'zerado', 'cem', 'larguei'].includes(f.status);
-const STATUS_DO_JOGO = { quero: 'Quero jogar', jogando: 'Jogando', pausado: 'Pausado', zerado: 'Zerado', cem: '100%', larguei: 'Larguei' };
+const ROTULOS_STATUS_PREMIOS = { quero: 'Quero jogar', jogando: 'Jogando', pausado: 'Pausado', zerado: 'Zerado', cem: '100%', larguei: 'Larguei' };
 // "Já viu" (filme) ou "já jogou" (jogo): o que conta na cédula.
 const itemFeito = (premio, f) => Boolean(f) && (premioEhDeJogo(premio) ? jogoJogado(f) : Boolean(f.visto));
 
@@ -494,7 +494,7 @@ function renderPremios() {
           const nomeInd = semTitulo ? x.pessoa : (f ? f.titulo : x.titulo);
           const pessoa = !semTitulo && x.pessoa && x.pessoa !== x.titulo ? x.pessoa : '';
           // Jogo da sua lista: o estado dele (Zerado, Jogando…). Os de filme não têm selo.
-          const seloLista = jogo && f ? `<span class="pr-na-lista">Na sua lista${STATUS_DO_JOGO[f.status] ? ` · ${STATUS_DO_JOGO[f.status]}` : ''}</span>` : '';
+          const seloLista = jogo && f ? `<span class="pr-na-lista">Na sua lista${ROTULOS_STATUS_PREMIOS[f.status] ? ` · ${ROTULOS_STATUS_PREMIOS[f.status]}` : ''}</span>` : '';
           return `<li class="pr-ind${x.venceu ? ' venceu' : ''}${eu ? ' palpite' : ''}${visto ? ' visto' : ''}${semTitulo ? ' sem-jogo' : ''}" data-i="${i}">
             <button class="pr-capa" data-pr="abrir" ${semTitulo ? 'tabindex="-1" aria-hidden="true"' : `title="Ver os detalhes de ${esc(x.titulo)}"`}>${capaIndicadoHTML(f, ids, nomeInd, jogo)}</button>
             <div class="pr-ind-texto">

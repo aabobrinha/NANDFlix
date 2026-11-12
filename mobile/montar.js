@@ -79,6 +79,7 @@ async function montar() {
   trocar('<link rel="stylesheet" href="styles.css">', '<link rel="stylesheet" href="styles.css">\n  <link rel="stylesheet" href="celular.css">\n  <link rel="stylesheet" href="inicio.css">\n  <link rel="stylesheet" href="detalhes.css">\n  <link rel="stylesheet" href="telas.css">\n  <link rel="stylesheet" href="calendario.css">\n  <link rel="stylesheet" href="tierlist.css">');
   trocar('<script src="../node_modules/lucide/dist/umd/lucide.min.js"></script>', '<script src="vendor/lucide.min.js"></script>\n  <script src="api-celular.js"></script>');
   trocar('<script src="busca.js"></script>', '<script src="busca.js"></script>\n  <script src="celular.js"></script>\n  <script src="inicio.js"></script>\n  <script src="detalhes.js"></script>\n  <script src="calendario.js"></script>\n  <script src="tierlist.js"></script>');
+  trocar('<script src="jogos-lista.js"></script>', '<script src="jogos-lista.js"></script>\n  <script src="jogos-celular.js"></script>'); // nandplay: o celular
   // Na versão do GitHub a fonte (Montserrat) vem de ../node_modules: vai junto para dentro do app.
   const FONTE = '../node_modules/@fontsource/montserrat/';
   if (html.includes(FONTE)) {

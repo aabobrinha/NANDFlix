@@ -15,7 +15,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Marcas } from '../../lib/marcas.js';
 import { Nuvem } from '../../lib/nuvem.js';
-import { novoFilme, acharRepetido, ehSerie, passoSerie, definirSerie, alternarEpisodio, statusSerie, comDia, comEpisodiosDoDia, vistoSerie } from '../../lib/filmes.js';
+import { novoFilme, novoJogo, ehJogo, acharRepetido, ehSerie, passoSerie, definirSerie, alternarEpisodio, statusSerie, comDia, comEpisodiosDoDia, vistoSerie } from '../../lib/filmes.js';
 import tmdb from '../../lib/tmdb.js';
 import anilist from '../../lib/anilist.js';
 import { Igdb } from '../../lib/igdb.js';
@@ -247,7 +247,7 @@ let buscaEmAndamento = null;
 function buscarCapasQueFaltam({ incluirNaoEncontradas = false } = {}) {
   if (buscaEmAndamento) return buscaEmAndamento;
   if (!config.tmdbKey) return Promise.resolve({ pulada: 'chave' });
-  const fila = filmes.filter((f) => !f.tmdbEm || (incluirNaoEncontradas && !f.tmdbId));
+  const fila = filmes.filter((f) => !ehJogo(f) && (!f.tmdbEm || (incluirNaoEncontradas && !f.tmdbId))); // jogo não tem nada no TMDB
   if (!fila.length) { extras.atualizar(); return Promise.resolve({ total: 0, encontradas: 0 }); }
   buscaEmAndamento = (async () => {
     const total = fila.length;
@@ -601,11 +601,13 @@ window.api = {
     return configPublica();
   },
   atualizarFilme: async (id, mudancas) => {
-    const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa', 'pagina', 'paginaEm', 'story', 'listas', 'shots', 'paginaOutra', 'epDias'];
+    const permitidas = ['titulo', 'ano', 'diretor', 'visto', 'vistoEm', 'favorito', 'notas', 'minhaNota', 'linkLetterboxd', 'buscaCapa', 'pagina', 'paginaEm', 'story', 'listas', 'shots', 'paginaOutra', 'epDias', 'status', 'tags', 'zeradoEm'];
     const limpo = {};
     for (const k of permitidas) if (k in mudancas) limpo[k] = mudancas[k];
     const atual = filmes.find((f) => f.id === id);
     if (atual && atual.tipo === 'jogo') Object.assign(limpo, camposDoJogo(mudancas)); // nandplay (como no main.js)
+    // Jogo: zerar (ou 100%) é o "visto" dele (filtros, sorteio e contagens leem f.visto).
+    if (ehJogo(atual) && 'status' in limpo) limpo.visto = limpo.status === 'zerado' || limpo.status === 'cem';
     if (ehSerie(atual)) {
       delete limpo.buscaCapa;
       if ('visto' in limpo) Object.assign(limpo, vistoSerie(atual, Boolean(limpo.visto)), 'vistoEm' in limpo ? { vistoEm: limpo.vistoEm } : {});
@@ -660,6 +662,13 @@ window.api = {
   acharRepetido: async (dados, ignorarId) => acharRepetido(filmes, dados, ignorarId),
   adicionarFilme: async (dados) => {
     const ordem = filmes.reduce((m, f) => Math.max(m, f.ordem || 0), 0) + 1;
+    // nandplay: o item de jogo já vem completo da IGDB/Steam (adicionarJogo, na interface).
+    if (dados.tipo === 'jogo') {
+      const jogo = novoJogo(dados, ordem);
+      filmes.push(jogo);
+      gravarDepois();
+      return jogo;
+    }
     const anilistId = Number(dados.anilistId) || '';
     const serie = Boolean(anilistId) && !dados.filme;
     const f = novoFilme({
@@ -732,6 +741,7 @@ window.api = {
   obterTrailer: async (id) => {
     const f = filmes.find((x) => x.id === id);
     if (!f) return null;
+    if (ehJogo(f)) return f.trailerId && f.trailerId !== 'nenhum' ? f.trailerId : null; // o trailer do jogo vem da IGDB
     if (f.trailerId) return f.trailerId === 'nenhum' ? null : f.trailerId;
     if (!trailersEmBusca.has(id)) {
       trailersEmBusca.set(id, trailer.buscarTrailer(f)
@@ -811,6 +821,14 @@ window.api = {
   // nandplay
   buscarJogos: (termo) => chamar(() => igdb.buscarJogos(termo)),
   detalhesJogo: (id) => chamar(() => igdb.detalhesJogo(id)),
+  buscarJogosSteam: (termo) => chamar(async () => (await steam.buscarLoja(termo)).filter(steam.ehJogoDaLoja).map(steam.resultadoDaLoja)),
+  detalhesJogoSteam: (appid) => chamar(async () => {
+    const det = await steam.detalhesLoja(appid);
+    if (!det) throw Object.assign(new Error('A Steam não tem esse jogo à venda.'), { tipo: 'rede' });
+    let imagens = null;
+    try { imagens = (await steam.imagensLoja([appid]))[det.appid] || null; } catch { /* fica o caminho simples */ }
+    return steam.itemDeLoja(det, imagens);
+  }),
   jogosDoDesenvolvedor: (empresaId, opcoes) => chamar(() => igdb.jogosDoDesenvolvedor(empresaId, opcoes || {})),
   testarJogos,
   steamLocal: async () => ({ steamNoPc: false, instalados: [] }),

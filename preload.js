@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld('api', {
   // nandplay: jogos (IGDB) e Steam. Os links da Steam são montados no processo principal.
   buscarJogos: chamar('jogos:buscar'),
   detalhesJogo: chamar('jogos:detalhes'),
+  buscarJogosSteam: chamar('jogos:buscarSteam'), // sem as chaves da IGDB: a loja da Steam
+  detalhesJogoSteam: chamar('jogos:detalhesSteam'),
   jogosDoDesenvolvedor: chamar('jogos:doDesenvolvedor'),
   testarJogos: chamar('jogos:testar'),
   steamLocal: chamar('steam:local'),
