@@ -20,6 +20,8 @@ import tmdb from '../../lib/tmdb.js';
 import anilist from '../../lib/anilist.js';
 import { Igdb } from '../../lib/igdb.js';
 import steam from '../../lib/steam.js';
+import hltb from '../../lib/hltb.js';
+import { camposDoJogo } from '../../lib/jogo-usuario.js';
 import omdb from '../../lib/omdb.js';
 import trailer from '../../lib/trailer.js';
 import { Episodios } from '../../lib/episodios.js';
@@ -64,6 +66,7 @@ const C = {
   episodios: `${PASTA}/episodios.json`,
   igdbToken: `${PASTA}/igdb-token.json`,
   steamBiblioteca: `${PASTA}/steam-biblioteca.json`,
+  hltb: `${PASTA}/hltb-cache.json`,
 };
 // A versão do app (mobile/package.json), posta pelo montar.js.
 // eslint-disable-next-line no-undef
@@ -602,6 +605,7 @@ window.api = {
     const limpo = {};
     for (const k of permitidas) if (k in mudancas) limpo[k] = mudancas[k];
     const atual = filmes.find((f) => f.id === id);
+    if (atual && atual.tipo === 'jogo') Object.assign(limpo, camposDoJogo(mudancas)); // nandplay (como no main.js)
     if (ehSerie(atual)) {
       delete limpo.buscaCapa;
       if ('visto' in limpo) Object.assign(limpo, vistoSerie(atual, Boolean(limpo.visto)), 'vistoEm' in limpo ? { vistoEm: limpo.vistoEm } : {});
@@ -819,6 +823,22 @@ window.api = {
     return { ok: true, url };
   },
   aoBibliotecaSteam: ouvir('steam:biblioteca'),
+  imagensSteam: (appids) => chamar(async () => {
+    const ids = [...new Set([].concat(appids || []).map(steam.appidValido).filter(Boolean))];
+    const r = ids.length ? await steam.imagensLoja(ids) : {};
+    return Object.fromEntries(ids.map((id) => [id, r[id] || steam.imagensSteam(id)]));
+  }),
+  // O id do HowLongToBeat pelo Wikidata (aceita pedidos do WebView), com cache como no PC.
+  hltbJogo: (jogo) => chamar(async () => {
+    const j = { igdbSlug: jogo && jogo.igdbSlug, steam: jogo && jogo.steam };
+    const cache = lerJSON(C.hltb, {}) || {};
+    const guardado = hltb.doCacheHltb(cache, j);
+    if (guardado !== undefined) return guardado;
+    const id = await hltb.acharHltb(j);
+    const chave = hltb.chaveCacheHltb(j);
+    if (chave !== '|') gravarJSON(C.hltb, { ...cache, [chave]: { id, em: new Date().toISOString() } });
+    return id;
+  }),
   extrasAgora: (id, opcoes) => extras.agora(id, opcoes || {}),
   listaPremios: async () => listaPremios(),
   premios: async (id) => { await iniciar(); return pegarAcervo().dados(id); },
