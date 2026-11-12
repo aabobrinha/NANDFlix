@@ -42,6 +42,7 @@ const PLATAFORMAS = [
     pertence: ehAnime,
     rotulos: { item: 'anime', itens: 'animes', todos: 'Todos os animes', nenhum: 'Nenhum anime', artigo: 'o', genero: 'm', de: 'do anime', deste: 'deste anime', um: 'um anime', este: 'este anime', adicionar: 'Adicionar anime', sortear: 'Sortear um anime' },
     doMes: { chave: 'animesDoMes', rotulo: 'Anime do mês' },
+    recursos: ['retrospectiva'], // a retrospectiva em stories (de animes: episódios, horas, anime do mês)
     porEpisodio: true, // o que se registra num dia é episódio assistido (epDias), não "vi o filme"
     tema: 'laranja',
   },

@@ -3544,7 +3544,7 @@ function itemDoMes(mes, p = escopoCal()) {
   const f = id && porId(id);
   return f && daPlataforma(f, p) && diasVistos(f).some((d) => d.startsWith(mes)) ? f : null;
 }
-// O filme do mês (a retrospectiva em stories é só de filmes).
+// O filme do mês (a retrospectiva de filmes usa este; a de animes chama itemDoMes com a plataforma).
 const filmeDoMes = (mes) => itemDoMes(mes, plataformaPorId('nandflix'));
 function definirFilmeDoMes(mes, id) {
   const p = id ? plataformaDoItem(porId(id)) : escopoCal();
@@ -5117,6 +5117,7 @@ function renderEstatisticasAnimes(p) {
     <section class="est-hero">
       <span class="est-kicker">${icone('Sparkles')} ${periodo === 'tudo' ? 'Seus animes' : 'Animes de ' + esc(nomePeriodo(periodo))}</span>
       <p>${frase}</p>
+      ${d.itens.length && (p.recursos || []).includes('retrospectiva') ? `<button class="btn btn-primario est-story" data-e="story">${icone('ImagePlus')} Criar stories da retrospectiva</button>` : ''}
     </section>
     <div class="est-tiles">
       ${tile(voc('Itens', undefined, p) + ' assistidos', numero(d.itens.length), d.completos.length ? numero(d.completos.length) + ' completo' + plural(d.completos.length, '', 's') : '')}
@@ -5183,7 +5184,7 @@ estatisticas.addEventListener('click', (e) => {
   switch (alvo.dataset.e) {
     case 'fechar': fecharEstatisticas(); break;
     case 'periodo': periodoEst = alvo.dataset.periodo; renderEstatisticas(); break;
-    case 'story': abrirRetrospectivaStory(periodoEst); break;
+    case 'story': abrirRetrospectivaStory(periodoEst, escopoEst()); break;
     case 'filme': abrirPainel(alvo.dataset.id); break;
     case 'diretor': fecharEstatisticas(); filtrarDiretor(alvo.dataset.valor); break;
     case 'pais': fecharEstatisticas(); filtrarPais(alvo.dataset.valor); break;
