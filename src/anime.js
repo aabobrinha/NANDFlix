@@ -46,12 +46,12 @@ function aplicarNandroll() {
 function nandrollConfigHTML() {
   return `
       <div class="secao">
-        <h3>nandanimes (animes)</h3>
+        <h3>nandchan (animes)</h3>
         <div class="opcoes-radio nandroll-opcoes">
           <label><input type="checkbox" id="cfg-nandroll-assistir" ${estado.config.nandrollAssistir !== 'stremio' ? 'checked' : ''}> O botão Assistir abre a plataforma oficial do anime (em vez do Stremio)</label>
           <label><input type="checkbox" id="cfg-nandroll-plataformas" ${todasPlataformas() ? 'checked' : ''}> Mostrar plataformas de fora do Brasil</label>
         </div>
-        <p>Busca de animes na AniList (sem chave), episódios e status das séries, próximo episódio e onde assistir. Para usar, habilite o nandanimes em Plataformas, acima; desabilitado, os animes já adicionados ficam guardados.</p>
+        <p>Busca de animes na AniList (sem chave), episódios e status das séries, próximo episódio e onde assistir. Para usar, habilite o nandchan em Plataformas, acima; desabilitado, os animes já adicionados ficam guardados.</p>
         <div class="busca-linha nandroll-importar">
           <input id="cfg-anilist-usuario" placeholder="Seu usuário da AniList" spellcheck="false" autocomplete="off" aria-label="Usuário da AniList">
           <button class="btn" id="cfg-anilist-importar">${icone('Download')} Importar lista</button>

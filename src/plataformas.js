@@ -1,6 +1,6 @@
 'use strict';
 
-// ---------- Plataformas: nandflix, nandanimes e nandhub ----------
+// ---------- Plataformas: nandflix, nandchan e nandhub ----------
 //
 // O app é um "hub" de plataformas. Cada uma mostra uma parte da lista (filmes,
 // animes…) com o seu nome, ícone, vocabulário e cor; o hub (nandhub) junta as
@@ -33,7 +33,8 @@ const PLATAFORMAS = [
     tema: 'roxo',
   },
   {
-    id: 'nandanimes', nome: 'nandanimes', emoji: '🍣',
+    // Aparece como "nandchan"; o id continua 'nandanimes' (é o que fica gravado nas configurações).
+    id: 'nandanimes', nome: 'nandchan', emoji: '🍣',
     descricao: 'Seus animes: episódios, temporadas e o próximo episódio.',
     pertence: ehAnime,
     rotulos: { item: 'anime', itens: 'animes', todos: 'Todos os animes', nenhum: 'Nenhum anime', artigo: 'o', genero: 'm', de: 'do anime', deste: 'deste anime', um: 'um anime', este: 'este anime', adicionar: 'Adicionar anime', sortear: 'Sortear um anime' },
