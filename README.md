@@ -19,9 +19,10 @@ O app agora tem plataformas, cada uma com a sua lista, o seu tema e o seu vocabu
 
 - **nandflix** 🎬: os filmes, como sempre (tema roxo).
 - **nandchan** 🍣: os animes (tema laranja).
-- **nandhub** 🍿: **tudo junto**, filmes e animes numa lista só.
+- **nandhub** 🍿: **tudo junto**, filmes, animes e jogos numa lista só.
+- **nandplay** 🎮: os jogos (tema verde).
 
-Ao abrir, o app pergunta onde entrar (dá para marcar **Sempre abrir direto na que eu escolher**); depois, troque pela marca no alto da tela. Em **Configurações → Plataformas** você escolhe o que acompanha e onde o app abre. A estrutura já está pronta para outros tipos no futuro (jogos, séries).
+Ao abrir, o app pergunta onde entrar (dá para marcar **Sempre abrir direto na que eu escolher**); depois, troque pela marca no alto da tela. Em **Configurações → Plataformas** você escolhe o que acompanha e onde o app abre. A estrutura já está pronta para outros tipos no futuro (séries, por exemplo).
 
 No **nandchan**:
 
@@ -34,6 +35,23 @@ No **nandchan**:
 - **Importar a sua lista da AniList** (Configurações → nandchan), com episódios, status e notas.
 
 `node scripts/testar-anime.js` confere as regras de episódios e a leitura da AniList, sem internet.
+
+## nandplay: jogos
+
+No **nandplay**, a sua lista é de jogos, com a mesma cara do resto do app e o seu próprio vocabulário (zerar, jogando, 100%).
+
+- **Backlog** de jogos de qualquer console. A busca é feita na [IGDB](https://www.igdb.com), que precisa de chaves (veja abaixo); sem as chaves, busca na loja da Steam, e o app avisa que, com as chaves, aparecem jogos de todos os consoles.
+- **Botão da Steam**: **Jogar** (o jogo está instalado), **Instalar** (está na sua biblioteca, mas não no PC) ou **Ver na loja** (não tem o jogo).
+- **Página do jogo**: onde jogar (com a Steam em destaque), os tempos do [HowLongToBeat](https://howlongtobeat.com) (história, história + extras e 100%), com o botão **Ver no HowLongToBeat**, e a fileira **Mais de <desenvolvedor>** com os outros jogos da mesma empresa.
+- **Status**: quero jogar, jogando, pausado, zerei, 100% ou larguei. Dá para criar **tags** próprias (por exemplo, "jogar nas férias") e dar nota. O **calendário** marca o dia em que você zerou.
+- **Estatísticas, tierlist, jogo do mês, stories e retrospectiva** de jogos, separados dos filmes e animes.
+- **Prêmios**: The Game Awards e BAFTA Games, com indicados, vencedores e palpites, como nos filmes.
+
+Para buscar em todos os consoles e ver a sua biblioteca da Steam, configure as chaves em **Configurações → nandplay**:
+
+- **Client ID** e **Client Secret** do IGDB: crie um app em [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps), com a sua conta da Twitch. Ela precisa de **verificação em duas etapas** ligada. Em **OAuth Redirect URLs**, ponha `http://localhost`; categoria **Application Integration**; cliente **Confidential**. Em **Manage**, copie o Client ID e gere um Client Secret (**New Secret**).
+- **Chave da Steam**: em [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) (o domínio pode ser `localhost`).
+- **Seu perfil da Steam**: cole o link do perfil, o nome dele ou o número (SteamID64). O perfil precisa ser público, com os detalhes de jogos públicos.
 
 ## Download
 

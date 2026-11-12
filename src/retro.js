@@ -239,10 +239,12 @@ async function slideCapa(d, periodo, imgs) {
   const ctx = c.getContext('2d');
   fundoRetro(ctx, imgs, { tom: 0.45 });
   kickerRetro(ctx, 'Retrospectiva', 80, 250);
-  let y = escrever(ctx, tituloRetro(periodo, ehRetroJogo(d) ? 'zerei' : 'vi'), 80, 270, { peso: 800, tam: 128, altura: 1.02, maxLinhas: 2 });
   const an = ehRetroAnime(d);
   const jg = ehRetroJogo(d);
-  y = escrever(ctx, jg ? 'em jogos' : an ? 'em animes' : 'em filmes', 80, y, { peso: 800, tam: 128, altura: 1.02, cor: RETRO_COR.apagado });
+  // Nos jogos, o "Tudo" diz só "Tudo o que eu já zerei" (sem o "em jogos" logo abaixo).
+  const tudoJogos = jg && periodo === 'tudo';
+  let y = escrever(ctx, tudoJogos ? 'Tudo o que eu já zerei' : tituloRetro(periodo, jg ? 'zerei' : 'vi'), 80, 270, { peso: 800, tam: 128, altura: 1.02, maxLinhas: 2 });
+  if (!tudoJogos) y = escrever(ctx, jg ? 'em jogos' : an ? 'em animes' : 'em filmes', 80, y, { peso: 800, tam: 128, altura: 1.02, cor: RETRO_COR.apagado });
 
   // O número grande: filmes, ou episódios nos animes (sem episódios datados, os animes).
   const porEp = an && d.episodios > 0;
