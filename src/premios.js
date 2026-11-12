@@ -185,11 +185,14 @@ function filmeDoIndicado(premio, x, cerimonia) {
     || null;
 }
 
-// A página de um jogo indicado que não está na sua lista. Ponto de ligação: outro lote (a página
-// de jogo fora da lista) define abrirJogoExterno(ids, indicado); sem ele, não faz nada (a cédula
-// só mostra o nome). `ids` = { igdb, igdbSlug, steam }. Devolve se abriu algo.
+// A página de um jogo indicado que não está na sua lista: abrirJogoFora (src/jogos-painel.js) precisa
+// do id da IGDB; sem ele (ou sem a página de jogo), não faz nada e a cédula só mostra o nome.
+// `ids` = { igdb, igdbSlug, steam }. Devolve se abriu algo.
 function abrirIndicadoJogo(ids, x) {
-  if (typeof abrirJogoExterno === 'function' && temIdsDeJogo(ids)) { abrirJogoExterno(ids, x); return true; }
+  if (typeof abrirJogoFora === 'function' && ids && ids.igdb) {
+    abrirJogoFora(Number(ids.igdb), { igdb: Number(ids.igdb), igdbSlug: ids.igdbSlug || '', steam: ids.steam ? Number(ids.steam) : undefined, titulo: x.titulo });
+    return true;
+  }
   return false;
 }
 

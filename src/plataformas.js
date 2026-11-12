@@ -54,7 +54,7 @@ const PLATAFORMAS = [
     pertence: ehJogo,
     rotulos: { item: 'jogo', itens: 'jogos', todos: 'Todos os jogos', nenhum: 'Nenhum jogo', artigo: 'o', genero: 'm', de: 'do jogo', deste: 'deste jogo', um: 'um jogo', este: 'este jogo', adicionar: 'Adicionar jogo', sortear: 'Sortear um jogo' },
     doMes: { chave: 'jogosDoMes', rotulo: 'Jogo do mês' },
-    recursos: [],
+    recursos: ['premios'], // The Game Awards e BAFTA Games
     tema: 'verde',
   },
   {
