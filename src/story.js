@@ -19,6 +19,8 @@ const STORY_A = 1920;
 const VERDE_LB = '#00E054';
 const LARANJA_ANIME = '#FF9340'; // acento do nandchan, mais vivo para brilhar sobre a capa
 const CHAVE_PADRAO_STORY = 'nandflix.storyPadrao';
+const CHAVE_PADRAO_STORY_JOGO = 'nandplay.storyPadrao'; // o jogo tem a sua arrumação padrão (a logo da Steam é maior)
+const VERDE_JOGO = '#3DDC84'; // acento do nandplay nas estrelas e no selo
 let story = null; // { id, el, estado, sel, escala, imagens, timer }
 
 const ESTILOS_TEXTO = [
@@ -27,17 +29,25 @@ const ESTILOS_TEXTO = [
   { id: 'nenhum', rotulo: 'Sem fundo' },
 ];
 
-function padraoStory() {
-  const base = {
+function padraoStory(jogo = false) {
+  const base = jogo ? {
+    fundo: 'desfocado',
+    capa: { x: 540, y: 800, l: 640 },
+    estrelas: { x: 540, y: 1470, a: 80, visivel: true },
+    logo: { x: 540, y: 1650, a: 190, visivel: true },
+    selo: { x: 540, y: 1350, a: 36, visivel: true }, // "Zerado em março · 22 h", "100%", "Jogando"
+    tags: { x: 540, y: 1800, a: 28, visivel: false },
+  } : {
     fundo: 'desfocado',
     capa: { x: 540, y: 860, l: 700 },
     estrelas: { x: 540, y: 1540, a: 84, visivel: true },
     logo: { x: 540, y: 1680, a: 62, visivel: true },
     selo: { x: 540, y: 1444, a: 38, visivel: false }, // só nos animes
+    tags: { x: 540, y: 1800, a: 28, visivel: false }, // só nos jogos
   };
   try {
-    const salvo = JSON.parse(localStorage.getItem(CHAVE_PADRAO_STORY) || 'null');
-    if (salvo) for (const k of ['capa', 'estrelas', 'logo', 'selo']) if (salvo[k]) base[k] = { ...base[k], ...salvo[k] };
+    const salvo = JSON.parse(localStorage.getItem(jogo ? CHAVE_PADRAO_STORY_JOGO : CHAVE_PADRAO_STORY) || 'null');
+    if (salvo) for (const k of ['capa', 'estrelas', 'logo', 'selo', 'tags']) if (salvo[k]) base[k] = { ...base[k], ...salvo[k] };
     if (salvo && salvo.fundo) base.fundo = salvo.fundo;
   } catch { /* sem armazenamento: fica o padrão */ }
   return { ...base, poster: '', textos: [] };
@@ -91,11 +101,55 @@ const LOGO_ANILIST = {
   proporcao: 440 / 120,
 };
 // Filme: Letterboxd; anime (série ou filme de anime): AniList.
-const logoStoryDe = (f) => (ehAnime(f) ? LOGO_ANILIST : LOGO_STORY);
-const corEstrelasStory = (f) => (ehAnime(f) ? LARANJA_ANIME : VERDE_LB);
+// Jogo: a logo da Steam (carregada ao abrir, story.logoJogo) ou, sem ela, o título escrito.
+const logoStoryDe = (f) => (ehJogo(f) ? (story && story.logoJogo) || tituloComoLogoStory(f) : ehAnime(f) ? LOGO_ANILIST : LOGO_STORY);
+const corEstrelasStory = (f) => (ehJogo(f) ? VERDE_JOGO : ehAnime(f) ? LARANJA_ANIME : VERDE_LB);
+
+// O título do jogo como logo (SVG): serve quando o jogo não tem a logo da Steam. Títulos longos encolhem.
+function tituloComoLogoStory(f) {
+  const titulo = String(f.titulo || '');
+  const fonte = "'Segoe UI','Helvetica Neue',Arial,sans-serif";
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.font = `800 78px ${fonte}`;
+  const largura = Math.max(60, ctx.measureText(titulo).width);
+  const maximo = 1300;
+  const corpo = largura > maximo ? Math.floor(78 * maximo / largura) : 78;
+  const w = Math.round(Math.min(largura, maximo) + 24);
+  return {
+    chave: 'titulo',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} 120"><text x="12" y="${Math.round(60 + corpo * 0.36)}" font-family="${fonte}" font-weight="800" font-size="${corpo}" fill="#FFFFFF">${esc(titulo)}</text></svg>`,
+    proporcao: w / 120,
+  };
+}
+
+// A logo da Steam do jogo, já como imagem (para o canvas poder desenhar); se não vier, fica o título.
+async function carregarLogoJogoStory() {
+  const meu = story;
+  const f = porId(meu.id);
+  const src = ehJogo(f) ? logoDoJogo(f) : '';
+  if (!src) return;
+  const dados = await Promise.resolve().then(() => api.dadosImagem(src)).catch(() => null);
+  const img = dados ? await carregarImg(dados) : null;
+  if (story !== meu || !img || !img.naturalWidth) return;
+  meu.logoJogo = { chave: 'steam', src: dados, proporcao: img.naturalWidth / img.naturalHeight };
+  posicionarTudo();
+  renderControlesStory();
+}
+
+// O selo de status do jogo: "Zerado em março · 22 h", "100% em março · 22 h", "Jogando · 8 h"…
+// As horas são as jogadas na Steam (biblioteca, se houver); sem elas, o tempo para zerar.
+function seloJogoStory(f) {
+  const status = statusDoJogo(f);
+  const minutos = typeof minutosSteamPorAppid === 'function' ? (minutosSteamPorAppid() || new Map()).get(Number(f.steam)) || 0 : 0;
+  const horas = minutos >= 60 ? `${Math.round(minutos / 60).toLocaleString('pt-BR')} h` : horasLegiveis(f.tempoZerar);
+  const mes = f.zeradoEm ? MESES[Number(f.zeradoEm.slice(5, 7)) - 1] : '';
+  const base = { zerado: mes ? `Zerado em ${mes}` : 'Zerado', cem: mes ? `100% em ${mes}` : '100%', jogando: 'Jogando', pausado: 'Pausado', larguei: 'Largado', quero: 'Quero jogar' }[status];
+  return [base, status === 'quero' ? '' : horas].filter(Boolean).join(' · ');
+}
 
 // O texto do selo de progresso (só animes): da temporada escolhida na capa, ou o geral.
 function seloTextoStory(f, poster = '') {
+  if (ehJogo(f)) return seloJogoStory(f);
   const eps = (n) => `${n} episódio${n === 1 ? '' : 's'}`;
   if (!ehSerie(f)) { const m = Math.round(minutosDe(f)); return m > 0 ? `Filme · ${m} min` : 'Filme'; }
   const ts = temporadasDe(f);
@@ -132,7 +186,7 @@ async function abrirStory(id) {
   const f = porId(id);
   if (!f) return;
   if (story) fecharStory();
-  const estado = JSON.parse(JSON.stringify({ ...padraoStory(), ...(f.story || {}) }));
+  const estado = JSON.parse(JSON.stringify({ ...padraoStory(ehJogo(f)), ...(f.story || {}) }));
   estado.textos = estado.textos || [];
   const el = document.createElement('div');
   el.className = 'story-tela';
@@ -142,12 +196,13 @@ async function abrirStory(id) {
   el.innerHTML = `
     <div class="story-area">
       <div class="story-envoltorio">
-        <div class="story-palco" id="story-palco">
+        <div class="story-palco" id="story-palco"${ehJogo(f) ? ' data-jogo' : ''}>
           <canvas class="story-fundo" width="${STORY_L}" height="${STORY_A}"></canvas>
           <img class="st-el st-capa" data-el="capa" alt="" draggable="false">
           <img class="st-el st-estrelas" data-el="estrelas" alt="" draggable="false">
           <img class="st-el st-logo" data-el="logo" alt="" draggable="false">
           <div class="st-el st-selo" data-el="selo" hidden></div>
+          <div class="st-el st-tags" data-el="tags" hidden></div>
           <div class="st-guia st-guia-v" hidden></div>
           <div class="st-guia st-guia-h" hidden></div>
         </div>
@@ -181,6 +236,7 @@ async function abrirStory(id) {
   await carregarPosterStory();
   if (!story || story.id !== id) return;
   posicionarTudo();
+  if (ehJogo(f)) carregarLogoJogoStory();
 }
 
 function fecharStory() {
@@ -281,21 +337,29 @@ function posicionarTudo() {
 
   const logo = $('.st-logo', el);
   const desenhoLogo = logoStoryDe(f);
-  const chaveLogo = ehAnime(f) ? 'anilist' : 'letterboxd';
-  if (logo.dataset.de !== chaveLogo) { logo.src = urlSvg(desenhoLogo.svg); logo.dataset.de = chaveLogo; }
+  const chaveLogo = ehJogo(f) ? `jogo-${desenhoLogo.chave}-${desenhoLogo.proporcao.toFixed(3)}` : ehAnime(f) ? 'anilist' : 'letterboxd';
+  if (logo.dataset.de !== chaveLogo) { logo.src = desenhoLogo.src || urlSvg(desenhoLogo.svg); logo.dataset.de = chaveLogo; }
   Object.assign(logo.style, { left: `${estado.logo.x}px`, top: `${estado.logo.y}px`, height: `${estado.logo.a}px`, width: `${estado.logo.a * desenhoLogo.proporcao}px` });
   logo.hidden = !estado.logo.visivel;
 
   // O selo de progresso: só nos animes, e some se não houver o que escrever.
   const selo = $('.st-selo', el);
-  const textoSelo = ehAnime(f) ? seloTextoStory(f, estado.poster) : '';
+  const textoSelo = ehAnime(f) || ehJogo(f) ? seloTextoStory(f, estado.poster) : '';
   selo.textContent = textoSelo;
   Object.assign(selo.style, { left: `${estado.selo.x}px`, top: `${estado.selo.y}px`, fontSize: `${estado.selo.a}px` });
   selo.hidden = !textoSelo || !estado.selo.visivel;
+  // As tags do jogo (opcionais): uma pílula escura com as primeiras tags.
+  const tagsEl = $('.st-tags', el);
+  const textoTags = ehJogo(f) ? textoTagsStory(f) : '';
+  tagsEl.textContent = textoTags;
+  Object.assign(tagsEl.style, { left: `${estado.tags.x}px`, top: `${estado.tags.y}px`, fontSize: `${estado.tags.a}px` });
+  tagsEl.hidden = !textoTags || !estado.tags.visivel;
 
   for (const t of estado.textos) posicionarTexto(t);
   for (const x of $$('.st-el', el)) x.classList.toggle('selecionado', x.dataset.el === story.sel);
 }
+
+const textoTagsStory = (f) => tagsDoJogo(f).slice(0, 4).join(' · ');
 
 function posicionarTexto(t) {
   const caixa = $(`.st-texto[data-el="t-${t.id}"]`, story.el);
@@ -389,8 +453,8 @@ function selecionarStory(nome) {
 
 // O tamanho de cada coisa: largura na capa, altura nas estrelas e na logo,
 // corpo da letra nos textos.
-const LIMITES_TAMANHO = { capa: [240, 1080], estrelas: [30, 220], logo: [24, 220], selo: [20, 90], texto: [22, 140] };
-const DE_ALTURA = ['estrelas', 'logo', 'selo']; // o tamanho delas é a altura (a, em px)
+const LIMITES_TAMANHO = { capa: [240, 1080], estrelas: [30, 220], logo: [24, 360], selo: [20, 90], tags: [18, 70], texto: [22, 140] };
+const DE_ALTURA = ['estrelas', 'logo', 'selo', 'tags']; // o tamanho delas é a altura (a, em px)
 function tamanhoDe(nome) {
   if (nome === 'capa') return { valor: story.estado.capa.l, lim: LIMITES_TAMANHO.capa };
   if (DE_ALTURA.includes(nome)) return { valor: story.estado[nome].a, lim: LIMITES_TAMANHO[nome] };
@@ -511,11 +575,17 @@ function renderControlesStory() {
   const t = sel && sel.startsWith('t-') ? textoPorEl(sel) : null;
   const tam = sel ? tamanhoDe(sel) : null;
   const anime = ehAnime(f);
-  const nomeLogo = anime ? 'Logo da AniList' : 'Logo do Letterboxd';
-  const nomeSel = { capa: 'Capa', estrelas: 'Estrelas', logo: nomeLogo, selo: 'Selo de progresso' }[sel] || (t ? 'Caixa de texto' : '');
+  const jogo = ehJogo(f);
+  const nomeLogo = jogo ? (story.logoJogo ? 'Logo da Steam' : 'Título do jogo') : anime ? 'Logo da AniList' : 'Logo do Letterboxd';
+  const nomeSel = { capa: 'Capa', estrelas: 'Estrelas', logo: nomeLogo, selo: jogo ? 'Selo de status' : 'Selo de progresso', tags: 'Tags' }[sel] || (t ? 'Caixa de texto' : '');
   // Capas das temporadas (série com mais de uma): servem de capa do story, como as do TMDB.
   const temporadas = ehSerie(f) ? temporadasDe(f).map((x, i) => ({ t: x, i })).filter((x) => x.t.poster) : [];
-  const textoSelo = anime ? seloTextoStory(f, estado.poster) : '';
+  const textoSelo = anime || jogo ? seloTextoStory(f, estado.poster) : '';
+  const textoTags = jogo ? textoTagsStory(f) : '';
+  // Jogo: a capa do story pode ser a da lista ou a da Steam (não há capas do TMDB).
+  const appidCapa = jogo ? Number(f.steam) : 0;
+  const capaSteam = appidCapa > 0 ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appidCapa}/library_600x900.jpg` : '';
+  const capasJogo = capaSteam ? [{ valor: '', rotulo: 'Da lista', src: srcCapa(f) }, { valor: capaSteam, rotulo: 'Capa da Steam', src: capaSteam }] : [];
   const chip = (dado, valor, rotulo, ativo) => `<button class="chip${ativo ? ' ativo' : ''}" data-s="${dado}" data-valor="${valor}" aria-pressed="${ativo}">${rotulo}</button>`;
   const olho = (nome, rotulo, visivel, desativado = false) => `
     <button class="story-alternar${visivel && !desativado ? ' ligado' : ''}" data-s="mostrar" data-valor="${nome}"${desativado ? ' disabled' : ''} aria-pressed="${visivel && !desativado}">
@@ -536,8 +606,8 @@ function renderControlesStory() {
 
     <section class="story-secao">
       <h3>Capa</h3>
-      <button class="btn story-btn-largo" data-s="capas" aria-expanded="${story.mostrarCapas}">${icone('Images')} ${story.mostrarCapas ? 'Esconder as capas' : 'Trocar por outra capa do TMDB'}</button>
-      ${story.mostrarCapas ? `<div class="story-capas">${
+      ${jogo ? (capasJogo.length ? `<div class="story-capas">${capasJogo.map((c) => `<button class="story-capa-opcao${(estado.poster || '') === c.valor ? ' atual' : ''}" data-s="poster" data-valor="${esc(c.valor)}"><div class="capa"><img src="${esc(c.src)}" alt=""></div><span>${esc(c.rotulo)}</span></button>`).join('')}</div>` : '') : `<button class="btn story-btn-largo" data-s="capas" aria-expanded="${story.mostrarCapas}">${icone('Images')} ${story.mostrarCapas ? 'Esconder as capas' : 'Trocar por outra capa do TMDB'}</button>`}
+      ${!jogo && story.mostrarCapas ? `<div class="story-capas">${
         capas === null ? '<p class="mensagem carregando">Carregando as capas</p>'
           : capas.erro ? `<p class="mensagem">${esc(capas.erro)}</p>`
             : `<button class="story-capa-opcao${!estado.poster ? ' atual' : ''}" data-s="poster" data-valor="" title="${vocTextoDe(f, 'A capa {de} na sua lista')}"><div class="capa"><img src="${esc(srcCapa(f))}" alt=""></div><span>Da lista</span></button>
@@ -559,7 +629,8 @@ function renderControlesStory() {
       <div class="story-alternadores">
         ${olho('estrelas', f.minhaNota ? `Estrelas · ${notaLegivel(f.minhaNota)}` : 'Estrelas (sem nota)', estado.estrelas.visivel, !f.minhaNota)}
         ${olho('logo', nomeLogo, estado.logo.visivel)}
-        ${anime ? olho('selo', textoSelo ? `Selo · ${textoSelo}` : 'Selo (sem dados)', estado.selo.visivel, !textoSelo) : ''}
+        ${anime || jogo ? olho('selo', textoSelo ? `Selo · ${textoSelo}` : 'Selo (sem dados)', estado.selo.visivel, !textoSelo) : ''}
+        ${jogo ? olho('tags', textoTags ? `Tags · ${textoTags}` : 'Tags (sem tags)', estado.tags.visivel, !textoTags) : ''}
       </div>
       ${f.minhaNota ? '' : `<p class="story-ajuda">Dê uma nota nos detalhes ${vocDe(f, 'de')} para as estrelas aparecerem.</p>`}
     </section>
@@ -595,7 +666,7 @@ function renderControlesStory() {
     </section>` : ''}
 
     <section class="story-secao">
-      <button class="btn btn-fantasma" data-s="restaurar">${icone('RotateCcw')} Voltar ${anime ? 'capa, estrelas, logo e selo' : 'capa, estrelas e logo'} ao lugar</button>
+      <button class="btn btn-fantasma" data-s="restaurar">${icone('RotateCcw')} Voltar ${jogo ? 'capa, estrelas, logo, selo e tags' : anime ? 'capa, estrelas, logo e selo' : 'capa, estrelas e logo'} ao lugar</button>
     </section>`;
 
   const range = $('#story-tamanho', story.el);
@@ -653,9 +724,10 @@ function aoClicarStory(e) {
     case 'centralizar': alvoDe(story.sel).x = STORY_L / 2; break;
     case 'apagar-texto': removerTexto(story.sel); return;
     case 'restaurar': {
-      try { localStorage.removeItem(CHAVE_PADRAO_STORY); } catch { /* nada */ }
-      const p = padraoStory();
-      Object.assign(estado, { capa: p.capa, estrelas: p.estrelas, logo: p.logo, selo: p.selo });
+      const jogoAtual = ehJogo(porId(story.id));
+      try { localStorage.removeItem(jogoAtual ? CHAVE_PADRAO_STORY_JOGO : CHAVE_PADRAO_STORY); } catch { /* nada */ }
+      const p = padraoStory(jogoAtual);
+      Object.assign(estado, { capa: p.capa, estrelas: p.estrelas, logo: p.logo, selo: p.selo, tags: p.tags });
       break;
     }
     default: return;
@@ -708,13 +780,39 @@ function salvarStory(agora = false) {
     if (f) f.story = dados;
     api.atualizarFilme(id, { story: dados });
     // O lugar da capa, das estrelas e da logo vira o padrão dos próximos stories.
-    try { localStorage.setItem(CHAVE_PADRAO_STORY, JSON.stringify({ fundo: dados.fundo, capa: dados.capa, estrelas: dados.estrelas, logo: dados.logo, selo: dados.selo })); } catch { /* nada */ }
+    try { localStorage.setItem(f && ehJogo(f) ? CHAVE_PADRAO_STORY_JOGO : CHAVE_PADRAO_STORY, JSON.stringify({ fundo: dados.fundo, capa: dados.capa, estrelas: dados.estrelas, logo: dados.logo, selo: dados.selo, tags: dados.tags })); } catch { /* nada */ }
   };
   if (agora) gravar();
   else story.timer = setTimeout(gravar, 600);
 }
 
 // ---------- Exportar ----------
+
+// Uma pílula de texto (selo, tags) como o palco a mostra: altura 2× o corpo e margem de 1 corpo dos lados.
+async function pilulaStory(ctx, elemento, cfg, { fundo, texto, borda = '' }, peso) {
+  if (elemento.hidden || !elemento.textContent) return;
+  const a = cfg.a;
+  const fonte = `${peso} ${a}px ${getComputedStyle(elemento).fontFamily}`;
+  await document.fonts.load(fonte).catch(() => {});
+  ctx.save();
+  ctx.font = fonte;
+  const w = ctx.measureText(elemento.textContent).width + a * 2;
+  const x = cfg.x - w / 2;
+  const y = cfg.y - a;
+  ctx.shadowColor = 'rgba(0, 0, 0, .4)';
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 6;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, a * 2, a);
+  ctx.fillStyle = fundo;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  if (borda) { ctx.lineWidth = 2; ctx.strokeStyle = borda; ctx.stroke(); }
+  ctx.fillStyle = texto;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(elemento.textContent, x + a, y + a + a * 0.04);
+  ctx.restore();
+}
 
 async function desenharStory() {
   const { el, estado } = story;
@@ -757,30 +855,11 @@ async function desenharStory() {
     ctx.drawImage(img, estado[nome].x - w / 2, estado[nome].y - a / 2, w, a);
   }
 
-  // O selo: uma pílula laranja (altura = 2× o corpo, margem de 1 corpo dos lados, como no palco).
-  const selo = $('.st-selo', el);
-  if (!selo.hidden && selo.textContent) {
-    const a = estado.selo.a;
-    const fonte = `700 ${a}px ${getComputedStyle(selo).fontFamily}`;
-    await document.fonts.load(fonte).catch(() => {});
-    ctx.save();
-    ctx.font = fonte;
-    const w = ctx.measureText(selo.textContent).width + a * 2;
-    const x = estado.selo.x - w / 2;
-    const y = estado.selo.y - a;
-    ctx.shadowColor = 'rgba(0, 0, 0, .4)';
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 6;
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, a * 2, a);
-    ctx.fillStyle = LARANJA_ANIME;
-    ctx.fill();
-    ctx.shadowColor = 'transparent';
-    ctx.fillStyle = '#1B0F05';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(selo.textContent, x + a, y + a + a * 0.04);
-    ctx.restore();
-  }
+  // O selo: uma pílula laranja (verde no jogo; altura = 2× o corpo, margem de 1 corpo dos lados, como no palco).
+  const jogoAtual = ehJogo(porId(story.id));
+  await pilulaStory(ctx, $('.st-selo', el), estado.selo, jogoAtual ? { fundo: VERDE_JOGO, texto: '#04210F' } : { fundo: LARANJA_ANIME, texto: '#1B0F05' }, 700);
+  // As tags do jogo: pílula escura com borda clara.
+  await pilulaStory(ctx, $('.st-tags', el), estado.tags, { fundo: 'rgba(8, 10, 12, .62)', texto: '#FFFFFF', borda: 'rgba(255, 255, 255, .28)' }, 600);
 
   // Textos: as linhas e o fundo de cada uma saem das posições do próprio palco.
   const palco = $('.story-palco', el).getBoundingClientRect();

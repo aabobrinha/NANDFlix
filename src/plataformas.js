@@ -54,7 +54,8 @@ const PLATAFORMAS = [
     pertence: ehJogo,
     rotulos: { item: 'jogo', itens: 'jogos', todos: 'Todos os jogos', nenhum: 'Nenhum jogo', artigo: 'o', genero: 'm', de: 'do jogo', deste: 'deste jogo', um: 'um jogo', este: 'este jogo', adicionar: 'Adicionar jogo', sortear: 'Sortear um jogo' },
     doMes: { chave: 'jogosDoMes', rotulo: 'Jogo do mês' },
-    recursos: ['premios', 'jogos'], // prêmios (The Game Awards, BAFTA Games); console, tags e Steam no menu Filtros (jogos-lista.js)
+    recursos: ['premios', 'jogos', 'retrospectiva'], // prêmios (The Game Awards, BAFTA Games); console, tags e Steam no menu Filtros (jogos-lista.js); retrospectiva em stories (jogos-retro.js)
+    porZerado: true, // o que marca um dia é o jogo zerado (zeradoEm), não "vi o filme" nem episódio
     tema: 'verde',
   },
   {
@@ -313,6 +314,9 @@ const escopoEst = () => escopoDe('estatisticas');
 const chaveDoMes = (p) => (p.doMes && p.doMes.chave) || 'filmesDoMes';
 const rotuloDoMes = (p) => (p.doMes && p.doMes.rotulo) || 'Item do mês';
 const porEpisodio = (p) => Boolean(p && p.porEpisodio);
+const porZerado = (p) => Boolean(p && p.porZerado);
+// Um texto que muda com o tipo da plataforma: textoDoTipo(p, filme, anime, jogo).
+const textoDoTipo = (p, filme, anime, jogo) => (porZerado(p) ? jogo : porEpisodio(p) ? anime : filme);
 
 // O menu do alto (só no hub), com o visual dos menus do app (.ordenar).
 function seletorEscopoHTML(tela) {

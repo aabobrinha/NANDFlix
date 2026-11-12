@@ -628,6 +628,13 @@ function moverWatchlist(id, de, para) {
     });
     return;
   }
+  if (para < hoje() && ehJogo(f)) {
+    // Jogo: o dia passado é o dia em que zerou (se já estava zerado, só muda o dia).
+    salvarJogo(f, { status: STATUS_JOGO_ZERADO.includes(f.status) ? f.status : 'zerado', zeradoEm: para });
+    aviso(`“${f.titulo}” zerado em ${diaLegivel(para)}.`, { tipo: 'ok' });
+    aposMudarDia(id);
+    return;
+  }
   if (para < hoje()) {
     f.visto = true;
     salvarVistoEm(f, [...(f.vistoEm || []), para]);
@@ -3424,8 +3431,9 @@ document.addEventListener('keydown', (e) => {
 // Letterboxd), até o mês atual. Cada dia mostra as capas do que foi visto; hoje mostra
 // também a watchlist. Clicar num dia abre a página do dia, com as capas grandes.
 const PRIMEIRO_MES = '2026-10';
-// Os dias em que um item foi visto: as datas de vistoEm e, nos animes, os dias com episódios (epDias).
+// Os dias em que um item foi visto: as datas de vistoEm e, nos animes, os dias com episódios (epDias); nos jogos, o dia em que zerou (zeradoEm).
 const diasVistos = (f) => {
+  if (ehJogo(f)) return f.zeradoEm && (f.visto || f.status === 'zerado' || f.status === 'cem') ? [f.zeradoEm] : []; // jogo: só o dia em que zerou
   const dias = f.vistoEm || [];
   return f.epDias ? [...new Set([...dias, ...Object.keys(f.epDias)])] : dias;
 };
@@ -3593,7 +3601,7 @@ function escolherFilmeDoMes(mes) {
   const nomeMes = MESES[Number(mes.slice(5)) - 1];
   abrirModal(`${cabecalhoModal(`${voc('Item', undefined, p)} de ${mesLegivel(mes)}`)}
     <div class="modal-corpo">
-      <p class="filme-mes-ajuda">Dos ${filmes.length} ${porEpisodio(p) ? `${voc('itens', undefined, p)} que você assistiu` : `${voc('itens', undefined, p)} que você viu`} em ${esc(nomeMes)}, qual foi o seu favorito?</p>
+      <p class="filme-mes-ajuda">Dos ${filmes.length} ${voc('itens', undefined, p)} ${textoDoTipo(p, 'que você viu', 'que você assistiu', 'que você zerou')} em ${esc(nomeMes)}, qual foi o seu favorito?</p>
       <div class="resultados filme-mes-opcoes">${filmes.map((f) => `
         <button class="resultado${atual && atual.id === f.id ? ' atual' : ''}" data-id="${f.id}">
           ${capaHTML(f)}
@@ -3621,6 +3629,7 @@ function contagemDoMes(p, mes, porDia = vistosPorDia(p)) {
 }
 // A frase de resumo do mês ("3 filmes vistos" / "12 episódios em 2 animes"), com <b>.
 function resumoDoMesHTML(p, c) {
+  if (porZerado(p)) return `<b>${c.sessoes}</b> ${c.sessoes === 1 ? 'jogo zerado' : 'jogos zerados'}`;
   if (!porEpisodio(p)) return `<b>${c.sessoes}</b> ${c.sessoes === 1 ? 'filme visto' : 'filmes vistos'}`;
   const animes = `<b>${c.itens}</b> ${c.itens === 1 ? voc('item', undefined, p) : voc('itens', undefined, p)}`;
   return c.episodios ? `<b>${c.episodios}</b> ${c.episodios === 1 ? 'episódio' : 'episódios'} em ${animes}` : `${animes} assistido${c.itens === 1 ? '' : 's'}`;
@@ -3641,6 +3650,7 @@ function mesHTML(mes) {
   const wlHoje = idsWatchlist(diaHoje, p).length;
   const doMes = itemDoMes(mes, p);
   const porEp = porEpisodio(p);
+  const jogos = porZerado(p);
 
   let celulas = '';
   for (let i = 0; i < deslocamento; i++) celulas += '<div class="cal-dia vazio" aria-hidden="true"></div>';
@@ -3667,9 +3677,9 @@ function mesHTML(mes) {
         + (vistos.length > 3 ? `<span class="cal-mais">+${vistos.length - 3}</span>` : '')
       : '';
     const pensando = wl.length
-      ? `<div class="cal-wl" title="Pensando em ver"><div class="cal-wl-capas">${wl.slice(0, 3).map((f) => capinhaHTML(f, '', dia)).join('')}${wl.length > 3 ? `<span class="cal-mais">+${wl.length - 3}</span>` : ''}</div></div>`
+      ? `<div class="cal-wl" title="${jogos ? 'Quero jogar hoje' : 'Pensando em ver'}"><div class="cal-wl-capas">${wl.slice(0, 3).map((f) => capinhaHTML(f, '', dia)).join('')}${wl.length > 3 ? `<span class="cal-mais">+${wl.length - 3}</span>` : ''}</div></div>`
       : '';
-    const rotulo = `${diaLegivel(dia)}${vistos.length ? (porEp ? `: ${eps ? `${eps} episódio${eps === 1 ? '' : 's'}` : 'assistido'}` : `: ${vistos.length} visto${vistos.length === 1 ? '' : 's'}`) : ''}${wl.length ? `, ${wl.length} na watchlist` : ''}`;
+    const rotulo = `${diaLegivel(dia)}${vistos.length ? (porEp ? `: ${eps ? `${eps} episódio${eps === 1 ? '' : 's'}` : 'assistido'}` : jogos ? `: ${vistos.length} zerado${vistos.length === 1 ? '' : 's'}` : `: ${vistos.length} visto${vistos.length === 1 ? '' : 's'}`) : ''}${wl.length ? (jogos ? `, ${wl.length} para jogar` : `, ${wl.length} na watchlist`) : ''}`;
     celulas += `
       <div class="${classes.join(' ')}" data-c="dia" data-dia="${dia}" role="button" tabindex="0" aria-label="${esc(rotulo)}">
         ${fundo}
@@ -3695,13 +3705,13 @@ function mesHTML(mes) {
       <div class="cal-stats">
         <span class="cal-stat">${icone('Check')} ${noMes
           ? `${resumoDoMesHTML(p, contagem)} em ${esc(MESES[m - 1])}`
-          : `${porEp ? 'Nada assistido' : 'Nada visto'} em ${esc(MESES[m - 1])} ainda`}</span>
+          : `${textoDoTipo(p, 'Nada visto', 'Nada assistido', 'Nada zerado')} em ${esc(MESES[m - 1])} ainda`}</span>
         ${doMes
           ? `<button class="cal-stat ouro" data-c="filme-do-mes" data-mes="${mes}" title="${esc(rotuloDoMes(p))}: ${esc(doMes.titulo)} (clique para trocar)">${icone('Trophy')} <b>${esc(doMes.titulo)}</b></button>`
           : noMes ? `<button class="cal-stat ouro vazio" data-c="filme-do-mes" data-mes="${mes}" title="Escolher ${voc('artigo', undefined, p)} ${voc('item', undefined, p)} favorito deste mês">${icone('Trophy')} ${esc(rotuloDoMes(p))}</button>` : ''}
-        ${wlHoje ? `<button class="cal-stat roxo" data-c="dia" data-dia="${diaHoje}">${icone('CalendarClock')} <b>${wlHoje}</b> pensando em ver hoje</button>` : ''}
+        ${wlHoje ? `<button class="cal-stat roxo" data-c="dia" data-dia="${diaHoje}">${icone('CalendarClock')} <b>${wlHoje}</b> ${jogos ? 'quero jogar hoje' : 'pensando em ver hoje'}</button>` : ''}
       </div>
-      <span class="cal-dica-arrasto">${icone('Move')} Solte num dia: hoje ou depois, vai para a watchlist dele; antes de hoje, ${porEp ? 'conta um episódio nele' : 'conta como visto nele'}</span>
+      <span class="cal-dica-arrasto">${icone('Move')} Solte num dia: hoje ou depois, vai para a watchlist dele; antes de hoje, ${textoDoTipo(p, 'conta como visto nele', 'conta um episódio nele', 'marca como zerado nele')}</span>
       <button class="redondo cal-fechar" data-c="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
     </div>
     <div class="cal-semana" aria-hidden="true">${DIAS_SEMANA.map((d) => `<span>${d}</span>`).join('')}</div>
@@ -3713,7 +3723,7 @@ function mesHTML(mes) {
 function filmeDoDiaHTML(f, { pensandoEm = null, vistoNoMes = null, dia = null } = {}) {
   const pf = plataformaDoItem(f);
   const eps = vistoNoMes && dia ? episodiosNoDia(f, dia) : 0;
-  const meta = [eps ? `${eps} episódio${eps === 1 ? '' : 's'}` : '', f.ano, porEpisodio(pf) ? '' : duracaoDe(f)].filter(Boolean).map(esc).join(' · ');
+  const meta = [eps ? `${eps} episódio${eps === 1 ? '' : 's'}` : '', f.ano, porZerado(pf) ? horasLegiveis(f.tempoZerar) : porEpisodio(pf) ? '' : duracaoDe(f)].filter(Boolean).map(esc).join(' · ');
   let acoes = '';
   const ehDoMes = Boolean(vistoNoMes && itemDoMes(vistoNoMes, pf)?.id === f.id);
   const nomeDoMes = rotuloDoMes(pf);
@@ -3729,8 +3739,11 @@ function filmeDoDiaHTML(f, { pensandoEm = null, vistoNoMes = null, dia = null } 
         <button data-c="mover" data-id="${f.id}" data-de="${pensandoEm}" data-para="${diaSeguinte(pensandoEm)}">${pensandoEm === hoje() ? 'Passar para amanhã' : 'Passar para o dia seguinte'} ${icone('ArrowRight')}</button>
       </div>`;
     const principais = pensandoEm === hoje()
-      ? `<button class="btn btn-assistir" data-c="assistir" data-id="${f.id}">${ICONE_PLAY} Assistir</button>
-         <button class="redondo" data-c="vi" data-id="${f.id}" title="Marcar como visto hoje" aria-label="Marcar como visto hoje">${icone('Check')}</button>`
+      ? (porZerado(pf)
+        ? `<button class="btn btn-assistir" data-c="detalhes" data-id="${f.id}">${icone('Gamepad2')} Ver o jogo</button>
+         <button class="redondo" data-c="vi" data-id="${f.id}" title="Marcar como zerado hoje" aria-label="Marcar como zerado hoje">${icone('Check')}</button>`
+        : `<button class="btn btn-assistir" data-c="assistir" data-id="${f.id}">${ICONE_PLAY} Assistir</button>
+         <button class="redondo" data-c="vi" data-id="${f.id}" title="Marcar como visto hoje" aria-label="Marcar como visto hoje">${icone('Check')}</button>`)
       : '';
     acoes = `<div class="cal-filme-botoes">${principais}${tirar}</div>${mover}`;
   }
@@ -3741,7 +3754,7 @@ function filmeDoDiaHTML(f, { pensandoEm = null, vistoNoMes = null, dia = null } 
       ${capinhaHTML(f, 'grande')}
       <div class="cal-filme-info">
         <h4><button class="cal-filme-titulo" data-c="detalhes" data-id="${f.id}">${esc(f.titulo)}</button></h4>
-        <p>${meta}${f.diretor ? `<br>${esc(f.diretor)}` : ''}</p>
+        <p>${meta}${porZerado(pf) ? (desenvolvedoresDoJogo(f)[0] ? `<br>${esc(desenvolvedoresDoJogo(f)[0])}` : '') : f.diretor ? `<br>${esc(f.diretor)}` : ''}</p>
         ${vistoNoMes && f.minhaNota ? notaFixaHTML(f.minhaNota) : ''}
       </div>
       ${acoes}
@@ -3765,6 +3778,7 @@ function diaSeguinte(dia) {
 function paginaDiaHTML(dia) {
   const p = escopoCal();
   const porEp = porEpisodio(p);
+  const jogos = porZerado(p);
   const vistos = vistosPorDia(p).get(dia) || [];
   const ehHoje = dia === hoje();
   const futuro = dia > hoje();
@@ -3789,20 +3803,20 @@ function paginaDiaHTML(dia) {
     </div>
     ${ehHoje || futuro ? `
       <section class="cal-secao" data-secao="watchlist">
-        <h3>${icone('CalendarClock')} ${ehHoje ? 'Pensando em ver hoje' : 'Pensando em ver neste dia'} ${contagem(watchlist.length)}
-          ${ehHoje ? `<span class="cal-sortear-botoes"><button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje" title="${vocTexto('Sortear {um} não visto para a watchlist de hoje', p)}">${icone('Dices')} ${voc('sortear', undefined, p)}</button><button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje-filtro" title="Sortear só por duração, gênero, década ou país">${icone('SlidersHorizontal')} Sortear com filtro</button></span>` : ''}</h3>
+        <h3>${icone('CalendarClock')} ${jogos ? (ehHoje ? 'Quero jogar hoje' : 'Quero jogar neste dia') : ehHoje ? 'Pensando em ver hoje' : 'Pensando em ver neste dia'} ${contagem(watchlist.length)}
+          ${ehHoje ? `<span class="cal-sortear-botoes"><button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje" title="${vocTexto('Sortear {um} não visto para a watchlist de hoje', p)}">${icone('Dices')} ${voc('sortear', undefined, p)}</button><button class="btn btn-fantasma cal-sortear" data-c="sortear-hoje-filtro" title="${jogos ? 'Sortear só por status, console, gênero ou tag' : 'Sortear só por duração, gênero, década ou país'}">${icone('SlidersHorizontal')} Sortear com filtro</button></span>` : ''}</h3>
         ${watchlist.length
           ? `<div class="cal-filmes">${watchlist.map((f) => filmeDoDiaHTML(f, { pensandoEm: dia })).join('')}</div>`
           : `<p class="cal-vazio">${ehHoje
-            ? `${voc('Nenhum', undefined, p)} ainda. Use o ${icone('CalendarClock')} na capa ${vocTexto('de {um}', p)}, na prévia ou nos detalhes para colocar aqui o que você está pensando em ver hoje. A lista some quando o dia vira, às 5h.`
+            ? `${voc('Nenhum', undefined, p)} ainda. Use o ${icone('CalendarClock')} na capa ${vocTexto('de {um}', p)}, na prévia ou nos detalhes para colocar aqui o que você ${jogos ? 'quer jogar' : 'está pensando em ver'} hoje. A lista some quando o dia vira, às 5h.`
             : `${voc('Nenhum', undefined, p)} planejado para este dia. No mês, arraste uma capa da watchlist para cá.`}</p>`}
       </section>` : ''}
     ${futuro ? '' : `
     <section class="cal-secao cal-secao-vistos">
-      <h3>${icone('Check')} ${porEp ? (ehHoje ? 'Assistidos hoje' : 'Assistidos neste dia') : (ehHoje ? 'Vistos hoje' : 'Vistos neste dia')} ${contagem(vistos.length)}</h3>
+      <h3>${icone('Check')} ${jogos ? (ehHoje ? 'Zerados hoje' : 'Zerados neste dia') : porEp ? (ehHoje ? 'Assistidos hoje' : 'Assistidos neste dia') : (ehHoje ? 'Vistos hoje' : 'Vistos neste dia')} ${contagem(vistos.length)}</h3>
       ${vistos.length
         ? vistosDoDiaHTML(vistos, dia)
-        : `<p class="cal-vazio">${porEp ? (ehHoje ? 'Nenhum episódio assistido hoje ainda.' : 'Nenhum episódio assistido neste dia.') : (ehHoje ? 'Nada visto hoje ainda.' : 'Nada visto neste dia.')}</p>`}
+        : `<p class="cal-vazio">${jogos ? (ehHoje ? 'Nenhum jogo zerado hoje ainda.' : 'Nenhum jogo zerado neste dia.') : porEp ? (ehHoje ? 'Nenhum episódio assistido hoje ainda.' : 'Nenhum episódio assistido neste dia.') : (ehHoje ? 'Nada visto hoje ainda.' : 'Nada visto neste dia.')}</p>`}
     </section>`}`;
 }
 
@@ -4003,6 +4017,8 @@ calendario.addEventListener('click', (e) => {
     case 'detalhes': abrirPainel(id); break;
     case 'assistir': abrirStremio(id); break;
     case 'vi':
+      // Jogo: o ✓ é "zerei hoje" (sai da lista de hoje).
+      if (ehJogo(porId(id))) { tirarDaWatchlist(id, hoje()); mudarStatusJogo(porId(id), 'zerado'); break; }
       // Anime: o ✓ é "vi mais um episódio" (e sai da lista de hoje); filme: marca como visto.
       if (ehSerie(porId(id))) { tirarDaWatchlist(id, hoje()); viMaisUm(id); break; }
       alternar(id, 'visto', true); aviso(`“${porId(id).titulo}” marcado como visto hoje.`, { tipo: 'ok' }); break;
@@ -4233,20 +4249,28 @@ function listaAtiva() {
   return visiveis.find((l) => l.id === estado.config.tierlistAtiva) || visiveis[0];
 }
 // Quem pode entrar numa tierlist: os itens da plataforma dela que a pessoa já viu (anime: já começou).
-const jaViuTl = (f) => Boolean(f.visto) || (ehSerie(f) && Number(f.episodiosVistos) > 0);
+// Jogo: entra quem já foi jogado (qualquer status menos "quero jogar"): larguei também merece a sua tier.
+const jaViuTl = (f) => Boolean(f.visto) || (ehSerie(f) && Number(f.episodiosVistos) > 0) || (ehJogo(f) && Boolean(f.status) && f.status !== 'quero');
+// "viu" nas frases da tierlist: filme visto / anime assistido / jogo jogado.
+const textoTl = (pl, n) => textoDoTipo(pl, n === 1 ? 'filme visto' : 'filmes vistos', n === 1 ? 'anime assistido' : 'animes assistidos', n === 1 ? 'jogo jogado' : 'jogos jogados');
 const itensTl = (l = listaAtiva()) => itensDaPlataforma(estado.filmes, plataformaDaTl(l)).filter(jaViuTl);
 function tiers() { return listaAtiva().tiers; }
 function salvarTiers() { api.salvarConfig({ tierlists: listasTl(), tierlistAtiva: listaAtiva().id }); }
 
 // ---- Filtros da tierlist (gênero, diretor, país, década, mês em que viu) ----
+// `soJogo`/`naoJogo`: o filtro só vale para as tierlists de jogos (console, desenvolvedor, tags) ou só para as outras.
 const FILTROS_TL = [
-  { chave: 'listas', titulo: 'Lista', valores: (f) => listasDe(f) },
-  { chave: 'generos', titulo: 'Gênero', valores: (f) => generos(f.info) },
-  { chave: 'diretores', titulo: 'Diretor', valores: (f) => nomesDiretores(f.diretor) },
-  { chave: 'paises', titulo: 'País', valores: (f) => paisesDe(f) },
+  { chave: 'listas', titulo: 'Lista', naoJogo: true, valores: (f) => listasDe(f) },
+  { chave: 'generos', titulo: 'Gênero', valores: (f) => (ehJogo(f) ? (f.generos || []) : generos(f.info)) },
+  { chave: 'diretores', titulo: 'Diretor', naoJogo: true, valores: (f) => nomesDiretores(f.diretor) },
+  { chave: 'paises', titulo: 'País', naoJogo: true, valores: (f) => paisesDe(f) },
+  { chave: 'consoles', titulo: 'Console', soJogo: true, valores: (f) => [...new Set(consolesDoJogo(f))] },
+  { chave: 'desenvolvedores', titulo: 'Desenvolvedor', soJogo: true, valores: (f) => [...new Set(desenvolvedoresDoJogo(f))] },
+  { chave: 'tags', titulo: 'Tag', soJogo: true, valores: (f) => tagsDoJogo(f) },
   { chave: 'decadas', titulo: 'Década', valores: (f) => { const d = decadaDe(f); return d === null ? [] : [String(d)]; } },
-  { chave: 'meses', titulo: 'Mês em que viu', valores: (f) => [...new Set((f.vistoEm || []).map((d) => d.slice(0, 7)))] },
+  { chave: 'meses', titulo: 'Mês em que viu', tituloJogo: 'Mês em que zerou', valores: (f) => [...new Set((ehJogo(f) ? diasVistos(f) : f.vistoEm || []).map((d) => d.slice(0, 7)))] },
 ];
+const filtrosTlDe = (pl) => FILTROS_TL.filter((x) => (porZerado(pl) ? !x.naoJogo : !x.soJogo));
 const rotuloFiltroTl = (chave, v) => (chave === 'decadas' ? `Anos ${Number(v) < 2000 ? v.slice(2) : v}` : chave === 'meses' ? mesLegivel(v) : v);
 const filtrosTl = () => listaAtiva().filtros || {};
 const qtdFiltrosTl = () => Object.values(filtrosTl()).reduce((n, v) => n + (v || []).length, 0);
@@ -4294,7 +4318,7 @@ function renderTierlist() {
     const filmes = t.filmes.filter((id) => vistosIds.has(id) && !naTier.has(id)).map(porId);
     filmes.forEach((f) => naTier.add(f.id));
     return `
-      <div class="tl-tier" data-tier="${t.id}" style="--cor: ${esc(t.cor)}">
+      <div class="tl-tier" data-tier="${t.id}" data-vazio="Arraste ${esc(voc('itens', undefined, pl))} para cá" style="--cor: ${esc(t.cor)}">
         <span class="tl-alca" title="Arraste para mudar a tier de posição" aria-hidden="true">${icone('GripVertical')}</span>
         <button class="tl-rotulo" data-t="renomear" title="Clique para renomear, arraste para mudar de posição"><span class="tl-nome">${esc(t.nome) || '&nbsp;'}</span></button>
         <div class="tl-filmes" data-soltar="${t.id}">${filmes.map(capaTlHTML).join('')}</div>
@@ -4309,7 +4333,7 @@ function renderTierlist() {
   caixa.innerHTML = `
     <div class="tl-topo">
       <button class="tl-titulo" data-t="listas" title="Trocar de tierlist, criar outra ou renomear" aria-haspopup="menu"><h2>${esc(listaAtiva().nome || 'Tierlist')}</h2>${icone('ChevronDown')}</button>
-      <span class="cal-stat">${icone('Check')} <b>${naTier.size}</b> de ${vistos.length} ${porEpisodio(pl) ? (vistos.length === 1 ? 'anime assistido' : 'animes assistidos') : (vistos.length === 1 ? 'filme visto' : 'filmes vistos')}${nFiltros ? ' (com filtro)' : ''} classificados</span>${plataformaAtual().hub ? `<span class="cal-stat tl-plataforma">${iconePlataformaHTML(pl, 'tl-plat-icone')} ${esc(voc('Itens', undefined, pl))} · ${esc(pl.nome)}</span>` : ''}
+      <span class="cal-stat">${icone('Check')} <b>${naTier.size}</b> de ${vistos.length} ${textoTl(pl, vistos.length)}${nFiltros ? ' (com filtro)' : ''} classificados</span>${plataformaAtual().hub ? `<span class="cal-stat tl-plataforma">${iconePlataformaHTML(pl, 'tl-plat-icone')} ${esc(voc('Itens', undefined, pl))} · ${esc(pl.nome)}</span>` : ''}
       <button class="btn btn-fantasma tl-filtros${nFiltros ? ' ativo' : ''}" data-t="filtros" aria-haspopup="dialog">${icone('SlidersHorizontal')} ${nFiltros ? `Filtros (${nFiltros})` : 'Filtros'}</button>
       <button class="btn btn-fantasma tl-nova" data-t="nova">${icone('Plus')} Nova tier</button>
       <button class="redondo tl-fechar" data-t="fechar" title="Fechar (Esc)" aria-label="Fechar">${icone('X')}</button>
@@ -4322,7 +4346,7 @@ function renderTierlist() {
       </div>
       <div class="tl-filmes tl-sem" data-soltar="">${soltos.map((f) => capaTlHTML(f).replace('class="tl-capa"',
         `class="tl-capa"${termo && !normalizar(`${f.titulo} ${f.ano} ${f.diretor || ''}`).includes(termo) ? ' hidden' : ''}`)).join('')}</div>
-      ${vistos.length ? '' : `<p class="tl-nenhuma">${nFiltros && todosVistos.length ? `${voc('Nenhum', undefined, pl)} passa nos filtros desta tierlist.` : (porEpisodio(pl) ? 'Os animes que você começar a assistir aparecem aqui.' : 'Os filmes que você marcar como vistos aparecem aqui.')}</p>`}
+      ${vistos.length ? '' : `<p class="tl-nenhuma">${nFiltros && todosVistos.length ? `${voc('Nenhum', undefined, pl)} passa nos filtros desta tierlist.` : textoDoTipo(pl, 'Os filmes que você marcar como vistos aparecem aqui.', 'Os animes que você começar a assistir aparecem aqui.', 'Os jogos que você começar a jogar (ou zerar) aparecem aqui.')}</p>`}
     </div>`;
   ajustarTamanhoTl();
   [...$$('.tl-tiers, .tl-sem', caixa)].forEach((el, i) => { el.scrollTop = rolagem[i] || 0; });
@@ -4574,13 +4598,13 @@ function renomearTierlist() {
 function abrirFiltrosTl(botao) {
   const plTl = plataformaDaTl(listaAtiva());
   const vistos = itensTl();
-  const grupos = FILTROS_TL.map(({ chave, titulo, valores }) => {
+  const grupos = filtrosTlDe(plTl).map(({ chave, titulo, tituloJogo, valores }) => {
     const contagem = new Map();
     for (const f of vistos) for (const v of valores(f)) contagem.set(v, (contagem.get(v) || 0) + 1);
     let itens = [...contagem];
     itens = chave === 'meses' || chave === 'decadas' ? itens.sort((a, b) => b[0].localeCompare(a[0])) : itens.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt'));
     if (chave === 'decadas') itens.reverse();
-    return { chave, titulo, itens };
+    return { chave, titulo: tituloJogo && porZerado(plTl) ? tituloJogo : titulo, itens };
   }).filter((g) => g.itens.length);
   const desenhar = (menu) => {
     const filtros = filtrosTl();
@@ -4593,7 +4617,7 @@ function abrirFiltrosTl(botao) {
         }).join('')}</div>
       </div>`).join('');
     const n = vistos.filter((f) => passaFiltroTl(f)).length;
-    $('.tl-filtros-contagem', menu).textContent = porEpisodio(plTl) ? (n === 1 ? '1 anime assistido aparece' : `${n} animes assistidos aparecem`) : (n === 1 ? '1 filme visto aparece' : `${n} filmes vistos aparecem`);
+    $('.tl-filtros-contagem', menu).textContent = `${n} ${textoTl(plTl, n)} ${n === 1 ? 'aparece' : 'aparecem'}`;
     $('[data-acao="limpar"]', menu).disabled = !qtdFiltrosTl();
   };
   const menu = abrirMenuTl(botao, `
@@ -4938,6 +4962,7 @@ function capasEstHTML(filmes, legenda = () => '') {
 
 function renderEstatisticas() {
   const p = escopoEst();
+  if (porZerado(p)) { renderEstatisticasJogos(p); return; }
   if (porEpisodio(p)) { renderEstatisticasAnimes(p); return; }
   const caixa = $('#retrospectiva-caixa');
   const anos = anosComFilmes(p);
@@ -5209,6 +5234,8 @@ estatisticas.addEventListener('click', (e) => {
     case 'filme': abrirPainel(alvo.dataset.id); break;
     case 'diretor': fecharEstatisticas(); filtrarDiretor(alvo.dataset.valor); break;
     case 'pais': fecharEstatisticas(); filtrarPais(alvo.dataset.valor); break;
+    case 'console': filtrarJogosPor('consoleJogo', alvo.dataset.valor); break;
+    case 'tag-jogo': filtrarJogosPor('tagJogo', alvo.dataset.valor); break;
   }
 });
 estatisticas.addEventListener('keydown', (e) => {

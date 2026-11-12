@@ -1210,6 +1210,8 @@ button.tl-rotulo { position: relative; cursor: grab; touch-action: none; overflo
   content: 'Arraste filmes para cá'; align-self: center; margin: auto 0;
   color: rgba(232, 235, 240, .22); font-size: 13px; font-weight: 500;
 }
+/* No hub as tierlists são de uma mídia só: o texto vem do atributo da tier (data-vazio), com "filmes" de reserva. */
+.tl-tier[data-vazio] .tl-filmes:not(:has(.tl-capa))::before { content: attr(data-vazio); }
 .tl-capa {
   position: relative; flex: none; width: var(--larg-capa-tl, 64px); border-radius: 6px; cursor: grab;
   transition: transform .15s var(--saida), opacity .15s ease-out;
@@ -2411,6 +2413,10 @@ img.st-el { display: block; }
 /* O selo de progresso dos animes: pílula laranja com a altura de 2× o corpo (o canvas desenha igual). */
 .st-selo { padding: .5em 1em; border-radius: 999px; background: #FF9340; color: #1B0F05; font: 700 38px/1 var(--ui); white-space: nowrap; box-shadow: 0 6px 24px rgba(0, 0, 0, .4); }
 .st-selo[hidden] { display: none; }
+/* nandplay: o selo de status é verde; as tags são uma pílula escura (o canvas desenha igual). */
+.story-palco[data-jogo] .st-selo { background: #3DDC84; color: #04210F; }
+.st-tags { padding: .5em 1em; border-radius: 999px; background: rgba(8, 10, 12, .62); color: #fff; border: 2px solid rgba(255, 255, 255, .28); font: 600 28px/1 var(--ui); white-space: nowrap; box-shadow: 0 6px 24px rgba(0, 0, 0, .4); }
+.st-tags[hidden] { display: none; }
 .st-linhas:empty::before { content: attr(data-vazio); opacity: .45; }
 .st-guia { position: absolute; background: rgba(0, 224, 84, .85); pointer-events: none; }
 .st-guia-v { left: calc(50% - 2px); top: 0; bottom: 0; width: 4px; }

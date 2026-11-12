@@ -18,10 +18,12 @@ let retro = null; // { el, periodo, d, slides }
 // As cores que mudam por plataforma: acento, estrelas e o nome no rodapé.
 const TEMA_RETRO_FILMES = { acento: RETRO_COR.acento, estrelas: VERDE_LB, marca: 'nandflix' };
 const TEMA_RETRO_ANIMES = { acento: '#FF9A4D', estrelas: LARANJA_ANIME, marca: 'nandchan' };
+const TEMA_RETRO_JOGOS = { acento: '#3DDC84', estrelas: VERDE_JOGO, marca: 'nandplay' }; // slides em jogos-retro.js
 let retroTema = TEMA_RETRO_FILMES;
 const ehRetroAnime = (d) => Boolean(d.p && porEpisodio(d.p));
-// Texto abaixo do título de um item: ano e diretor (filme) ou estúdio (anime).
-const subRetro = (f) => [f.ano, ehAnime(f) ? nomesEstudios(f)[0] : nomesDiretores(f.diretor)[0]].filter(Boolean).join(' · ');
+const ehRetroJogo = (d) => Boolean(d.p && porZerado(d.p));
+// Texto abaixo do título de um item: ano e diretor (filme), estúdio (anime) ou desenvolvedor (jogo).
+const subRetro = (f) => [f.ano, ehJogo(f) ? desenvolvedoresDoJogo(f)[0] : ehAnime(f) ? nomesEstudios(f)[0] : nomesDiretores(f.diretor)[0]].filter(Boolean).join(' · ');
 // Episódios de um anime no período (em "Tudo", o total marcado, com ou sem data).
 const epsRetro = (d, f, periodo) => (periodo === 'tudo' && ehSerie(f) ? Number(f.episodiosVistos) || 0 : d.sessoes.filter((s) => s.f === f).reduce((n, s) => n + (s.eps || 0), 0));
 
@@ -155,7 +157,7 @@ function kickerRetro(ctx, texto, x, y, cor = retroTema.acento) {
 }
 
 const rotuloRetro = (p) => (p === 'tudo' ? 'Tudo até agora' : p.length === 7 ? mesLegivel(p).replace(/^./, (c) => c.toUpperCase()) : p);
-const tituloRetro = (p) => (p === 'tudo' ? 'Tudo o que eu vi' : p.length === 7 ? `Meu ${MESES[Number(p.slice(5)) - 1]}` : `Meu ${p}`);
+const tituloRetro = (p, verbo = 'vi') => (p === 'tudo' ? `Tudo o que eu ${verbo}` : p.length === 7 ? `Meu ${MESES[Number(p.slice(5)) - 1]}` : `Meu ${p}`);
 const novoCanvas = () => { const c = document.createElement('canvas'); c.width = RETRO_L; c.height = RETRO_A; return c; };
 
 // ---- A tierlist da retrospectiva ----
@@ -164,7 +166,7 @@ const novoCanvas = () => { const c = document.createElement('canvas'); c.width =
 // período ou todos, título) ficam guardados neste computador.
 
 // Cada plataforma tem as suas tierlists e os seus ajustes (os de animes numa chave à parte).
-const chaveTierRetro = (p) => (p && porEpisodio(p) ? 'retroTierlistAnimes' : 'retroTierlist');
+const chaveTierRetro = (p) => (p && porZerado(p) ? 'retroTierlistJogos' : p && porEpisodio(p) ? 'retroTierlistAnimes' : 'retroTierlist');
 function cfgTierRetro(p) {
   const padrao = { lista: null, ocultas: {}, todos: false, titulo: '' };
   try { return { ...padrao, ...JSON.parse(localStorage.getItem(chaveTierRetro(p)) || '{}') }; } catch { return padrao; }
@@ -237,9 +239,10 @@ async function slideCapa(d, periodo, imgs) {
   const ctx = c.getContext('2d');
   fundoRetro(ctx, imgs, { tom: 0.45 });
   kickerRetro(ctx, 'Retrospectiva', 80, 250);
-  let y = escrever(ctx, tituloRetro(periodo), 80, 270, { peso: 800, tam: 128, altura: 1.02, maxLinhas: 2 });
+  let y = escrever(ctx, tituloRetro(periodo, ehRetroJogo(d) ? 'zerei' : 'vi'), 80, 270, { peso: 800, tam: 128, altura: 1.02, maxLinhas: 2 });
   const an = ehRetroAnime(d);
-  y = escrever(ctx, an ? 'em animes' : 'em filmes', 80, y, { peso: 800, tam: 128, altura: 1.02, cor: RETRO_COR.apagado });
+  const jg = ehRetroJogo(d);
+  y = escrever(ctx, jg ? 'em jogos' : an ? 'em animes' : 'em filmes', 80, y, { peso: 800, tam: 128, altura: 1.02, cor: RETRO_COR.apagado });
 
   // O número grande: filmes, ou episódios nos animes (sem episódios datados, os animes).
   const porEp = an && d.episodios > 0;
@@ -248,12 +251,12 @@ async function slideCapa(d, periodo, imgs) {
   ctx.fillStyle = RETRO_COR.texto;
   ctx.fillText(grande.toLocaleString('pt-BR'), 64, y + 320);
   const horas = Math.round(d.minutos / 60);
-  const partes = [porEp ? (grande === 1 ? 'episódio' : 'episódios') : voc(grande === 1 ? 'item' : 'itens', undefined, d.p)];
+  const partes = [jg ? (grande === 1 ? 'jogo zerado' : 'jogos zerados') : porEp ? (grande === 1 ? 'episódio' : 'episódios') : voc(grande === 1 ? 'item' : 'itens', undefined, d.p)];
   if (porEp) partes.push(`${d.lista.length} ${voc(d.lista.length === 1 ? 'item' : 'itens', undefined, d.p)}`);
-  if (horas) partes.push(`${horas.toLocaleString('pt-BR')} ${horas === 1 ? 'hora' : 'horas'}`);
-  // Nos animes a linha já é longa: "10 dias" (sem o "com anime") para não quebrar.
-  if (d.dias.length) partes.push(`${d.dias.length} ${d.dias.length === 1 ? 'dia' : 'dias'}${an ? '' : ` com ${voc('item', undefined, d.p)}`}`);
-  escrever(ctx, partes.join(' · '), 80, y + 340, { peso: 500, tam: an ? 36 : 40, cor: RETRO_COR.apagado });
+  if (horas) partes.push(jg ? `${horas.toLocaleString('pt-BR')} h para zerar` : `${horas.toLocaleString('pt-BR')} ${horas === 1 ? 'hora' : 'horas'}`);
+  // Nos animes e nos jogos a linha já é longa: "10 dias" (sem o "com anime") para não quebrar.
+  if (d.dias.length) partes.push(`${d.dias.length} ${d.dias.length === 1 ? 'dia' : 'dias'}${an || jg ? '' : ` com ${voc('item', undefined, d.p)}`}`);
+  escrever(ctx, partes.join(' · '), 80, y + 340, { peso: 500, tam: an || jg ? 36 : 40, cor: RETRO_COR.apagado });
 
   // Três capas em leque: as maiores notas (ou as últimas vistas).
   const tres = topFilmes(d, periodo).slice(0, 3);
@@ -498,7 +501,7 @@ async function slideMosaico(d, periodo, imgs) {
   const ctx = c.getContext('2d');
   fundoRetro(ctx, imgs, { tom: 0.2 });
   kickerRetro(ctx, rotuloRetro(periodo), 80, 210);
-  const verbo = ehRetroAnime(d) ? 'assisti' : 'vi';
+  const verbo = ehRetroJogo(d) ? 'zerei' : ehRetroAnime(d) ? 'assisti' : 'vi';
   const titulo = periodo === 'tudo' ? `Tudo o que eu ${verbo}` : periodo.length === 7 ? `Tudo o que eu ${verbo} em ${MESES[Number(periodo.slice(5)) - 1]}` : `Tudo o que eu ${verbo} em ${periodo}`;
   const yTopo = escrever(ctx, titulo, 80, 230, { peso: 800, tam: 80, maxLinhas: 2 }) + 50;
   const area = { l: RETRO_L - 160, a: RETRO_A - yTopo - 200 };
@@ -612,15 +615,16 @@ async function slideResumo(d, periodo) {
   const c = novoCanvas();
   const ctx = c.getContext('2d');
   const an = ehRetroAnime(d);
+  const jg = ehRetroJogo(d);
   const g = ctx.createLinearGradient(0, 0, RETRO_L, RETRO_A);
-  const [c0, c1, c2] = an ? ['#3B1A07', '#9A4A12', '#E8832A'] : ['#2A1650', '#5B3A9A', '#8A5FD0'];
+  const [c0, c1, c2] = jg ? ['#06301A', '#0F6B3A', '#2FBF71'] : an ? ['#3B1A07', '#9A4A12', '#E8832A'] : ['#2A1650', '#5B3A9A', '#8A5FD0'];
   g.addColorStop(0, c0);
   g.addColorStop(0.55, c1);
   g.addColorStop(1, c2);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, RETRO_L, RETRO_A);
   // Um brilho no canto, para não ficar chapado (verde nos filmes, dourado nos animes).
-  const rgb = an ? '255, 196, 110' : '0, 224, 84';
+  const rgb = jg ? '150, 255, 200' : an ? '255, 196, 110' : '0, 224, 84';
   const brilho = ctx.createRadialGradient(RETRO_L * 0.85, 260, 0, RETRO_L * 0.85, 260, 700);
   brilho.addColorStop(0, `rgba(${rgb}, .22)`);
   brilho.addColorStop(1, `rgba(${rgb}, 0)`);
@@ -634,11 +638,12 @@ async function slideResumo(d, periodo) {
   const ph = 600;
   capaNoCanvas(ctx, img, (RETRO_L - pw) / 2, 150, pw, ph, { raio: 16 });
 
-  const lilas = an ? '#FFDDBF' : '#D9C8FF';
+  const lilas = jg ? '#C8F7DC' : an ? '#FFDDBF' : '#D9C8FF';
   const colunas = [
     [`Top ${voc('itens', undefined, d.p)}`, porNota.slice(0, 5).map((f) => f.titulo)],
-    an ? ['Top estúdios', ranking(d.lista.flatMap(nomesEstudios), 5).map(([n]) => n)]
-      : ['Top diretores', ranking(d.lista.flatMap((f) => nomesDiretores(f.diretor)), 5).map(([n]) => n)],
+    jg ? ['Top desenvolvedores', ranking(d.lista.flatMap((f) => [...new Set(desenvolvedoresDoJogo(f))]), 5).map(([n]) => n)]
+      : an ? ['Top estúdios', ranking(d.lista.flatMap(nomesEstudios), 5).map(([n]) => n)]
+        : ['Top diretores', ranking(d.lista.flatMap((f) => nomesDiretores(f.diretor)), 5).map(([n]) => n)],
   ];
   const larg = 440;
   colunas.forEach(([rot, itens], ci) => {
@@ -658,10 +663,11 @@ async function slideResumo(d, periodo) {
   });
 
   const horas = Math.round(d.minutos / 60);
-  const genero = ranking(d.lista.flatMap((f) => generos(f.info)), 1)[0];
+  const genero = ranking(d.lista.flatMap((f) => (jg ? f.generos || [] : generos(f.info))), 1)[0];
+  const horasSteam = jg && d.temSteam && d.minutosJogados ? Math.round(d.minutosJogados / 60) : 0;
   const blocos = [
-    an ? ['Episódios', d.episodios.toLocaleString('pt-BR'), 120] : ['Filmes vistos', d.lista.length.toLocaleString('pt-BR'), 120],
-    [an ? 'Horas de anime' : 'Horas de filme', horas.toLocaleString('pt-BR'), 120],
+    jg ? ['Jogos zerados', d.lista.length.toLocaleString('pt-BR'), 120] : an ? ['Episódios', d.episodios.toLocaleString('pt-BR'), 120] : ['Filmes vistos', d.lista.length.toLocaleString('pt-BR'), 120],
+    jg ? (horasSteam ? ['Horas na Steam', horasSteam.toLocaleString('pt-BR'), 120] : ['Horas para zerar', horas.toLocaleString('pt-BR'), 120]) : [an ? 'Horas de anime' : 'Horas de filme', horas.toLocaleString('pt-BR'), 120],
     ['Gênero do período', genero ? genero[0] : '—', 54],
     ['Nota média', d.media ? `★ ${notaLegivel(Math.round(d.media * 10) / 10)}` : '—', 54],
   ];
@@ -673,7 +679,7 @@ async function slideResumo(d, periodo) {
     ctx.fillText(rot, x, y);
     ctx.font = fonteRetro(800, tam);
     // A nota: verde no roxo dos filmes; nos animes, branca (laranja sobre laranja some).
-    ctx.fillStyle = String(val).startsWith('★') && !an ? retroTema.estrelas : '#FFFFFF';
+    ctx.fillStyle = String(val).startsWith('★') && !an && !jg ? retroTema.estrelas : '#FFFFFF';
     ctx.fillText(caber(ctx, val, larg), x - (tam > 100 ? 4 : 0), y + (tam > 100 ? 128 : 74));
   });
 
@@ -694,11 +700,13 @@ async function slideResumo(d, periodo) {
 async function abrirRetrospectivaStory(periodo, p = plataformaAtual().hub ? plataformaPorId('nandflix') : plataformaAtual()) {
   if (retro) fecharRetro();
   const an = porEpisodio(p);
-  const d = an ? dadosDoPeriodoAnimes(periodo, p) : dadosDoPeriodo(periodo, p);
+  const jg = porZerado(p);
+  const d = jg ? dadosDoPeriodoJogos(periodo, p) : an ? dadosDoPeriodoAnimes(periodo, p) : dadosDoPeriodo(periodo, p);
   d.p = p;
+  if (jg) d.minutos = d.horasZerar * 60; // os slides somam "horas" a partir de d.minutos (aqui: o tempo para zerar)
   if (an) d.lista = d.itens; // os slides leem a lista de itens do período em d.lista
-  if (!d.lista.length) { aviso(`Nenhum ${voc('item', undefined, p)} ${an ? 'assistido' : 'visto'} neste período.`); return; }
-  retroTema = an ? TEMA_RETRO_ANIMES : TEMA_RETRO_FILMES;
+  if (!d.lista.length) { aviso(`Nenhum ${voc('item', undefined, p)} ${jg ? 'zerado' : an ? 'assistido' : 'visto'} neste período.`); return; }
+  retroTema = jg ? TEMA_RETRO_JOGOS : an ? TEMA_RETRO_ANIMES : TEMA_RETRO_FILMES;
   const el = document.createElement('div');
   el.className = 'retro-tela';
   el.setAttribute('role', 'dialog');
@@ -727,7 +735,7 @@ async function abrirRetrospectivaStory(periodo, p = plataformaAtual().hub ? plat
   const fundoImgs = await Promise.all(d.lista.slice(0, 12).map(imagemRetro));
   if (retro !== meu) return;
   // Cada slide tem um nome: mexer na tierlist redesenha só os que dependem dela.
-  meu.slides = [
+  meu.slides = jg ? slidesRetroJogos(d, periodo, fundoImgs, p) : [
     { k: 'capa', fazer: () => slideCapa(d, periodo, fundoImgs) },
     { k: 'notas', fazer: () => slideNotas(d, periodo, fundoImgs) },
     ...(an ? [{ k: 'eps', fazer: () => slideMaisAssistidos(d, periodo, fundoImgs) }] : []),
@@ -816,7 +824,7 @@ function ajustesTierHTML() {
     <div class="ra-grupo">
       <span class="ra-rotulo">${esc(voc('Itens', undefined, d.p))}</span>
       <div class="ra-chips">
-        ${chip(!cfg.todos, 'data-r="tl-todos" data-v="0"', `Vistos em ${esc(rotuloRetro(periodo).toLowerCase())}`)}
+        ${chip(!cfg.todos, 'data-r="tl-todos" data-v="0"', `${ehRetroJogo(d) ? 'Zerados' : 'Vistos'} em ${esc(rotuloRetro(periodo).toLowerCase())}`)}
         ${chip(cfg.todos, 'data-r="tl-todos" data-v="1"', 'Todos da tierlist')}
       </div>
     </div>
@@ -886,7 +894,7 @@ function fecharRetro() {
 async function aoClicarRetro(e) {
   const b = e.target.closest('[data-r]');
   if (!b || !retro) return;
-  const nome = `Retrospectiva ${rotuloRetro(retro.periodo)}${ehRetroAnime(retro.d) ? ' - animes' : ''}`;
+  const nome = `Retrospectiva ${rotuloRetro(retro.periodo)}${ehRetroJogo(retro.d) ? ' - jogos' : ehRetroAnime(retro.d) ? ' - animes' : ''}`;
   const s = retro.slides.find((x) => x.card && x.card.contains(b));
   const n = s ? retro.slides.filter((x) => x.url).indexOf(s) + 1 : 0;
   switch (b.dataset.r) {

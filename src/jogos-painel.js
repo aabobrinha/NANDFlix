@@ -378,6 +378,7 @@ function renderPainelJogo(f) {
           <div class="painel-botoes">
             <button class="btn btn-assistir jogo-steam-btn" data-j="steam" data-acao="${e.tipo === 'steam' ? e.acao : 'link'}" title="${esc(e.dica)}">${botaoSteamConteudoHTML(e)}</button>
             ${f.externo ? `<button class="btn jogo-adicionar" data-j="adicionar">${icone('Plus')} Adicionar à lista</button>` : ''}
+            ${f.externo ? '' : `<button class="redondo" data-p="story" title="Criar story para o Instagram" aria-label="Criar story para o Instagram">${icone('ImagePlus')}</button>`}
             ${f.trailer ? `<button class="redondo" data-p="trailer" data-rotulo="Trailer" title="Ver o trailer em tela cheia" aria-label="Ver o trailer em tela cheia">${icone('Maximize')}</button>` : ''}
           </div>
           <p class="jogo-steam-linha" data-j-steam-linha${linhaSteamJogo(e) ? '' : ' hidden'}>${esc(linhaSteamJogo(e))}</p>
@@ -580,6 +581,8 @@ function fileiraDevHTML(titulo, jogos) {
 
 async function salvarJogo(f, mudancas) {
   Object.assign(f, mudancas);
+  // Zerei e 100% são o "visto" do jogo (o processo principal grava o mesmo; aqui só para a tela já refletir).
+  if ('status' in mudancas) f.visto = STATUS_JOGO_ZERADO.includes(mudancas.status);
   agendarRender();
   if (typeof calendario !== 'undefined' && !calendario.hidden) renderCalendario();
   if (!f.externo) await api.atualizarFilme(f.id, mudancas);

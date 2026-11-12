@@ -579,3 +579,58 @@ test('detalhes da loja da Steam → item de jogo do contrato (sem IGDB)', () => 
   assert.ok(/library_600x900/.test(item.capa) && /logo\.png/.test(item.logo));
   assert.strictEqual(steam.itemDeLoja(null), null);
 });
+
+// ---------- Lote 6: estatísticas e retrospectiva dos jogos ----------
+
+// dadosDoPeriodoJogos (src/jogos-estatisticas.js) sem DOM: os globais que ele usa vão como stubs.
+function estatisticasJogo(filmes) {
+  const dia = (d) => { const x = new Date(`${d}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10); };
+  const ctx = vm.createContext({
+    console, estado: { filmes }, ehJogo: (f) => f.tipo === 'jogo', itensDaPlataforma: (l) => l, diaSeguinte: dia,
+  });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'jogos-estatisticas.js'), 'utf8'), ctx, { filename: 'jogos-estatisticas.js' });
+  return ctx;
+}
+const jogoT = (titulo, o = {}) => ({ id: titulo, tipo: 'jogo', titulo, status: 'quero', ...o });
+
+test('estatísticas dos jogos: zerados do período, 100%, horas para zerar e nota', () => {
+  const e = estatisticasJogo([
+    jogoT('A', { status: 'zerado', visto: true, zeradoEm: '2026-11-03', tempoZerar: 10, minhaNota: 4 }),
+    jogoT('B', { status: 'cem', visto: true, zeradoEm: '2026-11-04', tempoZerar: 20.5, minhaNota: 5 }),
+    jogoT('C', { status: 'zerado', visto: true, zeradoEm: '2025-12-31', tempoZerar: 8 }),
+    jogoT('D', { status: 'zerado', visto: true }), // sem data: só entra em "tudo"
+    jogoT('E', { status: 'jogando' }),
+    jogoT('F', { status: 'larguei', zeradoEm: '2026-11-05' }), // data de sobra: não zerou, não conta
+  ]);
+  const nov = e.dadosDoPeriodoJogos('2026-11', {});
+  assert.deepStrictEqual(daqui(nov.lista.map((f) => f.titulo)), ['A', 'B']);
+  assert.strictEqual(nov.cem.length, 1);
+  assert.strictEqual(nov.horasZerar, 30.5);
+  assert.strictEqual(nov.media, 4.5);
+  assert.strictEqual(nov.sequencia, 2); // 3 e 4 de novembro
+  assert.strictEqual(nov.dias.length, 2);
+  assert.strictEqual(e.dadosDoPeriodoJogos('2025', {}).lista.length, 1);
+  const tudo = e.dadosDoPeriodoJogos('tudo', {});
+  assert.deepStrictEqual(daqui(tudo.lista.map((f) => f.titulo)), ['A', 'B', 'C', 'D']);
+  assert.strictEqual(tudo.todos.length, 6);
+  assert.strictEqual(e.dadosDoPeriodoJogos('2024', {}).lista.length, 0);
+});
+
+test('estatísticas dos jogos: horas da Steam só com a biblioteca, e só dos jogos que a conta tem', () => {
+  const e = estatisticasJogo([
+    jogoT('A', { status: 'zerado', visto: true, zeradoEm: '2026-11-03', steam: 10 }),
+    jogoT('B', { status: 'jogando', steam: 20 }),
+    jogoT('C', { status: 'zerado', visto: true, zeradoEm: '2026-11-10' }), // sem Steam
+  ]);
+  const sem = e.dadosDoPeriodoJogos('tudo', {});
+  assert.strictEqual(sem.temSteam, false);
+  assert.strictEqual(sem.maisJogados.length, 0);
+  const minutosSteam = new Map([[10, 600], [20, 3000], [99, 100000]]);
+  const com = e.dadosDoPeriodoJogos('tudo', {}, { minutosSteam });
+  assert.strictEqual(com.temSteam, true);
+  assert.deepStrictEqual(daqui(com.maisJogados.map(([f, m]) => [f.titulo, m])), [['B', 3000], ['A', 600]]);
+  assert.strictEqual(com.minutosJogados, 3600);
+  // Num período, só os zerados dele (as horas da Steam são de sempre, não do período).
+  const nov = e.dadosDoPeriodoJogos('2026-11', {}, { minutosSteam });
+  assert.deepStrictEqual(daqui(nov.maisJogados.map(([f]) => f.titulo)), ['A']);
+});
