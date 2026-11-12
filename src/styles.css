@@ -2408,6 +2408,9 @@ img.st-el { display: block; }
 .st-texto[data-estilo="branco"] .st-linhas { background: #fff; color: #000; }
 .st-texto[data-estilo="nenhum"] .st-linhas { background: transparent; color: #fff; text-shadow: 0 2px 14px rgba(0, 0, 0, .6); }
 .st-linhas:empty { display: inline-block; min-width: 4em; }
+/* O selo de progresso dos animes: pílula laranja com a altura de 2× o corpo (o canvas desenha igual). */
+.st-selo { padding: .5em 1em; border-radius: 999px; background: #FF9340; color: #1B0F05; font: 700 38px/1 var(--ui); white-space: nowrap; box-shadow: 0 6px 24px rgba(0, 0, 0, .4); }
+.st-selo[hidden] { display: none; }
 .st-linhas:empty::before { content: attr(data-vazio); opacity: .45; }
 .st-guia { position: absolute; background: rgba(0, 224, 84, .85); pointer-events: none; }
 .st-guia-v { left: calc(50% - 2px); top: 0; bottom: 0; width: 4px; }

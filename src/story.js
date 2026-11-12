@@ -4,7 +4,9 @@
 //
 // Um editor simples de imagem 1080×1920: a capa do filme no meio, o fundo feito
 // da própria capa, as estrelas da sua nota (no verde do Letterboxd, com ½) e a
-// logo do Letterboxd. Capa, estrelas e logo se arrastam e mudam de tamanho
+// logo do Letterboxd. Num anime, as estrelas ficam no laranja do nandchan, a logo
+// é a da AniList (de onde vêm os dados) e há um selo opcional com o progresso
+// ("Temporada 2 · 12 episódios"); a capa pode ser a de uma temporada. Capa, estrelas e logo se arrastam e mudam de tamanho
 // (roda do mouse ou o controle ao lado). Clicar num espaço vazio cria uma caixa
 // de texto no estilo do Instagram. O resultado é salvo em PNG ou copiado.
 //
@@ -15,6 +17,7 @@
 const STORY_L = 1080;
 const STORY_A = 1920;
 const VERDE_LB = '#00E054';
+const LARANJA_ANIME = '#FF9340'; // acento do nandchan, mais vivo para brilhar sobre a capa
 const CHAVE_PADRAO_STORY = 'nandflix.storyPadrao';
 let story = null; // { id, el, estado, sel, escala, imagens, timer }
 
@@ -30,10 +33,11 @@ function padraoStory() {
     capa: { x: 540, y: 860, l: 700 },
     estrelas: { x: 540, y: 1540, a: 84, visivel: true },
     logo: { x: 540, y: 1680, a: 62, visivel: true },
+    selo: { x: 540, y: 1444, a: 38, visivel: false }, // só nos animes
   };
   try {
     const salvo = JSON.parse(localStorage.getItem(CHAVE_PADRAO_STORY) || 'null');
-    if (salvo) for (const k of ['capa', 'estrelas', 'logo']) if (salvo[k]) base[k] = { ...base[k], ...salvo[k] };
+    if (salvo) for (const k of ['capa', 'estrelas', 'logo', 'selo']) if (salvo[k]) base[k] = { ...base[k], ...salvo[k] };
     if (salvo && salvo.fundo) base.fundo = salvo.fundo;
   } catch { /* sem armazenamento: fica o padrão */ }
   return { ...base, poster: '', textos: [] };
@@ -52,16 +56,16 @@ const PONTA_ESTRELA = (() => {
 })();
 
 // "★★★½": estrelas cheias e, se houver meia, o ½ do Letterboxd.
-function estrelasStory(nota) {
+function estrelasStory(nota, cor = VERDE_LB) {
   const cheias = Math.floor(nota);
   const meia = nota - cheias >= 0.5;
   const passo = 104;
   let x = 0;
   let corpo = '';
-  for (let i = 0; i < cheias; i++, x += passo) corpo += `<polygon transform="translate(${x} 0)" points="${PONTA_ESTRELA}" fill="${VERDE_LB}" stroke="${VERDE_LB}" stroke-width="6" stroke-linejoin="round"/>`;
+  for (let i = 0; i < cheias; i++, x += passo) corpo += `<polygon transform="translate(${x} 0)" points="${PONTA_ESTRELA}" fill="${cor}" stroke="${cor}" stroke-width="6" stroke-linejoin="round"/>`;
   // ½ desenhado em traços (o SVG como imagem não usa as fontes do app).
   if (meia) {
-    corpo += `<g transform="translate(${x + 4} 6)" fill="none" stroke="${VERDE_LB}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    corpo += `<g transform="translate(${x + 4} 6)" fill="none" stroke="${cor}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
       <path d="M6 14 L16 6 V42"/>
       <path d="M52 4 L14 92"/>
       <path d="M38 60 C38 49 60 47 61 59 C62 70 38 78 36 92 H63"/>
@@ -73,6 +77,43 @@ function estrelasStory(nota) {
 }
 
 const LOGO_STORY = { svg: LB_PONTOS.replace('<svg class="lb-pontos"', '<svg xmlns="http://www.w3.org/2000/svg"').replace(' aria-hidden="true"', ''), proporcao: 378 / 140 };
+
+// A logo da AniList (a marca em azul e o nome), simples como a do Letterboxd. O texto usa
+// fonte do sistema: o SVG como imagem não enxerga as fontes do app.
+const LOGO_ANILIST = {
+  svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 120">
+    <g stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-width="22">
+      <path d="M22 106 L56 14" stroke="#FFFFFF"/>
+      <path d="M92 106 V54 C92 40 80 34 64 38" stroke="#3DB4F2"/>
+    </g>
+    <text x="150" y="86" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="78" fill="#FFFFFF" letter-spacing="1">Ani<tspan fill="#3DB4F2">List</tspan></text>
+  </svg>`,
+  proporcao: 440 / 120,
+};
+// Filme: Letterboxd; anime (série ou filme de anime): AniList.
+const logoStoryDe = (f) => (ehAnime(f) ? LOGO_ANILIST : LOGO_STORY);
+const corEstrelasStory = (f) => (ehAnime(f) ? LARANJA_ANIME : VERDE_LB);
+
+// O texto do selo de progresso (só animes): da temporada escolhida na capa, ou o geral.
+function seloTextoStory(f, poster = '') {
+  const eps = (n) => `${n} episódio${n === 1 ? '' : 's'}`;
+  if (!ehSerie(f)) { const m = Math.round(minutosDe(f)); return m > 0 ? `Filme · ${m} min` : 'Filme'; }
+  const ts = temporadasDe(f);
+  const i = poster ? ts.findIndex((t) => t.poster && t.poster === poster) : -1;
+  if (i >= 0) {
+    const t = ts[i];
+    const nome = rotuloTemporada(f, t, i);
+    return ehFilmeDaOrdem(t) || !t.episodios ? nome : `${nome} · ${eps(t.episodios)}`;
+  }
+  const total = ts.filter((t) => !ehFilmeDaOrdem(t)).reduce((n, t) => n + (Number(t.episodios) || 0), 0) || Number(f.episodios) || 0;
+  if (f.status === 'completo') return total ? `Completo · ${eps(total)}` : 'Completo';
+  if (ts.length > 1) {
+    const t = temporadaCorrente(f);
+    const nome = rotuloTemporada(f, t, ts.indexOf(t));
+    return t.episodios && !ehFilmeDaOrdem(t) ? `${nome} · ${eps(t.episodios)}` : nome;
+  }
+  return total ? eps(total) : (Number(f.episodiosVistos) ? `${eps(Number(f.episodiosVistos))} vistos` : '');
+}
 
 const urlSvg = (svg) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
@@ -106,6 +147,7 @@ async function abrirStory(id) {
           <img class="st-el st-capa" data-el="capa" alt="" draggable="false">
           <img class="st-el st-estrelas" data-el="estrelas" alt="" draggable="false">
           <img class="st-el st-logo" data-el="logo" alt="" draggable="false">
+          <div class="st-el st-selo" data-el="selo" hidden></div>
           <div class="st-guia st-guia-v" hidden></div>
           <div class="st-guia st-guia-h" hidden></div>
         </div>
@@ -228,17 +270,28 @@ function posicionarTudo() {
   const est = $('.st-estrelas', el);
   const nota = f.minhaNota || 0;
   if (nota) {
-    const desenho = estrelasStory(nota);
-    if (est.dataset.nota !== String(nota)) { est.src = urlSvg(desenho.svg); est.dataset.nota = String(nota); }
+    const cor = corEstrelasStory(f);
+    const desenho = estrelasStory(nota, cor);
+    const chave = nota + cor;
+    if (est.dataset.nota !== chave) { est.src = urlSvg(desenho.svg); est.dataset.nota = chave; }
     est.dataset.proporcao = desenho.proporcao;
     Object.assign(est.style, { left: `${estado.estrelas.x}px`, top: `${estado.estrelas.y}px`, height: `${estado.estrelas.a}px`, width: `${estado.estrelas.a * desenho.proporcao}px` });
   }
   est.hidden = !nota || !estado.estrelas.visivel;
 
   const logo = $('.st-logo', el);
-  if (!logo.getAttribute('src')) logo.src = urlSvg(LOGO_STORY.svg);
-  Object.assign(logo.style, { left: `${estado.logo.x}px`, top: `${estado.logo.y}px`, height: `${estado.logo.a}px`, width: `${estado.logo.a * LOGO_STORY.proporcao}px` });
+  const desenhoLogo = logoStoryDe(f);
+  const chaveLogo = ehAnime(f) ? 'anilist' : 'letterboxd';
+  if (logo.dataset.de !== chaveLogo) { logo.src = urlSvg(desenhoLogo.svg); logo.dataset.de = chaveLogo; }
+  Object.assign(logo.style, { left: `${estado.logo.x}px`, top: `${estado.logo.y}px`, height: `${estado.logo.a}px`, width: `${estado.logo.a * desenhoLogo.proporcao}px` });
   logo.hidden = !estado.logo.visivel;
+
+  // O selo de progresso: só nos animes, e some se não houver o que escrever.
+  const selo = $('.st-selo', el);
+  const textoSelo = ehAnime(f) ? seloTextoStory(f, estado.poster) : '';
+  selo.textContent = textoSelo;
+  Object.assign(selo.style, { left: `${estado.selo.x}px`, top: `${estado.selo.y}px`, fontSize: `${estado.selo.a}px` });
+  selo.hidden = !textoSelo || !estado.selo.visivel;
 
   for (const t of estado.textos) posicionarTexto(t);
   for (const x of $$('.st-el', el)) x.classList.toggle('selecionado', x.dataset.el === story.sel);
@@ -336,10 +389,11 @@ function selecionarStory(nome) {
 
 // O tamanho de cada coisa: largura na capa, altura nas estrelas e na logo,
 // corpo da letra nos textos.
-const LIMITES_TAMANHO = { capa: [240, 1080], estrelas: [30, 220], logo: [24, 220], texto: [22, 140] };
+const LIMITES_TAMANHO = { capa: [240, 1080], estrelas: [30, 220], logo: [24, 220], selo: [20, 90], texto: [22, 140] };
+const DE_ALTURA = ['estrelas', 'logo', 'selo']; // o tamanho delas é a altura (a, em px)
 function tamanhoDe(nome) {
   if (nome === 'capa') return { valor: story.estado.capa.l, lim: LIMITES_TAMANHO.capa };
-  if (nome === 'estrelas' || nome === 'logo') return { valor: story.estado[nome].a, lim: LIMITES_TAMANHO[nome] };
+  if (DE_ALTURA.includes(nome)) return { valor: story.estado[nome].a, lim: LIMITES_TAMANHO[nome] };
   const t = textoPorEl(nome);
   return t ? { valor: t.tam, lim: LIMITES_TAMANHO.texto } : null;
 }
@@ -348,7 +402,7 @@ function mudarTamanho(nome, valor) {
   if (!atual) return;
   const v = Math.round(Math.max(atual.lim[0], Math.min(atual.lim[1], valor)));
   if (nome === 'capa') story.estado.capa.l = v;
-  else if (nome === 'estrelas' || nome === 'logo') story.estado[nome].a = v;
+  else if (DE_ALTURA.includes(nome)) story.estado[nome].a = v;
   else textoPorEl(nome).tam = v;
   posicionarTudo();
   const range = $('#story-tamanho', story.el);
@@ -356,7 +410,7 @@ function mudarTamanho(nome, valor) {
   salvarStory();
 }
 
-const alvoDe = (nome) => (nome === 'capa' || nome === 'estrelas' || nome === 'logo' ? story.estado[nome] : textoPorEl(nome));
+const alvoDe = (nome) => (nome === 'capa' || DE_ALTURA.includes(nome) ? story.estado[nome] : textoPorEl(nome));
 
 // ---------- Arrastar, clicar e rolar ----------
 
@@ -456,7 +510,12 @@ function renderControlesStory() {
   const { estado, sel } = story;
   const t = sel && sel.startsWith('t-') ? textoPorEl(sel) : null;
   const tam = sel ? tamanhoDe(sel) : null;
-  const nomeSel = { capa: 'Capa', estrelas: 'Estrelas', logo: 'Logo do Letterboxd' }[sel] || (t ? 'Caixa de texto' : '');
+  const anime = ehAnime(f);
+  const nomeLogo = anime ? 'Logo da AniList' : 'Logo do Letterboxd';
+  const nomeSel = { capa: 'Capa', estrelas: 'Estrelas', logo: nomeLogo, selo: 'Selo de progresso' }[sel] || (t ? 'Caixa de texto' : '');
+  // Capas das temporadas (série com mais de uma): servem de capa do story, como as do TMDB.
+  const temporadas = ehSerie(f) ? temporadasDe(f).map((x, i) => ({ t: x, i })).filter((x) => x.t.poster) : [];
+  const textoSelo = anime ? seloTextoStory(f, estado.poster) : '';
   const chip = (dado, valor, rotulo, ativo) => `<button class="chip${ativo ? ' ativo' : ''}" data-s="${dado}" data-valor="${valor}" aria-pressed="${ativo}">${rotulo}</button>`;
   const olho = (nome, rotulo, visivel, desativado = false) => `
     <button class="story-alternar${visivel && !desativado ? ' ligado' : ''}" data-s="mostrar" data-valor="${nome}"${desativado ? ' disabled' : ''} aria-pressed="${visivel && !desativado}">
@@ -486,12 +545,21 @@ function renderControlesStory() {
       }</div>` : ''}
       <p class="story-ajuda">A troca vale só para o story; a capa ${vocDe(f, 'de')} na lista continua a mesma.</p>
     </section>
+    ${temporadas.length > 1 ? `
+    <section class="story-secao">
+      <h3>Capa de uma temporada</h3>
+      <div class="story-capas story-capas-temporadas">
+        <button class="story-capa-opcao${!estado.poster ? ' atual' : ''}" data-s="poster" data-valor="" title="A capa principal"><div class="capa"><img src="${esc(srcCapa(f))}" alt=""></div><span>Principal</span></button>
+        ${temporadas.map(({ t: x, i }) => `<button class="story-capa-opcao${estado.poster === x.poster ? ' atual' : ''}" data-s="poster" data-valor="${esc(x.poster)}" title="${esc(x.titulo || '')}"><div class="capa"><img src="${esc(x.poster)}" alt="" loading="lazy"></div><span>${esc(rotuloTemporada(f, x, i))}</span></button>`).join('')}
+      </div>
+    </section>` : ''}
 
     <section class="story-secao">
       <h3>Na imagem</h3>
       <div class="story-alternadores">
         ${olho('estrelas', f.minhaNota ? `Estrelas · ${notaLegivel(f.minhaNota)}` : 'Estrelas (sem nota)', estado.estrelas.visivel, !f.minhaNota)}
-        ${olho('logo', 'Logo do Letterboxd', estado.logo.visivel)}
+        ${olho('logo', nomeLogo, estado.logo.visivel)}
+        ${anime ? olho('selo', textoSelo ? `Selo · ${textoSelo}` : 'Selo (sem dados)', estado.selo.visivel, !textoSelo) : ''}
       </div>
       ${f.minhaNota ? '' : `<p class="story-ajuda">Dê uma nota nos detalhes ${vocDe(f, 'de')} para as estrelas aparecerem.</p>`}
     </section>
@@ -527,7 +595,7 @@ function renderControlesStory() {
     </section>` : ''}
 
     <section class="story-secao">
-      <button class="btn btn-fantasma" data-s="restaurar">${icone('RotateCcw')} Voltar capa, estrelas e logo ao lugar</button>
+      <button class="btn btn-fantasma" data-s="restaurar">${icone('RotateCcw')} Voltar ${anime ? 'capa, estrelas, logo e selo' : 'capa, estrelas e logo'} ao lugar</button>
     </section>`;
 
   const range = $('#story-tamanho', story.el);
@@ -540,11 +608,11 @@ async function mostrarCapasStory() {
   if (!story.mostrarCapas || story.capasTmdb) return;
   const f = porId(story.id);
   const meu = story;
-  if (!f.tmdbId) { story.capasTmdb = { erro: 'Este filme não foi achado no TMDB.' }; renderControlesStory(); return; }
+  if (!f.tmdbId) { story.capasTmdb = { erro: `${vocDe(f, 'Este')} não foi achado no TMDB.` }; renderControlesStory(); return; }
   const r = await api.capasTmdb(story.id);
   if (story !== meu) return;
   story.capasTmdb = !r.ok ? { erro: mensagemErroTmdb(r.erro) }
-    : !r.dados.length ? { erro: 'O TMDB não tem outras capas deste filme.' }
+    : !r.dados.length ? { erro: `O TMDB não tem outras capas ${vocDe(f, 'deste')}.` }
       : r.dados.slice(0, 40).map((c) => ({ ...c, original: c.poster.replace('/w780/', '/original/') }));
   if (Array.isArray(story.capasTmdb)) story.capasTmdb.erro = '';
   renderControlesStory();
@@ -587,7 +655,7 @@ function aoClicarStory(e) {
     case 'restaurar': {
       try { localStorage.removeItem(CHAVE_PADRAO_STORY); } catch { /* nada */ }
       const p = padraoStory();
-      Object.assign(estado, { capa: p.capa, estrelas: p.estrelas, logo: p.logo });
+      Object.assign(estado, { capa: p.capa, estrelas: p.estrelas, logo: p.logo, selo: p.selo });
       break;
     }
     default: return;
@@ -640,7 +708,7 @@ function salvarStory(agora = false) {
     if (f) f.story = dados;
     api.atualizarFilme(id, { story: dados });
     // O lugar da capa, das estrelas e da logo vira o padrão dos próximos stories.
-    try { localStorage.setItem(CHAVE_PADRAO_STORY, JSON.stringify({ fundo: dados.fundo, capa: dados.capa, estrelas: dados.estrelas, logo: dados.logo })); } catch { /* nada */ }
+    try { localStorage.setItem(CHAVE_PADRAO_STORY, JSON.stringify({ fundo: dados.fundo, capa: dados.capa, estrelas: dados.estrelas, logo: dados.logo, selo: dados.selo })); } catch { /* nada */ }
   };
   if (agora) gravar();
   else story.timer = setTimeout(gravar, 600);
@@ -680,12 +748,38 @@ async function desenharStory() {
     ctx.restore();
   }
 
+  const logoDe = logoStoryDe(porId(story.id));
   for (const nome of ['estrelas', 'logo']) {
     const img = $(`.st-${nome}`, el);
     if (img.hidden || !img.complete) continue;
     const a = estado[nome].a;
-    const w = a * (nome === 'logo' ? LOGO_STORY.proporcao : Number(img.dataset.proporcao));
+    const w = a * (nome === 'logo' ? logoDe.proporcao : Number(img.dataset.proporcao));
     ctx.drawImage(img, estado[nome].x - w / 2, estado[nome].y - a / 2, w, a);
+  }
+
+  // O selo: uma pílula laranja (altura = 2× o corpo, margem de 1 corpo dos lados, como no palco).
+  const selo = $('.st-selo', el);
+  if (!selo.hidden && selo.textContent) {
+    const a = estado.selo.a;
+    const fonte = `700 ${a}px ${getComputedStyle(selo).fontFamily}`;
+    await document.fonts.load(fonte).catch(() => {});
+    ctx.save();
+    ctx.font = fonte;
+    const w = ctx.measureText(selo.textContent).width + a * 2;
+    const x = estado.selo.x - w / 2;
+    const y = estado.selo.y - a;
+    ctx.shadowColor = 'rgba(0, 0, 0, .4)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 6;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, a * 2, a);
+    ctx.fillStyle = LARANJA_ANIME;
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = '#1B0F05';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(selo.textContent, x + a, y + a + a * 0.04);
+    ctx.restore();
   }
 
   // Textos: as linhas e o fundo de cada uma saem das posições do próprio palco.

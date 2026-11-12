@@ -6,12 +6,24 @@
 // 1080×1920 prontas para postar: a capa com o total, as maiores notas, os
 // números do período, o filme do mês (ou os do ano) e o mosaico de tudo que
 // foi visto. Cada uma se copia ou salva; "Salvar todas" grava numa pasta.
+// No nandchan a retrospectiva é de animes: os mesmos slides, no laranja, contando
+// episódios (dadosDoPeriodoAnimes, as mesmas contas das estatísticas); `d.p` é a
+// plataforma dos dados.
 
 const RETRO_L = 1080;
 const RETRO_A = 1920;
 const RETRO_COR = { fundo: '#07080B', texto: '#F2F3F5', apagado: '#9C9FA3', acento: '#B08FF3', verde: '#00E054', dourado: '#F5B301' };
 const RETRO_FONTE = getComputedStyle(document.documentElement).getPropertyValue('--display').trim() || 'system-ui, sans-serif';
-let retro = null; // { el, periodo, imagens: [dataUrl], geracao }
+let retro = null; // { el, periodo, d, slides }
+// As cores que mudam por plataforma: acento, estrelas e o nome no rodapé.
+const TEMA_RETRO_FILMES = { acento: RETRO_COR.acento, estrelas: VERDE_LB, marca: 'nandflix' };
+const TEMA_RETRO_ANIMES = { acento: '#FF9A4D', estrelas: LARANJA_ANIME, marca: 'nandchan' };
+let retroTema = TEMA_RETRO_FILMES;
+const ehRetroAnime = (d) => Boolean(d.p && porEpisodio(d.p));
+// Texto abaixo do título de um item: ano e diretor (filme) ou estúdio (anime).
+const subRetro = (f) => [f.ano, ehAnime(f) ? nomesEstudios(f)[0] : nomesDiretores(f.diretor)[0]].filter(Boolean).join(' · ');
+// Episódios de um anime no período (em "Tudo", o total marcado, com ou sem data).
+const epsRetro = (d, f, periodo) => (periodo === 'tudo' && ehSerie(f) ? Number(f.episodiosVistos) || 0 : d.sessoes.filter((s) => s.f === f).reduce((n, s) => n + (s.eps || 0), 0));
 
 const cacheRetroImg = new Map();
 async function imagemRetro(f) {
@@ -89,7 +101,7 @@ function capaNoCanvas(ctx, img, x, y, w, h, { raio = 12, sombra = true } = {}) {
 
 async function estrelasRetro(ctx, nota, x, y, altura, alinhar = 'left') {
   if (!nota) return 0;
-  const d = estrelasStory(nota);
+  const d = estrelasStory(nota, retroTema.estrelas);
   const img = await carregarImg(urlSvg(d.svg));
   const w = altura * d.proporcao;
   if (img) ctx.drawImage(img, alinhar === 'center' ? x - w / 2 : x, y, w, altura);
@@ -127,7 +139,7 @@ function rodapeRetro(ctx, periodo) {
   ctx.font = fonteRetro(800, 34);
   ctx.fillStyle = RETRO_COR.texto;
   ctx.textAlign = 'left';
-  ctx.fillText('nandflix', 80, RETRO_A - 90);
+  ctx.fillText(retroTema.marca, 80, RETRO_A - 90);
   ctx.font = fonteRetro(500, 30);
   ctx.fillStyle = RETRO_COR.apagado;
   ctx.textAlign = 'right';
@@ -135,7 +147,7 @@ function rodapeRetro(ctx, periodo) {
   ctx.textAlign = 'left';
 }
 
-function kickerRetro(ctx, texto, x, y, cor = RETRO_COR.acento) {
+function kickerRetro(ctx, texto, x, y, cor = retroTema.acento) {
   ctx.font = fonteRetro(700, 30);
   ctx.fillStyle = cor;
   ctx.textAlign = 'left';
@@ -151,30 +163,36 @@ const novoCanvas = () => { const c = document.createElement('canvas'); c.width =
 // Os ajustes do slide da tierlist (qual tierlist, quais tiers, só os filmes do
 // período ou todos, título) ficam guardados neste computador.
 
-const CHAVE_TIER_RETRO = 'retroTierlist';
-function cfgTierRetro() {
+// Cada plataforma tem as suas tierlists e os seus ajustes (os de animes numa chave à parte).
+const chaveTierRetro = (p) => (p && porEpisodio(p) ? 'retroTierlistAnimes' : 'retroTierlist');
+function cfgTierRetro(p) {
   const padrao = { lista: null, ocultas: {}, todos: false, titulo: '' };
-  try { return { ...padrao, ...JSON.parse(localStorage.getItem(CHAVE_TIER_RETRO) || '{}') }; } catch { return padrao; }
+  try { return { ...padrao, ...JSON.parse(localStorage.getItem(chaveTierRetro(p)) || '{}') }; } catch { return padrao; }
 }
-function salvarCfgTierRetro(cfg) {
-  try { localStorage.setItem(CHAVE_TIER_RETRO, JSON.stringify(cfg)); } catch { /* fica só nesta sessão */ }
+function salvarCfgTierRetro(cfg, p) {
+  try { localStorage.setItem(chaveTierRetro(p), JSON.stringify(cfg)); } catch { /* fica só nesta sessão */ }
 }
 
-// A tierlist escolhida; sem escolha, a que tem mais filmes do período (num
-// empate, a que está aberta na tela da tierlist).
+// As tierlists da plataforma dos dados (as antigas, sem o campo, são de filmes).
+const listasTierRetro = (d) => listasTl().filter((l) => plataformaDaTl(l).id === d.p.id);
+
+// A tierlist escolhida; sem escolha, a que tem mais itens do período (num
+// empate, a que está aberta na tela da tierlist). Sem nenhuma tierlist: null.
 function tierlistRetro(d) {
-  const listas = listasTl();
-  const escolhida = listas.find((l) => l.id === cfgTierRetro().lista);
+  const listas = listasTierRetro(d);
+  if (!listas.length) return null;
+  const escolhida = listas.find((l) => l.id === cfgTierRetro(d.p).lista);
   if (escolhida) return escolhida;
   const ids = new Set(d.lista.map((f) => f.id));
   const qtd = (l) => l.tiers.reduce((n, t) => n + t.filmes.filter((id) => ids.has(id)).length, 0);
-  const ativa = listaAtiva();
+  const ativa = listas.find((l) => l.id === estado.config.tierlistAtiva) || listas[0];
   return [ativa, ...listas.filter((l) => l !== ativa)].reduce((m, l) => (qtd(l) > qtd(m) ? l : m));
 }
 
 // id do filme → { t: índice da tier (0 = a mais alta), p: posição dentro dela, tier }.
 function posicoesTier(l) {
   const m = new Map();
+  if (!l) return m;
   l.tiers.forEach((tier, t) => tier.filmes.forEach((id, p) => { if (!m.has(id)) m.set(id, { t, p, tier }); }));
   return m;
 }
@@ -190,9 +208,10 @@ function topFilmes(d, periodo, { soComNota = false } = {}) {
     const pb = pos.get(b.id);
     if (pa && pb) return pa.t - pb.t || pa.p - pb.p;
     if (pa || pb) return pa ? -1 : 1;
-    return (b.minhaNota || 0) - (a.minhaNota || 0) || a.titulo.localeCompare(b.titulo);
+    // Empate de nota: nos animes, quem teve mais episódios no período.
+    return (b.minhaNota || 0) - (a.minhaNota || 0) || (ehRetroAnime(d) ? epsRetro(d, b, periodo) - epsRetro(d, a, periodo) : 0) || a.titulo.localeCompare(b.titulo);
   });
-  const doMes = periodo.length === 7 && filmeDoMes(periodo);
+  const doMes = periodo.length === 7 && itemDoMes(periodo, d.p);
   return doMes ? [doMes, ...ordenados.filter((f) => f !== doMes)] : ordenados;
 }
 
@@ -219,13 +238,22 @@ async function slideCapa(d, periodo, imgs) {
   fundoRetro(ctx, imgs, { tom: 0.45 });
   kickerRetro(ctx, 'Retrospectiva', 80, 250);
   let y = escrever(ctx, tituloRetro(periodo), 80, 270, { peso: 800, tam: 128, altura: 1.02, maxLinhas: 2 });
-  y = escrever(ctx, 'em filmes', 80, y, { peso: 800, tam: 128, altura: 1.02, cor: RETRO_COR.apagado });
+  const an = ehRetroAnime(d);
+  y = escrever(ctx, an ? 'em animes' : 'em filmes', 80, y, { peso: 800, tam: 128, altura: 1.02, cor: RETRO_COR.apagado });
 
-  ctx.font = fonteRetro(800, 300);
+  // O número grande: filmes, ou episódios nos animes (sem episódios datados, os animes).
+  const porEp = an && d.episodios > 0;
+  const grande = porEp ? d.episodios : d.lista.length;
+  ctx.font = fonteRetro(800, grande >= 1000 ? 260 : 300);
   ctx.fillStyle = RETRO_COR.texto;
-  ctx.fillText(d.lista.length.toLocaleString('pt-BR'), 64, y + 320);
+  ctx.fillText(grande.toLocaleString('pt-BR'), 64, y + 320);
   const horas = Math.round(d.minutos / 60);
-  escrever(ctx, `${d.lista.length === 1 ? 'filme' : 'filmes'}${horas ? ` · ${horas.toLocaleString('pt-BR')} ${horas === 1 ? 'hora' : 'horas'}` : ''}${d.dias.length ? ` · ${d.dias.length} ${d.dias.length === 1 ? 'dia' : 'dias'} com filme` : ''}`, 80, y + 340, { peso: 500, tam: 40, cor: RETRO_COR.apagado });
+  const partes = [porEp ? (grande === 1 ? 'episódio' : 'episódios') : voc(grande === 1 ? 'item' : 'itens', undefined, d.p)];
+  if (porEp) partes.push(`${d.lista.length} ${voc(d.lista.length === 1 ? 'item' : 'itens', undefined, d.p)}`);
+  if (horas) partes.push(`${horas.toLocaleString('pt-BR')} ${horas === 1 ? 'hora' : 'horas'}`);
+  // Nos animes a linha já é longa: "10 dias" (sem o "com anime") para não quebrar.
+  if (d.dias.length) partes.push(`${d.dias.length} ${d.dias.length === 1 ? 'dia' : 'dias'}${an ? '' : ` com ${voc('item', undefined, d.p)}`}`);
+  escrever(ctx, partes.join(' · '), 80, y + 340, { peso: 500, tam: an ? 36 : 40, cor: RETRO_COR.apagado });
 
   // Três capas em leque: as maiores notas (ou as últimas vistas).
   const tres = topFilmes(d, periodo).slice(0, 3);
@@ -266,11 +294,96 @@ async function slideNotas(d, periodo, imgs) {
     ctx.fillStyle = RETRO_COR.apagado;
     ctx.fillText(String(i + 1), 280, y + 58);
     let ty = escrever(ctx, f.titulo, 340, y + 4, { peso: 700, tam: 46, largura: 660, maxLinhas: 2, altura: 1.12 });
-    ty = escrever(ctx, [f.ano, nomesDiretores(f.diretor)[0]].filter(Boolean).join(' · '), 340, ty + 2, { peso: 500, tam: 30, cor: RETRO_COR.apagado, largura: 660, maxLinhas: 1 });
+    const eps = ehRetroAnime(d) ? epsRetro(d, f, periodo) : 0;
+    ty = escrever(ctx, [subRetro(f), eps ? `${eps} ep.` : ''].filter(Boolean).join(' · '), 340, ty + 2, { peso: 500, tam: 30, cor: RETRO_COR.apagado, largura: 660, maxLinhas: 1 });
     const we = await estrelasRetro(ctx, f.minhaNota, 340, ty + 16, 46);
     const p = pos.get(f.id);
     if (p) etiquetaTier(ctx, p.tier, 340 + (we ? we + 22 : 0), ty + 15, 48);
     y += linha;
+  }
+  rodapeRetro(ctx, periodo);
+  return c.toDataURL('image/png');
+}
+
+// Os animes com mais episódios no período, com uma barra para comparar (só nos animes).
+async function slideMaisAssistidos(d, periodo, imgs) {
+  const top = d.itens.map((f) => [f, epsRetro(d, f, periodo)]).filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].titulo.localeCompare(b[0].titulo)).slice(0, 5);
+  if (!top.length) return null;
+  const maior = top[0][1];
+  const c = novoCanvas();
+  const ctx = c.getContext('2d');
+  fundoRetro(ctx, imgs);
+  kickerRetro(ctx, rotuloRetro(periodo), 80, 210);
+  const yTitulo = escrever(ctx, 'Os que mais assisti', 80, 230, { peso: 800, tam: 84, altura: 1.05, maxLinhas: 2 });
+  const capas = await Promise.all(top.map(([f]) => imagemRetro(f)));
+  let y = yTitulo + 60;
+  for (const [i, [f, n]] of top.entries()) {
+    capaNoCanvas(ctx, capas[i], 80, y, 150, 225, { raio: 10 });
+    ctx.font = fonteRetro(800, 44);
+    ctx.fillStyle = RETRO_COR.apagado;
+    ctx.fillText(String(i + 1), 280, y + 58);
+    let ty = escrever(ctx, f.titulo, 340, y + 4, { peso: 700, tam: 46, largura: 660, maxLinhas: 2, altura: 1.12 });
+    const horas = (n * minutosPorEpisodio(f)) / 60;
+    ty = escrever(ctx, `${n} episódio${n === 1 ? '' : 's'} · ${horas >= 1 ? Math.round(horas) + ' h' : Math.round(horas * 60) + ' min'}`, 340, ty + 2, { peso: 600, tam: 32, cor: retroTema.acento, largura: 660, maxLinhas: 1 });
+    ctx.fillStyle = 'rgba(232, 235, 240, .1)';
+    ctx.beginPath();
+    ctx.roundRect(340, ty + 22, 660, 16, 8);
+    ctx.fill();
+    ctx.fillStyle = retroTema.acento;
+    ctx.beginPath();
+    ctx.roundRect(340, ty + 22, Math.max(16, 660 * (n / maior)), 16, 8);
+    ctx.fill();
+    y += 256;
+  }
+  rodapeRetro(ctx, periodo);
+  return c.toDataURL('image/png');
+}
+
+// Os números dos animes: episódios, horas, completos e dias (as contas das estatísticas).
+async function slideNumerosAnimes(d, periodo, imgs) {
+  const c = novoCanvas();
+  const ctx = c.getContext('2d');
+  fundoRetro(ctx, imgs);
+  kickerRetro(ctx, rotuloRetro(periodo), 80, 210);
+  escrever(ctx, 'Em números', 80, 230, { peso: 800, tam: 96 });
+  const horas = Math.round(d.minutos / 60);
+  const tiles = [
+    ['Episódios', d.episodios],
+    ['Horas', horas],
+    ['Animes', d.itens.length],
+    ['Completos', d.completos.length],
+    ['Dias com anime', d.dias.length],
+    ['Maior sequência', d.sequencia > 1 ? `${d.sequencia} dias` : '—'],
+  ];
+  const tw = 440;
+  const th = 210;
+  tiles.forEach(([rot, val], i) => {
+    const x = 80 + (i % 2) * (tw + 40);
+    const y = 420 + Math.floor(i / 2) * (th + 30);
+    ctx.fillStyle = 'rgba(232, 235, 240, .07)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, tw, th, 24);
+    ctx.fill();
+    ctx.font = fonteRetro(500, 30);
+    ctx.fillStyle = RETRO_COR.apagado;
+    ctx.fillText(rot, x + 36, y + 62);
+    ctx.font = fonteRetro(800, typeof val === 'number' ? 92 : 68);
+    ctx.fillStyle = RETRO_COR.texto;
+    ctx.fillText(typeof val === 'number' ? val.toLocaleString('pt-BR') : val, x + 34, y + 170);
+  });
+  const estudio = ranking(d.itens.flatMap(nomesEstudios), 1)[0];
+  const genero = ranking(d.itens.flatMap((f) => generos(f.info)), 1)[0];
+  const nota = d.media ? [`★ ${notaLegivel(Math.round(d.media * 10) / 10)}`, d.comNota.length] : null;
+  let y = 420 + 3 * (th + 30) + 40;
+  for (const [rot, item, cor] of [['Estúdio mais visto', estudio, null], ['Gênero', genero, null], ['Nota média', nota, retroTema.estrelas]]) {
+    if (!item) continue;
+    ctx.font = fonteRetro(500, 32);
+    ctx.fillStyle = RETRO_COR.apagado;
+    ctx.fillText(rot, 80, y + 36);
+    const extra = rot === 'Nota média' ? `  ·  ${item[1]} ${item[1] === 1 ? 'anime' : 'animes'}` : item[1] > 1 ? `  ·  ${item[1]} animes` : '';
+    y = escrever(ctx, `${item[0]}${extra}`, 80, y + 44, { peso: 700, tam: 50, maxLinhas: 1, cor: cor || RETRO_COR.texto });
+    y += 30;
   }
   rodapeRetro(ctx, periodo);
   return c.toDataURL('image/png');
@@ -323,33 +436,33 @@ async function slideNumeros(d, periodo, imgs) {
   return c.toDataURL('image/png');
 }
 
-async function slideFilmeDoMes(periodo, imgs) {
+async function slideFilmeDoMes(periodo, imgs, p = plataformaPorId('nandflix')) {
   const c = novoCanvas();
   const ctx = c.getContext('2d');
   if (periodo.length === 7) {
-    const f = filmeDoMes(periodo);
+    const f = itemDoMes(periodo, p);
     if (!f) return null;
     const img = await imagemRetro(f);
     fundoRetro(ctx, [img, img, img, img, img, img], { tom: 0.6 });
-    kickerRetro(ctx, 'Filme do mês', 80, 220, RETRO_COR.dourado);
+    kickerRetro(ctx, rotuloDoMes(p), 80, 220, RETRO_COR.dourado);
     escrever(ctx, mesLegivel(periodo).replace(/^./, (x) => x.toUpperCase()), 80, 240, { peso: 800, tam: 72 });
     const w = 640;
     capaNoCanvas(ctx, img, (RETRO_L - w) / 2, 420, w, w * 1.5, { raio: 18 });
     let y = escrever(ctx, f.titulo, RETRO_L / 2, 420 + w * 1.5 + 40, { peso: 800, tam: 62, alinhar: 'center', maxLinhas: 2, largura: 900 });
-    y = escrever(ctx, [f.ano, nomesDiretores(f.diretor)[0]].filter(Boolean).join(' · '), RETRO_L / 2, y, { peso: 500, tam: 34, cor: RETRO_COR.apagado, alinhar: 'center' });
+    y = escrever(ctx, subRetro(f), RETRO_L / 2, y, { peso: 500, tam: 34, cor: RETRO_COR.apagado, alinhar: 'center' });
     await estrelasRetro(ctx, f.minhaNota, RETRO_L / 2, y + 26, 64, 'center');
     rodapeRetro(ctx, periodo);
     return c.toDataURL('image/png');
   }
   // Ano (ou tudo): os filmes de cada mês, em grade.
-  const meses = Object.keys(estado.config.filmesDoMes || {})
+  const meses = Object.keys(estado.config[chaveDoMes(p)] || {})
     .filter((m) => periodo === 'tudo' || m.startsWith(periodo)).sort()
-    .map((m) => ({ m, f: filmeDoMes(m) })).filter((x) => x.f).slice(-12);
+    .map((m) => ({ m, f: itemDoMes(m, p) })).filter((x) => x.f).slice(-12);
   if (!meses.length) return null;
   fundoRetro(ctx, imgs);
   kickerRetro(ctx, rotuloRetro(periodo), 80, 210, RETRO_COR.dourado);
   // O título pode quebrar em duas linhas: a grade começa logo abaixo dele.
-  const yGrade = escrever(ctx, 'Os filmes de cada mês', 80, 230, { peso: 800, tam: 84, maxLinhas: 2 }) + 60;
+  const yGrade = escrever(ctx, `Os ${voc('itens', undefined, p)} de cada mês`, 80, 230, { peso: 800, tam: 84, maxLinhas: 2 }) + 60;
   const capas = await Promise.all(meses.map((x) => imagemRetro(x.f)));
   const cols = 3;
   const gap = 36;
@@ -377,7 +490,7 @@ async function slideFilmeDoMes(periodo, imgs) {
 
 async function slideMosaico(d, periodo, imgs) {
   // Na ordem em que foram vistos.
-  const primeiraVez = (f) => (f.vistoEm || []).filter((x) => periodo === 'tudo' || x.startsWith(periodo)).sort()[0] || '9999';
+  const primeiraVez = (f) => diasVistos(f).filter((x) => periodo === 'tudo' || x.startsWith(periodo)).sort()[0] || '9999';
   const todos = [...d.lista].sort((a, b) => primeiraVez(a).localeCompare(primeiraVez(b)));
   const max = 60;
   const lista = todos.slice(0, max);
@@ -385,7 +498,8 @@ async function slideMosaico(d, periodo, imgs) {
   const ctx = c.getContext('2d');
   fundoRetro(ctx, imgs, { tom: 0.2 });
   kickerRetro(ctx, rotuloRetro(periodo), 80, 210);
-  const titulo = periodo === 'tudo' ? 'Tudo o que eu vi' : periodo.length === 7 ? `Tudo o que eu vi em ${MESES[Number(periodo.slice(5)) - 1]}` : `Tudo o que eu vi em ${periodo}`;
+  const verbo = ehRetroAnime(d) ? 'assisti' : 'vi';
+  const titulo = periodo === 'tudo' ? `Tudo o que eu ${verbo}` : periodo.length === 7 ? `Tudo o que eu ${verbo} em ${MESES[Number(periodo.slice(5)) - 1]}` : `Tudo o que eu ${verbo} em ${periodo}`;
   const yTopo = escrever(ctx, titulo, 80, 230, { peso: 800, tam: 80, maxLinhas: 2 }) + 50;
   const area = { l: RETRO_L - 160, a: RETRO_A - yTopo - 200 };
   const gap = 14;
@@ -403,7 +517,7 @@ async function slideMosaico(d, periodo, imgs) {
   if (todos.length > max) {
     ctx.font = fonteRetro(700, 34);
     ctx.fillStyle = RETRO_COR.apagado;
-    ctx.fillText(`+ ${todos.length - max} filmes`, 80, RETRO_A - 150);
+    ctx.fillText(`+ ${todos.length - max} ${voc('itens', undefined, d.p)}`, 80, RETRO_A - 150);
   }
   rodapeRetro(ctx, periodo);
   return c.toDataURL('image/png');
@@ -412,9 +526,9 @@ async function slideMosaico(d, periodo, imgs) {
 // A tierlist: cada tier é uma faixa com a etiqueta colorida e as capas. As
 // capas encolhem até tudo caber; tiers sem filme não aparecem.
 async function slideTierlist(d, periodo, imgs) {
-  if (!listasTl().some((l) => l.tiers.some((t) => t.filmes.length))) return null;
+  if (!listasTierRetro(d).some((l) => l.tiers.some((t) => t.filmes.length))) return null;
   const l = tierlistRetro(d);
-  const cfg = cfgTierRetro();
+  const cfg = cfgTierRetro(d.p);
   const ocultas = new Set(cfg.ocultas[l.id] || []);
   const ids = new Set(d.lista.map((f) => f.id));
   const faixas = l.tiers
@@ -429,7 +543,7 @@ async function slideTierlist(d, periodo, imgs) {
   const titulo = cfg.titulo.trim() || (l.nome && l.nome !== 'Tierlist' ? l.nome : 'Minha tierlist');
   const yTopo = escrever(ctx, titulo, 80, 230, { peso: 800, tam: 84, maxLinhas: 2 }) + 50;
   if (!faixas.length) {
-    escrever(ctx, 'Nenhum filme nestas tiers.', RETRO_L / 2, RETRO_A / 2 - 40, { peso: 600, tam: 44, cor: RETRO_COR.apagado, alinhar: 'center' });
+    escrever(ctx, `${voc('Nenhum', undefined, d.p)} nestas tiers.`, RETRO_L / 2, RETRO_A / 2 - 40, { peso: 600, tam: 44, cor: RETRO_COR.apagado, alinhar: 'center' });
     rodapeRetro(ctx, periodo);
     return c.toDataURL('image/png');
   }
@@ -497,16 +611,19 @@ function caber(ctx, texto, largura) {
 async function slideResumo(d, periodo) {
   const c = novoCanvas();
   const ctx = c.getContext('2d');
+  const an = ehRetroAnime(d);
   const g = ctx.createLinearGradient(0, 0, RETRO_L, RETRO_A);
-  g.addColorStop(0, '#2A1650');
-  g.addColorStop(0.55, '#5B3A9A');
-  g.addColorStop(1, '#8A5FD0');
+  const [c0, c1, c2] = an ? ['#3B1A07', '#9A4A12', '#E8832A'] : ['#2A1650', '#5B3A9A', '#8A5FD0'];
+  g.addColorStop(0, c0);
+  g.addColorStop(0.55, c1);
+  g.addColorStop(1, c2);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, RETRO_L, RETRO_A);
-  // Um brilho no canto, para não ficar chapado.
+  // Um brilho no canto, para não ficar chapado (verde nos filmes, dourado nos animes).
+  const rgb = an ? '255, 196, 110' : '0, 224, 84';
   const brilho = ctx.createRadialGradient(RETRO_L * 0.85, 260, 0, RETRO_L * 0.85, 260, 700);
-  brilho.addColorStop(0, 'rgba(0, 224, 84, .22)');
-  brilho.addColorStop(1, 'rgba(0, 224, 84, 0)');
+  brilho.addColorStop(0, `rgba(${rgb}, .22)`);
+  brilho.addColorStop(1, `rgba(${rgb}, 0)`);
   ctx.fillStyle = brilho;
   ctx.fillRect(0, 0, RETRO_L, RETRO_A);
 
@@ -517,10 +634,11 @@ async function slideResumo(d, periodo) {
   const ph = 600;
   capaNoCanvas(ctx, img, (RETRO_L - pw) / 2, 150, pw, ph, { raio: 16 });
 
-  const lilas = '#D9C8FF';
+  const lilas = an ? '#FFDDBF' : '#D9C8FF';
   const colunas = [
-    ['Top filmes', porNota.slice(0, 5).map((f) => f.titulo)],
-    ['Top diretores', ranking(d.lista.flatMap((f) => nomesDiretores(f.diretor)), 5).map(([n]) => n)],
+    [`Top ${voc('itens', undefined, d.p)}`, porNota.slice(0, 5).map((f) => f.titulo)],
+    an ? ['Top estúdios', ranking(d.lista.flatMap(nomesEstudios), 5).map(([n]) => n)]
+      : ['Top diretores', ranking(d.lista.flatMap((f) => nomesDiretores(f.diretor)), 5).map(([n]) => n)],
   ];
   const larg = 440;
   colunas.forEach(([rot, itens], ci) => {
@@ -542,8 +660,8 @@ async function slideResumo(d, periodo) {
   const horas = Math.round(d.minutos / 60);
   const genero = ranking(d.lista.flatMap((f) => generos(f.info)), 1)[0];
   const blocos = [
-    ['Filmes vistos', d.lista.length.toLocaleString('pt-BR'), 120],
-    ['Horas de filme', horas.toLocaleString('pt-BR'), 120],
+    an ? ['Episódios', d.episodios.toLocaleString('pt-BR'), 120] : ['Filmes vistos', d.lista.length.toLocaleString('pt-BR'), 120],
+    [an ? 'Horas de anime' : 'Horas de filme', horas.toLocaleString('pt-BR'), 120],
     ['Gênero do período', genero ? genero[0] : '—', 54],
     ['Nota média', d.media ? `★ ${notaLegivel(Math.round(d.media * 10) / 10)}` : '—', 54],
   ];
@@ -554,13 +672,14 @@ async function slideResumo(d, periodo) {
     ctx.fillStyle = lilas;
     ctx.fillText(rot, x, y);
     ctx.font = fonteRetro(800, tam);
-    ctx.fillStyle = String(val).startsWith('★') ? RETRO_COR.verde : '#FFFFFF';
+    // A nota: verde no roxo dos filmes; nos animes, branca (laranja sobre laranja some).
+    ctx.fillStyle = String(val).startsWith('★') && !an ? retroTema.estrelas : '#FFFFFF';
     ctx.fillText(caber(ctx, val, larg), x - (tam > 100 ? 4 : 0), y + (tam > 100 ? 128 : 74));
   });
 
   ctx.font = fonteRetro(800, 34);
   ctx.fillStyle = '#FFFFFF';
-  ctx.fillText('nandflix', 80, RETRO_A - 90);
+  ctx.fillText(retroTema.marca, 80, RETRO_A - 90);
   ctx.font = fonteRetro(600, 30);
   ctx.fillStyle = lilas;
   ctx.textAlign = 'right';
@@ -571,10 +690,15 @@ async function slideResumo(d, periodo) {
 
 // ---- A tela ----
 
-async function abrirRetrospectivaStory(periodo) {
+// `p`: a plataforma dos dados (nas estatísticas, a do escopo; fora delas, a atual, ou filmes no hub).
+async function abrirRetrospectivaStory(periodo, p = plataformaAtual().hub ? plataformaPorId('nandflix') : plataformaAtual()) {
   if (retro) fecharRetro();
-  const d = dadosDoPeriodo(periodo);
-  if (!d.lista.length) { aviso('Nenhum filme visto neste período.'); return; }
+  const an = porEpisodio(p);
+  const d = an ? dadosDoPeriodoAnimes(periodo, p) : dadosDoPeriodo(periodo, p);
+  d.p = p;
+  if (an) d.lista = d.itens; // os slides leem a lista de itens do período em d.lista
+  if (!d.lista.length) { aviso(`Nenhum ${voc('item', undefined, p)} ${an ? 'assistido' : 'visto'} neste período.`); return; }
+  retroTema = an ? TEMA_RETRO_ANIMES : TEMA_RETRO_FILMES;
   const el = document.createElement('div');
   el.className = 'retro-tela';
   el.setAttribute('role', 'dialog');
@@ -606,9 +730,10 @@ async function abrirRetrospectivaStory(periodo) {
   meu.slides = [
     { k: 'capa', fazer: () => slideCapa(d, periodo, fundoImgs) },
     { k: 'notas', fazer: () => slideNotas(d, periodo, fundoImgs) },
+    ...(an ? [{ k: 'eps', fazer: () => slideMaisAssistidos(d, periodo, fundoImgs) }] : []),
     { k: 'tier', fazer: () => slideTierlist(d, periodo, fundoImgs) },
-    { k: 'numeros', fazer: () => slideNumeros(d, periodo, fundoImgs) },
-    { k: 'mes', fazer: () => slideFilmeDoMes(periodo, fundoImgs) },
+    { k: 'numeros', fazer: () => (an ? slideNumerosAnimes(d, periodo, fundoImgs) : slideNumeros(d, periodo, fundoImgs)) },
+    { k: 'mes', fazer: () => slideFilmeDoMes(periodo, fundoImgs, p) },
     { k: 'mosaico', fazer: () => slideMosaico(d, periodo, fundoImgs) },
     { k: 'resumo', fazer: () => slideResumo(d, periodo) },
   ];
@@ -662,8 +787,8 @@ async function redesenharRetro(chaves) {
 
 function ajustesTierHTML() {
   const { d, periodo } = retro;
-  const cfg = cfgTierRetro();
-  const listas = listasTl();
+  const cfg = cfgTierRetro(d.p);
+  const listas = listasTierRetro(d);
   const l = tierlistRetro(d);
   const ocultas = new Set(cfg.ocultas[l.id] || []);
   const ids = new Set(d.lista.map((f) => f.id));
@@ -689,13 +814,13 @@ function ajustesTierHTML() {
         `${esc(t.nome)} <em>${qtd(t)}</em>`, `<i class="ra-cor" style="background:${esc(t.cor || '#8A8F98')}"></i>`)).join('')}</div>
     </div>
     <div class="ra-grupo">
-      <span class="ra-rotulo">Filmes</span>
+      <span class="ra-rotulo">${esc(voc('Itens', undefined, d.p))}</span>
       <div class="ra-chips">
         ${chip(!cfg.todos, 'data-r="tl-todos" data-v="0"', `Vistos em ${esc(rotuloRetro(periodo).toLowerCase())}`)}
         ${chip(cfg.todos, 'data-r="tl-todos" data-v="1"', 'Todos da tierlist')}
       </div>
     </div>
-    <p class="ra-nota">${icone('Trophy')} A ordem desta tierlist também decide o ranking da retrospectiva: as tiers mais altas vêm primeiro, depois os filmes sem tier, pela nota.</p>`;
+    <p class="ra-nota">${icone('Trophy')} A ordem desta tierlist também decide o ranking da retrospectiva: as tiers mais altas vêm primeiro, depois ${voc('itens', undefined, d.p)} sem tier, pela nota.</p>`;
 }
 
 function abrirAjustesTier() {
@@ -725,9 +850,9 @@ function fecharAjustesTier() {
 // Muda um ajuste, redesenha o painel e os slides afetados (trocar de tierlist
 // muda também o ranking: capa, top e resumão).
 function mudarAjusteTier(mudar, { ranking = false } = {}) {
-  const cfg = cfgTierRetro();
+  const cfg = cfgTierRetro(retro.d.p);
   mudar(cfg);
-  salvarCfgTierRetro(cfg);
+  salvarCfgTierRetro(cfg, retro.d.p);
   const painel = retro && $('.retro-ajustes', retro.el);
   if (painel) {
     const foco = document.activeElement?.dataset?.a;
@@ -743,9 +868,10 @@ function aoMudarAjusteRetro(e) {
   const valor = e.target.value;
   clearTimeout(timerTituloRetro);
   timerTituloRetro = setTimeout(() => {
-    const cfg = cfgTierRetro();
+    if (!retro) return;
+    const cfg = cfgTierRetro(retro.d.p);
     cfg.titulo = valor;
-    salvarCfgTierRetro(cfg);
+    salvarCfgTierRetro(cfg, retro.d.p);
     redesenharRetro(['tier']);
   }, 400);
 }
@@ -760,7 +886,7 @@ function fecharRetro() {
 async function aoClicarRetro(e) {
   const b = e.target.closest('[data-r]');
   if (!b || !retro) return;
-  const nome = `Retrospectiva ${rotuloRetro(retro.periodo)}`;
+  const nome = `Retrospectiva ${rotuloRetro(retro.periodo)}${ehRetroAnime(retro.d) ? ' - animes' : ''}`;
   const s = retro.slides.find((x) => x.card && x.card.contains(b));
   const n = s ? retro.slides.filter((x) => x.url).indexOf(s) + 1 : 0;
   switch (b.dataset.r) {

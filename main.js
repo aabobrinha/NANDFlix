@@ -1039,7 +1039,8 @@ ipcMain.handle('capa:baixar', async (_e, id) => {
 
 // O editor desenha a imagem num canvas; imagens de outra origem (capa:// e o
 // TMDB) "sujariam" o canvas e impediriam de exportar. Por isso elas chegam
-// aqui como data: URL. Só servem as capas baixadas e as imagens do TMDB.
+// aqui como data: URL. Só servem as capas baixadas e as imagens do TMDB e da AniList
+// (as capas das temporadas dos animes).
 ipcMain.handle('imagem:dados', async (_e, src) => {
   try {
     const url = new URL(String(src || ''));
@@ -1050,7 +1051,7 @@ ipcMain.handle('imagem:dados', async (_e, src) => {
       dados = await fs.promises.readFile(arquivo);
       if (/\.png$/i.test(arquivo)) tipo = 'image/png';
       else if (/\.webp$/i.test(arquivo)) tipo = 'image/webp';
-    } else if (url.protocol === 'https:' && url.hostname === 'image.tmdb.org') {
+    } else if (url.protocol === 'https:' && (url.hostname === 'image.tmdb.org' || /(^|\.)anilist\.co$/.test(url.hostname))) {
       const r = await net.fetch(url.toString());
       if (!r.ok) return null;
       tipo = r.headers.get('content-type') || tipo;
