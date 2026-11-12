@@ -12,10 +12,12 @@ const trailer = require('./lib/trailer');
 const tmdb = require('./lib/tmdb');
 const { novoFilme, juntar, resumo, acharRepetido, mesmoFilme } = require('./lib/filmes');
 const letterboxd = require('./lib/letterboxd');
+const importar = require('./lib/importar');
+const stremio = require('./lib/stremio');
 const { Marcas } = require('./lib/marcas');
 const { Nuvem } = require('./lib/nuvem');
 const { Extras } = require('./lib/extras');
-const { Acervo } = require('./lib/premios');
+const { Acervo, listaPremios } = require('./lib/premios');
 
 app.setName(armazem.NOME_APP);
 // FILMES_LEGAIS_DADOS: outra pasta de dados (para testar sem mexer na lista de verdade).
@@ -310,10 +312,12 @@ ipcMain.handle('extras:agora', (_e, id, opcoes) => extras.agora(id, opcoes || {}
 // ---------- Prêmios (lib/premios.js): o histórico vem no app; as cerimônias recentes, da Wikipédia ----------
 
 const acervo = new Acervo({
-  historico: { oscar: require('./lib/premios-oscar.json') },
+  // lib/premios-<id>.json, lido só quando o prêmio é usado.
+  historico: (id) => armazem.lerJSON(path.join(__dirname, 'lib', `premios-${id}.json`), null),
   lerCache: () => armazem.lerJSON(path.join(PASTA, 'premios.json'), null),
   gravarCache: (d) => armazem.gravarJSON(path.join(PASTA, 'premios.json'), d),
 });
+ipcMain.handle('premios:lista', () => listaPremios());
 ipcMain.handle('premios:dados', (_e, id) => acervo.dados(id));
 ipcMain.handle('premios:atualizar', (_e, id, opcoes) => chamar(() => acervo.atualizar(id, opcoes || {})));
 
@@ -1089,36 +1093,78 @@ ipcMain.handle('abrir:pastaDados', () => shell.openPath(PASTA));
 
 // Importação de planilha em duas etapas: escolher/ler o arquivo, depois aplicar
 // (substituir ou juntar), para o app perguntar o modo só depois de ler o arquivo.
-// ---------- Importar do Letterboxd ----------
+// ---------- Importar de outros apps (Letterboxd, IMDb, Stremio, CSV) ----------
 
-// Pasta do export do Letterboxd → lista. Filmes vistos são marcados como vistos,
-// com as datas do diário; só entram as datas de antes do primeiro dia já
-// registrado no NANDFlix (depois dele, o calendário daqui já tem o registro).
-// A watchlist entra como filmes novos na lista (os que ainda não estão nela).
-// As notas preenchem "Sua nota" só onde ela ainda está vazia. Filmes que não
-// estão na lista são procurados no TMDB antes, para não duplicar por diferença
-// de título; os novos ganham capa e informações na atualização pelo TMDB.
-ipcMain.handle('letterboxd:importar', async (_e, pastaDada) => {
-  const r = pastaDada ? { canceled: false, filePaths: [String(pastaDada)] } : await dialog.showOpenDialog(janela, {
+// Os vistos são marcados, com as datas (do diário do Letterboxd ou do Stremio) de
+// antes do primeiro dia já registrado no NANDFlix; a watchlist entra como filmes
+// novos; as notas preenchem "Sua nota" só onde ela ainda está vazia. Filmes que não
+// estão na lista são procurados no TMDB antes, para não duplicar por diferença de
+// título; os novos ganham capa e informações na atualização pelo TMDB. Um backup é
+// feito antes. Ver lib/importar.js.
+async function aplicarImportacao(fonte, itens) {
+  armazem.fazerBackup(PASTA);
+  const chave = config.tmdbKey;
+  const res = await importar.aplicar(itens, () => filmes, {
+    idPorTitulo: chave ? (titulo, ano) => tmdb.idPorTitulo(chave, titulo, ano) : null,
+    idPorImdb: chave ? (imdbID) => tmdb.idPorImdb(chave, imdbID) : null,
+  });
+  gravarAgora();
+  buscarCapasQueFaltam();
+  return { ...res, fonte, filmes };
+}
+
+// Os arquivos exportados: .csv soltos, um .zip, ou a pasta descompactada do Letterboxd.
+// `caminhos` (opcional) pula a janela de escolher.
+ipcMain.handle('importar:arquivos', async (_e, caminhos) => {
+  const r = caminhos ? { canceled: false, filePaths: [].concat(caminhos).map(String) } : await dialog.showOpenDialog(janela, {
+    title: 'Escolha os arquivos exportados (.csv ou .zip)',
+    defaultPath: app.isPackaged ? app.getPath('downloads') : __dirname,
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Exportações (.csv, .zip)', extensions: ['csv', 'zip'] }, { name: 'Todos os arquivos', extensions: ['*'] }],
+  });
+  if (r.canceled || !r.filePaths.length) return { cancelado: true };
+  let lido;
+  try {
+    const arquivos = [];
+    for (const c of r.filePaths) {
+      if (fs.statSync(c).isDirectory()) {
+        for (const n of fs.readdirSync(c)) if (/.csv$/i.test(n)) arquivos.push({ nome: n, bytes: fs.readFileSync(path.join(c, n)) });
+      } else {
+        arquivos.push({ nome: path.basename(c), bytes: fs.readFileSync(c) });
+      }
+    }
+    lido = importar.lerArquivos(importar.textosDosArquivos(arquivos));
+  } catch (e) {
+    return { erro: e.message };
+  }
+  return aplicarImportacao(lido.fonte, lido.itens);
+});
+
+// A biblioteca do Stremio, pela conta (a senha não é guardada).
+ipcMain.handle('importar:stremio', async (_e, email, senha) => {
+  let itens;
+  try {
+    itens = stremio.converter(await stremio.biblioteca(email, senha));
+  } catch (e) {
+    return { erro: e.message };
+  }
+  if (!itens.length) return { erro: 'Não achei filmes na sua biblioteca do Stremio.' };
+  return aplicarImportacao('stremio', itens);
+});
+
+// Compatibilidade: a pasta do export do Letterboxd.
+ipcMain.handle('letterboxd:importar', (_e, pasta) => importarDaPasta(pasta));
+async function importarDaPasta(pasta) {
+  const r = pasta ? { canceled: false, filePaths: [String(pasta)] } : await dialog.showOpenDialog(janela, {
     title: 'Escolha a pasta do export do Letterboxd (descompactada)',
     defaultPath: app.isPackaged ? app.getPath('downloads') : __dirname,
     properties: ['openDirectory'],
   });
   if (r.canceled || !r.filePaths.length) return { cancelado: true };
   let itens;
-  try {
-    itens = letterboxd.ler(r.filePaths[0]);
-  } catch (e) {
-    return { erro: e.message };
-  }
-  armazem.fazerBackup(PASTA);
-  const res = await letterboxd.aplicar(itens, filmes, {
-    idPorTitulo: config.tmdbKey ? (titulo, ano) => tmdb.idPorTitulo(config.tmdbKey, titulo, ano) : null,
-  });
-  gravarAgora();
-  buscarCapasQueFaltam();
-  return { ...res, filmes };
-});
+  try { itens = letterboxd.ler(r.filePaths[0]); } catch (e) { return { erro: e.message }; }
+  return aplicarImportacao('letterboxd', itens);
+}
 
 ipcMain.handle('planilha:ler', async () => {
   const r = await dialog.showOpenDialog(janela, {

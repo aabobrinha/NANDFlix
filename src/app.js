@@ -2024,7 +2024,7 @@ function abrirFiltrosSorteio({ paraHoje = false, botao = null } = {}) {
       decadas: decadasTodas.map(([d, n]) => chip('decadas', d, `Anos ${d < 2000 ? String(d).slice(2) : d}`, fs.decadas.includes(d), n)).join(''),
       paises: paisesTodos.map(([p, n]) => chip('paises', p, p, fs.paises.includes(p), n)).join(''),
       listas: listasTodas.map(([l, n]) => chip('listas', l, l, fs.listas.includes(l), n)).join(''),
-      premios: FILTROS_PREMIO_SORTEIO.map((p) => chip('premios', p, rotuloFiltroPremio(p), fs.premios.includes(p), naoVistos.filter((f) => passaPremio(f, p)).length)).join(''),
+      premios: filtrosPremioSorteio().map((p) => chip('premios', p, rotuloFiltroPremio(p), fs.premios.includes(p), naoVistos.filter((f) => passaPremio(f, p)).length)).join(''),
       onde: filtrosOndeDisponiveis().map((o) => chip('onde', o, FILTROS_ONDE[o].rotulo, fs.onde.includes(o), naoVistos.filter((f) => passaOnde(f, o)).length)).join(''),
     };
     for (const [nome, h] of Object.entries(html)) { const el = $(`[data-secao="${nome}"]`, modal); if (el) el.innerHTML = h; }
@@ -2596,7 +2596,7 @@ function abrirConfiguracoes() {
           <button class="btn" id="cfg-exportar">Exportar para Excel</button>
           <button class="btn" id="cfg-backup-exp">Exportar backup</button>
           <button class="btn" id="cfg-backup-imp">Importar backup</button>
-          <button class="btn" id="cfg-letterboxd" title="A pasta do export de dados do Letterboxd (Settings → Import &amp; Export), descompactada">${LB_PONTOS} Importar do Letterboxd</button>
+          <button class="btn" id="cfg-letterboxd" title="Letterboxd, IMDb, Stremio, Rotten Tomatoes ou qualquer .csv">${icone('Download')} Importar de outro app</button>
           <button class="btn" id="cfg-capas-todas">${icone('Download')} Baixar todas as capas</button>
           <button class="btn btn-fantasma" id="cfg-pasta">Abrir pasta de dados</button>
         </div>
@@ -2667,7 +2667,7 @@ function abrirConfiguracoes() {
     mostrarStatusBackup();
   };
   $('#cfg-backup-restaurar', modal).onclick = abrirRestaurarBackup;
-  $('#cfg-letterboxd', modal).onclick = () => { fecharModal(); importarLetterboxd(); };
+  $('#cfg-letterboxd', modal).onclick = () => { fecharModal(); abrirImportar(); };
   $('#cfg-pasta', modal).onclick = () => api.abrirPastaDados();
   $('#cfg-capas-todas', modal).onclick = async () => {
     const r = await api.baixarTodasCapas();
@@ -2735,30 +2735,102 @@ async function importarPlanilha() {
 
 // Pasta do export do Letterboxd: vistos (com as datas do diário de antes do
 // calendário daqui), notas e a watchlist como filmes novos.
-async function importarLetterboxd() {
-  const r = await api.importarLetterboxd();
-  if (r.cancelado) return;
+// ---------- Importar de outros apps (Letterboxd, IMDb, Stremio, Rotten Tomatoes…) ----------
+
+const FONTES_IMPORTAR = {
+  letterboxd: { nome: 'Letterboxd', icone: () => LB_PONTOS },
+  imdb: { nome: 'IMDb', icone: () => '<span class="marca-imdb">IMDb</span>' },
+  stremio: { nome: 'Stremio', icone: () => icone('Play') },
+  csv: { nome: 'outro app', icone: () => icone('FileSpreadsheet') },
+};
+
+// Tira todos os filtros da lista (busca, "não vistos", diretor, país, lista,
+// onde assistir, prêmio), para os filmes que acabaram de chegar aparecerem.
+function mostrarTudo() {
+  estado.filtro = 'todos';
+  $$('.chip[data-filtro]').forEach((c) => { c.classList.toggle('ativo', c.dataset.filtro === 'todos'); c.setAttribute('aria-checked', String(c.dataset.filtro === 'todos')); });
+  estado.busca = '';
+  $('#pesquisa').value = '';
+  fecharPesquisa();
+  Object.assign(estado, { diretor: '', pais: '', lista: '', onde: '', premio: '' });
+}
+
+function abrirImportar() {
+  const passo = (id, titulo, texto, corpo) => `
+    <section class="imp-fonte" data-fonte="${id}">
+      <div class="imp-cabeca"><span class="imp-icone">${FONTES_IMPORTAR[id].icone()}</span><h3>${titulo}</h3></div>
+      <p>${texto}</p>
+      ${corpo}
+    </section>`;
+  const botaoArquivos = (rotulo) => `<button class="btn" data-imp="arquivos">${icone('FolderOpen')} ${rotulo}</button>`;
+  abrirModal(`${cabecalhoModal('Importar de outro app')}
+    <div class="modal-corpo importar">
+      <p class="imp-intro">Os filmes vistos são marcados como vistos, as notas preenchem “Sua nota” onde ela está vazia e a watchlist entra como filmes novos. Nada que já está no NANDFlix é apagado, e um backup é feito antes.</p>
+      ${passo('letterboxd', 'Letterboxd', 'No Letterboxd: <b>Settings → Import &amp; Export → Export your data</b>. Escolha o <b>.zip</b> que chega por e-mail (não precisa descompactar). Vêm os vistos com as datas do diário, as notas e a watchlist.', botaoArquivos('Escolher o .zip'))}
+      ${passo('imdb', 'IMDb', 'No IMDb, em <b>Suas avaliações</b> e na sua <b>Watchlist</b>, use o menu <b>… → Exportar</b>; depois baixe os .csv em <b>imdb.com/exports</b>. Escolha os dois de uma vez: as avaliações viram vistos com nota (de 1 a 10 vira de ½ a 5 estrelas) e a watchlist entra na lista.', botaoArquivos('Escolher os .csv'))}
+      ${passo('stremio', 'Stremio', 'Entre com a sua conta do Stremio: os filmes assistidos (ou marcados como vistos) viram vistos, e os outros filmes da biblioteca entram como watchlist. A senha vai só para o Stremio e não fica guardada.', `
+        <form class="imp-stremio" autocomplete="on">
+          <input type="email" name="email" placeholder="E-mail do Stremio" required autocomplete="username">
+          <input type="password" name="senha" placeholder="Senha" required autocomplete="current-password">
+          <button class="btn btn-primario" type="submit">${icone('Download')} Importar biblioteca</button>
+        </form>`)}
+      ${passo('csv', 'Rotten Tomatoes e outros', 'O Rotten Tomatoes não exporta as suas avaliações; use uma extensão que gere um CSV no formato de importação do Letterboxd (há algumas na página de importação do Letterboxd). Serve também qualquer planilha .csv com <b>título e ano</b> e, se tiver, nota, data em que viu, código do IMDb ou uma coluna de watchlist.', botaoArquivos('Escolher o .csv'))}
+    </div>`, 'modal-importar');
+  const corpo = $('.importar', modal);
+  const ocupado = (sim, texto = 'Importando…') => {
+    corpo.classList.toggle('ocupado', sim);
+    $$('button, input', corpo).forEach((el) => { el.disabled = sim; });
+    let st = $('.imp-status', modal);
+    if (!st) { st = document.createElement('p'); st.className = 'imp-status'; corpo.prepend(st); }
+    st.textContent = sim ? `${texto} Procurando cada filme no TMDB; pode levar um minuto.` : '';
+  };
+  corpo.addEventListener('click', async (e) => {
+    if (!e.target.closest('[data-imp="arquivos"]')) return;
+    ocupado(true);
+    const r = await api.importarArquivos();
+    ocupado(false);
+    if (!r.cancelado) mostrarImportacao(r);
+  });
+  $('.imp-stremio', modal).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    ocupado(true, 'Lendo a sua biblioteca do Stremio…');
+    const r = await api.importarStremio(f.get('email'), f.get('senha'));
+    ocupado(false);
+    mostrarImportacao(r);
+  });
+}
+
+// O nome antigo (busca, atalhos): abre a mesma janela.
+function importarLetterboxd() { abrirImportar(); }
+
+function mostrarImportacao(r) {
   if (r.erro) { aviso(r.erro, { tipo: 'erro', duracao: 7000 }); return; }
   estado.filmes = r.filmes;
   cacheCartoes.clear();
   cacheFileira.clear();
+  // Sem filtro: com "Não vistos" ligado, por exemplo, os filmes vistos que chegaram não apareciam.
+  mostrarTudo();
   render();
+  if (filmeNoDestaque() == null) sortear({ rolar: false, avisarSeVazio: false });
   if (!calendario.hidden) renderCalendario();
+  const nome = (FONTES_IMPORTAR[r.fonte] || FONTES_IMPORTAR.csv).nome;
   const linha = (n, texto) => (n ? `<li><b>${n}</b> ${texto}</li>` : '');
   const nada = !(r.novosWatchlist || r.novosVistos || r.marcadosVistos || r.datas || r.notas);
-  abrirModal(`${cabecalhoModal('Letterboxd importado')}
+  abrirModal(`${cabecalhoModal(r.fonte === 'csv' ? 'Importado' : `${nome} importado`)}
     <div class="modal-corpo">
-      ${nada ? '<p style="margin:0;color:var(--texto-2)">Nada novo: tudo do export já estava no NANDFlix.</p>' : `<ul class="resumo-importacao">
+      ${nada ? '<p style="margin:0;color:var(--texto-2)">Nada novo: tudo já estava no NANDFlix.</p>' : `<ul class="resumo-importacao">
         ${linha(r.novosWatchlist, `filme${r.novosWatchlist === 1 ? '' : 's'} da watchlist adicionado${r.novosWatchlist === 1 ? '' : 's'} à lista`)}
         ${linha(r.novosVistos, `filme${r.novosVistos === 1 ? '' : 's'} visto${r.novosVistos === 1 ? '' : 's'} que não estava${r.novosVistos === 1 ? '' : 'm'} na lista`)}
         ${linha(r.marcadosVistos, `filme${r.marcadosVistos === 1 ? '' : 's'} da lista marcado${r.marcadosVistos === 1 ? '' : 's'} como visto${r.marcadosVistos === 1 ? '' : 's'}`)}
         ${linha(r.datas, `dia${r.datas === 1 ? '' : 's'} de filme no calendário`)}
         ${linha(r.notas, `nota${r.notas === 1 ? '' : 's'}`)}
       </ul>
-      <p style="margin:12px 0 0;color:var(--texto-2)">As capas e informações dos filmes novos chegam em seguida, pelo TMDB.${r.primeiroDia ? ` O calendário agora começa em ${esc(mesLegivel(r.primeiroDia.slice(0, 7)))}.` : ''}</p>`}
+      <p style="margin:12px 0 0;color:var(--texto-2)">A lista agora mostra todos os ${estado.filmes.length} filmes. As capas e informações dos novos chegam em seguida, pelo TMDB.${r.primeiroDia ? ` O calendário agora começa em ${esc(mesLegivel(r.primeiroDia.slice(0, 7)))}.` : ''}</p>`}
     </div>
     <div class="modal-rodape">${r.datas ? '<button class="btn btn-fantasma" id="lb-calendario">Ver no calendário</button>' : ''}<button class="btn btn-laranja" data-fechar>OK</button></div>`);
   $('#lb-calendario', modal)?.addEventListener('click', () => { fecharModal(); abrirCalendario(`${r.primeiroDia}`); });
+  modal.addEventListener('close', () => { if (calendario.hidden) rolarParaLista(); }, { once: true });
 }
 
 // ---------- Nuvem: conta e sincronia com o celular ----------
@@ -3173,6 +3245,7 @@ $('#btn-adicionar').addEventListener('click', () => abrirAdicionar());
 $('#btn-adicionar-vazio').addEventListener('click', () => abrirAdicionar());
 $('#btn-config').addEventListener('click', abrirConfiguracoes);
 $('#btn-importar-vazio').addEventListener('click', importarPlanilha);
+$('#btn-importar-app-vazio').addEventListener('click', () => abrirImportar());
 $('#btn-capas-faltam').addEventListener('click', () => buscarCapas({ incluirNaoEncontradas: true }));
 
 function digitandoEm(el) {

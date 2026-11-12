@@ -21,9 +21,10 @@ import omdb from '../../lib/omdb.js';
 import trailer from '../../lib/trailer.js';
 import letterboxd from '../../lib/letterboxd.js';
 import { Extras } from '../../lib/extras.js';
-import { Acervo } from '../../lib/premios.js';
-import historicoOscar from '../../lib/premios-oscar.json';
-import { textosDoExport, escolherArquivos } from './letterboxd-zip.mjs';
+import { Acervo, listaPremios } from '../../lib/premios.js';
+import { escolherArquivos } from './letterboxd-zip.mjs';
+import importar from '../../lib/importar.js';
+import stremio from '../../lib/stremio.js';
 // URL e chave do Supabase, de lib/nuvem.config.json (o montar.js põe aqui na hora
 // de montar). Sem esse arquivo (a versão pública do GitHub), o app funciona só
 // com os dados do aparelho: sem conta, sem sincronia e sem atualização sozinha.
@@ -366,13 +367,27 @@ const relacionadosCache = new Map();
 const soNoPc = async () => ({ erro: 'Isso só funciona no app do computador.' });
 
 let pronto = null;
+// Importar de outros apps (lib/importar.js): procura no TMDB o que não está na lista
+// e aplica tudo de uma vez na lista atual.
+async function aplicarImportacao(fonte, itens) {
+  const chave = config.tmdbKey;
+  const res = await importar.aplicar(itens, () => filmes, {
+    idPorTitulo: chave ? (titulo, ano) => tmdb.idPorTitulo(chave, titulo, ano) : null,
+    idPorImdb: chave ? (imdbID) => tmdb.idPorImdb(chave, imdbID) : null,
+  });
+  gravarAgora();
+  buscarCapasQueFaltam();
+  return { ...res, fonte, filmes };
+}
+
 // Notas do TMDB e do Letterboxd, onde assistir e Stremio (lib/extras.js).
 const extras = new Extras({ filmes: () => filmes, config: () => config, atualizarFilme, avisar, gravarAgora });
 
 // Prêmios (lib/premios.js): o histórico vem no app; as cerimônias recentes, da Wikipédia.
 let acervo = null;
 const pegarAcervo = () => {
-  if (!acervo) acervo = new Acervo({ historico: { oscar: historicoOscar }, lerCache: () => lerJSON(C.premios, null), gravarCache: (d) => gravarJSON(C.premios, d) });
+  // O histórico de cada prêmio vem num arquivo à parte (www/premios/<id>.json, posto pelo montar.js).
+  if (!acervo) acervo = new Acervo({ historico: (id) => fetch(`premios/${id}.json`).then((r) => (r.ok ? r.json() : null)), lerCache: () => lerJSON(C.premios, null), gravarCache: (d) => gravarJSON(C.premios, d) });
   return acervo;
 };
 
@@ -570,6 +585,7 @@ window.api = {
   },
   abrirLink: async (url) => { if (String(url).startsWith('https://')) abrirFora(String(url)); },
   extrasAgora: (id, opcoes) => extras.agora(id, opcoes || {}),
+  listaPremios: async () => listaPremios(),
   premios: async (id) => { await iniciar(); return pegarAcervo().dados(id); },
   atualizarPremios: async (id, opcoes) => { await iniciar(); return chamar(() => pegarAcervo().atualizar(id, opcoes || {})); },
   provedoresTmdb: () => chamar(() => tmdb.provedores(config.tmdbKey, config.pais || 'BR')),
@@ -592,22 +608,31 @@ window.api = {
   backupAgora: soNoPc,
   restaurarBackup: soNoPc,
   // O .zip do export do Letterboxd (ou os .csv), escolhido no celular.
-  importarLetterboxd: async () => {
-    const arquivos = await escolherArquivos();
-    if (!arquivos.length) return { cancelado: true };
-    let itens;
+  // Os arquivos exportados de outro app (.zip ou .csv: Letterboxd, IMDb, Rotten Tomatoes…).
+  importarArquivos: async () => {
+    const escolhidos = await escolherArquivos();
+    if (!escolhidos.length) return { cancelado: true };
+    let lido;
     try {
-      itens = letterboxd.lerTextos(await textosDoExport(arquivos));
+      const arquivos = await Promise.all(escolhidos.map(async (a) => ({ nome: a.name || '', bytes: new Uint8Array(await a.arrayBuffer()) })));
+      lido = importar.lerArquivos(importar.textosDosArquivos(arquivos));
     } catch (e) {
       return { erro: e.message };
     }
-    const res = await letterboxd.aplicar(itens, filmes, {
-      idPorTitulo: config.tmdbKey ? (titulo, ano) => tmdb.idPorTitulo(config.tmdbKey, titulo, ano) : null,
-    });
-    gravarAgora();
-    buscarCapasQueFaltam();
-    return { ...res, filmes };
+    return aplicarImportacao(lido.fonte, lido.itens);
   },
+  // A biblioteca do Stremio, pela conta (a senha não é guardada).
+  importarStremio: async (email, senha) => {
+    let itens;
+    try {
+      itens = stremio.converter(await stremio.biblioteca(email, senha));
+    } catch (e) {
+      return { erro: e.message };
+    }
+    if (!itens.length) return { erro: 'Não achei filmes na sua biblioteca do Stremio.' };
+    return aplicarImportacao('stremio', itens);
+  },
+  importarLetterboxd: (...args) => window.api.importarArquivos(...args),
   dadosImagem,
   guardarImagem,
   salvarStory: (dataUrl, nome) => compartilharImagens([dataUrl], nome),

@@ -229,7 +229,7 @@ function abrirMais() {
   abrirFolha(`<div class="cel-mais">
     ${item('paginas', 'NotebookPen', 'Suas páginas')}
     ${item('estatisticas', 'ChartColumn', 'Estatísticas')}
-    ${item('premios', 'Trophy', 'Prêmios (Oscar)')}
+    ${item('premios', 'Trophy', 'Prêmios')}
     ${item('sortear', 'Dices', 'Sortear um filme')}
     ${item('sortear-filtro', 'SlidersHorizontal', 'Sortear com filtro')}
     ${item('adicionar', 'Plus', 'Adicionar filme')}

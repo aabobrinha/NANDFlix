@@ -2839,7 +2839,12 @@ body.com-entrada { overflow: hidden; }
 /* ---------- Prêmios (premios.js): a cédula do Oscar ---------- */
 
 .pr-topo { flex-wrap: wrap; }
-.pr-lista { margin-left: 8px; }
+/* A lista de prêmios: uma linha embaixo do título, que rola de lado */
+.pr-lista {
+  order: 3; flex: 1 0 100%; margin: 6px -4px 0; padding: 4px 4px 8px;
+  flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin;
+}
+.pr-lista .chip { flex: none; min-height: 40px; padding: 0 16px; }
 .pr-topo .tl-fechar { margin-left: auto; }
 .pr-lista .chip .ico { width: 16px; height: 16px; color: var(--dourado); }
 .pr-abas {
@@ -2936,3 +2941,28 @@ body.com-entrada { overflow: hidden; }
   color: var(--texto-2); font: 600 12px var(--ui); font-variant-numeric: tabular-nums; cursor: pointer;
 }
 .link-premio:hover { border-color: var(--dourado); color: var(--dourado); }
+
+/* ---------- Importar de outro app (Letterboxd, IMDb, Stremio, CSV) ---------- */
+
+.modal-importar { width: min(680px, calc(100vw - 40px)); }
+.importar { display: flex; flex-direction: column; gap: 12px; }
+.imp-intro { margin: 0 0 4px; color: var(--texto-2); font-size: 14px; line-height: 1.5; }
+.imp-status { margin: 0; padding: 10px 14px; border-radius: 10px; background: rgba(109, 74, 168, .18); color: var(--acento-texto); font-size: 13.5px; font-weight: 600; }
+.imp-status:empty { display: none; }
+.imp-fonte { padding: 16px 18px; border-radius: 14px; background: rgba(232, 235, 240, .035); border: 1px solid rgba(232, 235, 240, .06); }
+.imp-cabeca { display: flex; align-items: center; gap: 10px; }
+.imp-cabeca h3 { margin: 0; font: 700 16px/1.2 var(--display); }
+.imp-icone { display: inline-grid; place-items: center; min-width: 30px; height: 30px; border-radius: 8px; background: var(--superficie-2); color: var(--texto); }
+.imp-icone .ico { width: 16px; height: 16px; }
+.imp-icone svg.lb-pontos { width: 22px; height: 9px; }
+.imp-icone .marca-imdb { font-size: 9px; }
+.imp-fonte p { margin: 8px 0 12px; color: var(--texto-2); font-size: 13.5px; line-height: 1.5; }
+.imp-fonte p b { color: var(--texto); font-weight: 600; }
+.imp-stremio { display: flex; flex-wrap: wrap; gap: 8px; }
+.imp-stremio input {
+  flex: 1 1 180px; min-height: 42px; padding: 0 16px; border-radius: 999px;
+  background: var(--canvas); border: 1px solid var(--divisor); color: var(--texto); font: 500 14px var(--ui); outline: none;
+}
+.imp-stremio input:focus { border-color: var(--acento); }
+.importar.ocupado .imp-fonte { opacity: .55; }
+.vazio-dir .link-forte + .link-forte { margin-top: 6px; }

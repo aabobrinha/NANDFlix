@@ -13,8 +13,12 @@
 // Os prêmios também viram filtros: na barra da lista ("Filtros"), no sorteio e
 // na tierlist; e os detalhes do filme mostram as indicações dele.
 
-const LISTA_PREMIOS = ['oscar'];
-const NOMES_PREMIOS = { oscar: 'Oscar' };
+// A lista dos prêmios (lib/premios.js → listaPremios): Oscar, Globo de Ouro,
+// Critics Choice, BAFTA, SAG, Spirit, Gotham, Cannes, Veneza e Berlim.
+let PREMIOS_INFO = []; // [{ id, nome, indicado, venceu, quando, festival }]
+const LISTA_PREMIOS = []; // os ids, na ordem
+const NOMES_PREMIOS = {};
+const infoPremio = (id) => PREMIOS_INFO.find((p) => p.id === id) || { id, nome: id, indicado: `Indicado: ${id}`, venceu: `Venceu: ${id}`, quando: '', festival: false };
 const premiosDados = {}; // id → { nome, cerimonias, filmes }
 let indicePremios = null;
 const cachePremiosFilme = new Map();
@@ -27,7 +31,10 @@ let carregandoPremios = null;
 function carregarPremios() {
   if (!carregandoPremios) {
     carregandoPremios = (async () => {
-      for (const id of LISTA_PREMIOS) premiosDados[id] = await api.premios(id);
+      PREMIOS_INFO = await api.listaPremios();
+      LISTA_PREMIOS.splice(0, LISTA_PREMIOS.length, ...PREMIOS_INFO.map((p) => p.id));
+      for (const p of PREMIOS_INFO) NOMES_PREMIOS[p.id] = p.nome;
+      await Promise.all(LISTA_PREMIOS.map(async (id) => { premiosDados[id] = await api.premios(id); }));
       indicePremios = null;
       cachePremiosFilme.clear();
       agendarRender();
@@ -36,18 +43,22 @@ function carregarPremios() {
   return carregandoPremios;
 }
 
-// Busca as cerimônias recentes (no máximo a cada 3 h na temporada, 1 vez por dia fora dela).
-async function atualizarPremios({ forcar = false } = {}) {
+// Busca as cerimônias recentes (a cada 3 h na temporada de cada prêmio, 1 vez por dia fora dela).
+// `so`: só esse prêmio (o aberto na tela); sem ele, todos, um de cada vez.
+async function atualizarPremios({ forcar = false, so = null } = {}) {
   await carregarPremios();
-  for (const id of LISTA_PREMIOS) {
+  const erros = [];
+  for (const id of so ? [so] : LISTA_PREMIOS) {
     const r = await api.atualizarPremios(id, { forcar });
-    if (!r || !r.ok) { if (forcar) aviso(`Não deu para atualizar o ${NOMES_PREMIOS[id]}: ${r && r.erro ? r.erro.mensagem : 'sem internet'}.`, { tipo: 'erro' }); continue; }
+    if (!r || !r.ok) { erros.push(`${NOMES_PREMIOS[id]}: ${r && r.erro ? r.erro.mensagem : 'sem internet'}`); continue; }
+    if (!r.dados) continue; // nada mudou
     premiosDados[id] = await api.premios(id);
     indicePremios = null;
     cachePremiosFilme.clear();
-    if (!premiosTela.hidden) renderPremios();
+    if (!premiosTela.hidden && vista.premio === id) renderPremios();
     agendarRender();
   }
+  if (forcar && erros.length) aviso(`Não deu para atualizar. ${erros.join(' · ')}`, { tipo: 'erro', duracao: 7000 });
 }
 
 const idsDoIndicado = (premio, x) => (x.wiki && premiosDados[premio] && premiosDados[premio].filmes[x.wiki]) || {};
@@ -87,7 +98,8 @@ function premiosDoFilme(f) {
   const achados = new Set([...(porImdb.get(f.imdbID) || []), ...(porTmdb.get(String(f.tmdbId || '')) || [])]);
   // Sem código: pelo título, se o ano bate (a cerimônia é no ano seguinte ao do filme).
   const ano = anoNumero(f.ano);
-  for (const r of porTitulo.get(normalizar(f.titulo)) || []) if (Number.isFinite(ano) && Math.abs(r.ano - 1 - ano) <= 1) achados.add(r);
+  // (Num festival, o filme é do mesmo ano do festival.)
+  for (const r of porTitulo.get(normalizar(f.titulo)) || []) if (Number.isFinite(ano) && Math.abs(r.ano - (infoPremio(r.premio).festival ? 0 : 1) - ano) <= 1) achados.add(r);
   const lista = [...achados].sort((a, b) => b.numero - a.numero || Number(b.venceu) - Number(a.venceu));
   cachePremiosFilme.set(chave, lista);
   return lista;
@@ -97,17 +109,18 @@ function premiosDoFilme(f) {
 function filmeDoIndicado(premio, x, cerimonia) {
   const ids = idsDoIndicado(premio, x);
   return estado.filmes.find((f) => (ids.imdb && f.imdbID === ids.imdb) || (ids.tmdb && String(f.tmdbId) === String(ids.tmdb)))
-    || (!ids.imdb && !ids.tmdb ? estado.filmes.find((f) => normalizar(f.titulo) === normalizar(x.titulo) && Math.abs(anoNumero(f.ano) - (cerimonia.ano - 1)) <= 1) : null)
+    || (!ids.imdb && !ids.tmdb ? estado.filmes.find((f) => normalizar(f.titulo) === normalizar(x.titulo) && Math.abs(anoNumero(f.ano) - (cerimonia.ano - (infoPremio(premio).festival ? 0 : 1))) <= 1) : null)
     || null;
 }
 
 // ---- Filtros (barra da lista, sorteio, tierlist) ----
 
-// 'oscar:indicado', 'oscar:venceu' ou 'oscar:venceu:Best Picture'
+// 'oscar:indicado', 'oscar:venceu', 'oscar:venceu:Best Picture' ou '*:venceu' (qualquer prêmio).
+// Nos festivais, "indicado" é estar na competição.
 function passaPremio(f, filtro) {
   if (!filtro) return true;
   const [premio, tipo, chave] = filtro.split(':');
-  return premiosDoFilme(f).some((r) => r.premio === premio && (tipo !== 'venceu' || r.venceu) && (!chave || nomeCategoria(premio, chave) === nomeCategoria(premio, r.chave)));
+  return premiosDoFilme(f).some((r) => (premio === '*' || r.premio === premio) && (tipo !== 'venceu' || r.venceu) && (!chave || nomeCategoria(r.premio, chave) === nomeCategoria(r.premio, r.chave)));
 }
 
 // O nome em português junta as categorias renomeadas (Filme Estrangeiro = Internacional).
@@ -121,8 +134,9 @@ function nomeCategoria(premio, chave) {
 
 function rotuloFiltroPremio(filtro) {
   const [premio, tipo, chave] = filtro.split(':');
-  const nome = NOMES_PREMIOS[premio] || premio;
-  return `${tipo === 'venceu' ? `Venceu o ${nome}` : `Indicado ao ${nome}`}${chave ? ` · ${nomeCategoria(premio, chave)}` : ''}`;
+  if (premio === '*') return tipo === 'venceu' ? 'Venceu algum prêmio' : 'Indicado a algum prêmio';
+  const info = infoPremio(premio);
+  return `${tipo === 'venceu' ? info.venceu : info.indicado}${chave ? ` · ${nomeCategoria(premio, chave)}` : ''}`;
 }
 
 function filtrarPremio(filtro) {
@@ -140,46 +154,58 @@ function categoriasNaLista(premio) {
   return [...conta].sort((a, b) => b[1].n - a[1].n).map(([nome, { chave, n }]) => ({ nome, chave, n }));
 }
 
-function escolherCategoriaPremio(premio) {
-  const cats = categoriasNaLista(premio);
-  let tipo = (estado.premio.split(':')[1]) || 'indicado';
-  abrirModal(`${cabecalhoModal(`${NOMES_PREMIOS[premio]} por categoria`)}
+// Escolher um prêmio, indicados ou vencedores, e (opcional) uma categoria.
+function escolherCategoriaPremio(premioInicial = null) {
+  const qtd = (filtro) => estado.filmes.filter((f) => passaPremio(f, filtro)).length;
+  const comFilmes = LISTA_PREMIOS.filter((p) => qtd(`${p}:indicado`));
+  let [premio, tipo] = estado.premio && !estado.premio.startsWith('*') ? estado.premio.split(':') : [premioInicial || comFilmes[0] || 'oscar', 'indicado'];
+  abrirModal(`${cabecalhoModal('Filtrar por prêmio')}
     <div class="modal-corpo filtros-sorteio">
+      <div class="secao"><h3>Prêmio</h3><div class="chips-linha" data-secao="premio"></div></div>
       <div class="secao"><h3>Mostrar</h3><div class="chips-linha" data-secao="tipo"></div></div>
-      <div class="secao"><h3>Categoria</h3><div class="chips-linha" data-secao="cats">${cats.length ? '' : '<p>Nenhum filme da sua lista foi indicado ainda.</p>'}</div></div>
-    </div>`, 'modal-filtros');
+      <div class="secao"><h3>Categoria</h3><div class="chips-linha" data-secao="cats"></div></div>
+    </div>
+    <div class="modal-rodape"><span class="filtros-contagem" id="premio-contagem"></span><button class="btn btn-primario" id="premio-aplicar">Mostrar</button></div>`, 'modal-filtros');
   const desenhar = () => {
-    $('[data-secao="tipo"]', modal).innerHTML = [['indicado', 'Indicados'], ['venceu', 'Vencedores']]
+    const info = infoPremio(premio);
+    $('[data-secao="premio"]', modal).innerHTML = (comFilmes.length ? comFilmes : LISTA_PREMIOS)
+      .map((p) => `<button class="chip${p === premio ? ' ativo' : ''}" data-premio-escolha="${p}" aria-pressed="${p === premio}">${esc(NOMES_PREMIOS[p])}<span class="chip-qtd">${qtd(`${p}:indicado`) || ''}</span></button>`).join('');
+    $('[data-secao="tipo"]', modal).innerHTML = [['indicado', info.festival ? 'Na competição' : 'Indicados'], ['venceu', info.festival ? 'Premiados' : 'Vencedores']]
       .map(([v, r]) => `<button class="chip${tipo === v ? ' ativo' : ''}" data-tipo="${v}" aria-pressed="${tipo === v}">${r}</button>`).join('');
-    if (cats.length) {
-      $('[data-secao="cats"]', modal).innerHTML = cats.map((c) => {
-        const n = estado.filmes.filter((f) => passaPremio(f, `${premio}:${tipo}:${c.chave}`)).length;
-        return `<button class="chip" data-cat="${esc(c.chave)}"${n ? '' : ' disabled'}>${esc(c.nome)}<span class="chip-qtd">${n}</span></button>`;
-      }).join('');
-    }
+    const cats = categoriasNaLista(premio);
+    $('[data-secao="cats"]', modal).innerHTML = cats.length ? cats.map((c) => {
+      const n = qtd(`${premio}:${tipo}:${c.chave}`);
+      return `<button class="chip" data-cat="${esc(c.chave)}"${n ? '' : ' disabled'}>${esc(c.nome)}<span class="chip-qtd">${n}</span></button>`;
+    }).join('') : '<p>Nenhum filme da sua lista foi indicado a este prêmio.</p>';
+    const n = qtd(`${premio}:${tipo}`);
+    $('#premio-contagem', modal).textContent = n === 1 ? '1 filme' : `${n} filmes`;
+    $('#premio-aplicar', modal).disabled = !n;
   };
   $('.filtros-sorteio', modal).addEventListener('click', (e) => {
+    const p = e.target.closest('[data-premio-escolha]');
+    if (p) { premio = p.dataset.premioEscolha; desenhar(); return; }
     const t = e.target.closest('[data-tipo]');
     if (t) { tipo = t.dataset.tipo; desenhar(); return; }
     const c = e.target.closest('[data-cat]');
     if (c) { fecharModal(); filtrarPremio(`${premio}:${tipo}:${c.dataset.cat}`); }
   });
+  $('#premio-aplicar', modal).onclick = () => { fecharModal(); filtrarPremio(`${premio}:${tipo}`); };
   desenhar();
 }
 
 SECOES_FILTRO.push({
   titulo: 'Prêmios',
   ativa: () => Boolean(estado.premio),
-  itensHTML: () => LISTA_PREMIOS.map((p) => {
-    const nome = NOMES_PREMIOS[p];
+  itensHTML: () => {
     const qtd = (filtro) => estado.filmes.filter((f) => passaPremio(f, filtro)).length;
-    return itemMenuHTML(estado.premio === `${p}:indicado`, `data-premio="${p}:indicado"`, `Indicados ao ${nome}`, qtd(`${p}:indicado`))
-      + itemMenuHTML(estado.premio === `${p}:venceu`, `data-premio="${p}:venceu"`, `Vencedores do ${nome}`, qtd(`${p}:venceu`))
-      + itemMenuHTML(estado.premio.split(':').length === 3 && estado.premio.startsWith(`${p}:`), `data-premio-categoria="${p}"`, `${nome} por categoria…`, '');
-  }).join(''),
+    const porPremio = estado.premio && !estado.premio.startsWith('*');
+    return itemMenuHTML(estado.premio === '*:indicado', 'data-premio="*:indicado"', 'Indicados a algum prêmio', qtd('*:indicado'))
+      + itemMenuHTML(estado.premio === '*:venceu', 'data-premio="*:venceu"', 'Vencedores de algum prêmio', qtd('*:venceu'))
+      + itemMenuHTML(porPremio, 'data-premio-categoria=""', porPremio ? `${esc(rotuloFiltroPremio(estado.premio))}…` : 'Por prêmio e categoria…', '');
+  },
   aoClicar: (e) => {
     const cat = e.target.closest('[data-premio-categoria]');
-    if (cat) { fecharFlutuante(); escolherCategoriaPremio(cat.dataset.premioCategoria); return true; }
+    if (cat) { fecharFlutuante(); escolherCategoriaPremio(cat.dataset.premioCategoria || null); return true; }
     const b = e.target.closest('[data-premio]');
     if (!b) return false;
     filtrarPremio(b.dataset.premio === estado.premio ? '' : b.dataset.premio);
@@ -193,16 +219,20 @@ SECOES_FILTRO.push({
 });
 $('#chip-premio').addEventListener('click', () => filtrarPremio(''));
 
-// Sorteio: "Indicados ao Oscar", "Vencedores do Oscar".
-const FILTROS_PREMIO_SORTEIO = LISTA_PREMIOS.flatMap((p) => [`${p}:indicado`, `${p}:venceu`]);
+// Sorteio: "Indicado a algum prêmio", "Venceu algum prêmio" e um por prêmio
+// (os que têm algum filme não visto da lista).
+function filtrosPremioSorteio() {
+  const naoVistos = estado.filmes.filter((f) => !f.visto);
+  return ['*:indicado', '*:venceu', ...LISTA_PREMIOS.map((p) => `${p}:indicado`).filter((x) => naoVistos.some((f) => passaPremio(f, x)))];
+}
 
-// Tierlist: "Indicado ao Oscar" / "Venceu o Oscar".
+// Tierlist: "Indicado ao Oscar", "Venceu o Oscar", "Na competição de Cannes"…
 FILTROS_TL.push({
   chave: 'premios',
   titulo: 'Prêmios',
   valores: (f) => {
     const v = new Set();
-    for (const r of premiosDoFilme(f)) { v.add(`Indicado ao ${NOMES_PREMIOS[r.premio]}`); if (r.venceu) v.add(`Venceu o ${NOMES_PREMIOS[r.premio]}`); }
+    for (const r of premiosDoFilme(f)) { const info = infoPremio(r.premio); v.add(info.indicado); if (r.venceu) v.add(info.venceu); }
     return [...v];
   },
 });
@@ -212,18 +242,34 @@ FILTROS_TL.push({
 function premiosPainelHTML(f) {
   const lista = premiosDoFilme(f);
   if (!lista.length) return '';
+  const item = (r, texto, pessoa, venceu) => `<li${venceu ? ' class="venceu"' : ''}>
+      <button class="link-premio" data-p="premio" data-premio="${r.premio}" data-numero="${r.numero}" title="Abrir a cédula: ${esc(NOMES_PREMIOS[r.premio])} ${r.ano}">${r.ano}</button>
+      <span>${esc(texto)}${pessoa ? ` <small>${esc(pessoa)}</small>` : ''}</span>
+      ${venceu ? `<b class="selo-venceu">${icone('Trophy')} Venceu</b>` : ''}
+    </li>`;
   return LISTA_PREMIOS.map((p) => {
     const doPremio = lista.filter((r) => r.premio === p);
     if (!doPremio.length) return '';
-    const vitorias = doPremio.filter((r) => r.venceu).length;
-    const resumo = [vitorias ? `${vitorias} ${vitorias === 1 ? 'vitória' : 'vitórias'}` : '', `${doPremio.length} ${doPremio.length === 1 ? 'indicação' : 'indicações'}`].filter(Boolean).join(' · ');
-    const itens = doPremio.map((r) => `<li${r.venceu ? ' class="venceu"' : ''}>
-        <button class="link-premio" data-p="premio" data-premio="${r.premio}" data-numero="${r.numero}" title="Abrir a cédula do ${NOMES_PREMIOS[r.premio]} ${r.ano}">${r.ano}</button>
-        <span>${esc(r.nome)}${r.pessoa ? ` <small>${esc(r.pessoa)}</small>` : ''}</span>
-        ${r.venceu ? `<b class="selo-venceu">${icone('Trophy')} Venceu</b>` : ''}
-      </li>`).join('');
+    let resumo;
+    let itens;
+    if (infoPremio(p).festival) {
+      // Num festival, o filme está em todas as categorias da competição: uma linha por edição.
+      const porEdicao = new Map();
+      for (const r of doPremio) {
+        const x = porEdicao.get(r.numero) || { r, ganhou: [] };
+        if (r.venceu) x.ganhou.push(r.nome);
+        porEdicao.set(r.numero, x);
+      }
+      const ganhou = [...porEdicao.values()].flatMap((x) => x.ganhou);
+      resumo = ganhou.length ? ganhou.join(' · ') : (porEdicao.size === 1 ? 'na competição' : `na competição ${porEdicao.size} vezes`);
+      itens = [...porEdicao.values()].map(({ r, ganhou: g }) => item(r, g.length ? g.join(', ') : 'Competição oficial', '', g.length > 0)).join('');
+    } else {
+      const vitorias = doPremio.filter((r) => r.venceu).length;
+      resumo = [vitorias ? `${vitorias} ${vitorias === 1 ? 'vitória' : 'vitórias'}` : '', `${doPremio.length} ${doPremio.length === 1 ? 'indicação' : 'indicações'}`].filter(Boolean).join(' · ');
+      itens = doPremio.map((r) => item(r, r.nome, r.pessoa, r.venceu)).join('');
+    }
     return `<details class="painel-ficha painel-premios">
-      <summary><b>${icone('Trophy')} ${NOMES_PREMIOS[p]}:</b> <span>${resumo}</span></summary>
+      <summary><b>${icone('Trophy')} ${esc(NOMES_PREMIOS[p])}:</b> <span>${esc(resumo)}</span></summary>
       <ul>${itens}</ul>
     </details>`;
   }).join('');
@@ -261,7 +307,7 @@ async function abrirPremios({ premio = vista.premio, numero = null } = {}) {
   Movimento.animar($('#premios-caixa'), [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 260 });
   $('#premios [data-pr="fechar"]')?.focus({ preventScroll: true });
   // As cerimônias recentes podem ter mudado (indicados novos, vencedores).
-  atualizarPremios();
+  atualizarPremios({ so: premio });
 }
 
 function fecharPremios() {
@@ -293,17 +339,22 @@ function renderPremios() {
   const caixa = $('#premios-caixa');
   const premio = vista.premio;
   const d = premiosDados[premio];
-  const c = d && d.cerimonias.find((x) => x.numero === vista.numero);
-  const ordinalPt = (n) => `${n}º`;
-  const abas = d.cerimonias.map((x) => `<button class="chip pr-aba${x.numero === vista.numero ? ' ativo' : ''}" data-pr="cerimonia" data-numero="${x.numero}" role="tab" aria-selected="${x.numero === vista.numero}" title="${ordinalPt(x.numero)} ${d.nome}${x.indicados ? '' : ' (indicados ainda não anunciados)'}">${x.ano}${x.indicados ? '' : ' <small>em breve</small>'}</button>`).join('');
+  if (!d) return;
+  // A edição escolhida sumiu (ou ainda não havia dados ao abrir): a padrão.
+  if (!d.cerimonias.some((x) => x.numero === vista.numero)) vista.numero = cerimoniaPadrao(premio);
+  const c = d.cerimonias.find((x) => x.numero === vista.numero);
+  const info = infoPremio(premio);
+  // "98º Oscar · 2026", ou "Cannes 2025" quando a edição é o próprio ano.
+  const nomeEdicao = (x) => (x.numero === x.ano ? `${d.nome} ${x.ano}` : `${x.numero}º ${d.nome} · ${x.ano}`);
+  const abas = d.cerimonias.map((x) => `<button class="chip pr-aba${x.numero === vista.numero ? ' ativo' : ''}" data-pr="cerimonia" data-numero="${x.numero}" role="tab" aria-selected="${x.numero === vista.numero}" title="${esc(nomeEdicao(x))}${x.indicados ? '' : ' (ainda não anunciado)'}">${x.ano}${x.indicados ? '' : ' <small>em breve</small>'}</button>`).join('');
 
   let corpo = '';
   if (!c) {
-    corpo = '<p class="mensagem">Sem cerimônias ainda.</p>';
+    corpo = `<p class="mensagem">Ainda não há edições aqui. ${esc(info.quando)}.</p>`;
   } else if (!c.indicados) {
     corpo = `<section class="pr-resumo pr-aguardando">
-      <span class="est-kicker">${icone('Hourglass')} ${ordinalPt(c.numero)} ${esc(d.nome)} · ${c.ano}</span>
-      <p>Os indicados ainda não foram anunciados. ${premio === 'oscar' ? 'Eles saem no fim de janeiro' : 'Eles saem em breve'} e aparecem aqui sozinhos.</p>
+      <span class="est-kicker">${icone('Hourglass')} ${esc(nomeEdicao(c))}</span>
+      <p>${info.festival ? 'Os filmes da competição ainda não foram anunciados.' : 'Os indicados ainda não foram anunciados.'} ${esc(info.quando)}, e aparecem aqui sozinhos.</p>
       <button class="btn" data-pr="atualizar">${icone('RefreshCw')} Procurar agora</button>
     </section>`;
   } else {
@@ -357,10 +408,10 @@ function renderPremios() {
 
     corpo = `<section class="pr-resumo">
         <div class="pr-resumo-titulo">
-          <span class="est-kicker">${icone('Trophy')} ${ordinalPt(c.numero)} ${esc(d.nome)} · ${c.ano}</span>
-          <h3>Você viu ${vistos} de ${filmes.size} filmes indicados</h3>
+          <span class="est-kicker">${icone('Trophy')} ${esc(nomeEdicao(c))}</span>
+          <h3>Você viu ${vistos} de ${filmes.size} filmes ${info.festival ? 'da competição' : 'indicados'}</h3>
           <div class="pr-barra" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>
-          <p>${naLista - vistos > 0 ? `${naLista - vistos} ${naLista - vistos === 1 ? 'está' : 'estão'} na sua lista para ver. ` : ''}${c.vencedores ? 'Os vencedores já saíram.' : 'Os vencedores saem na cerimônia; faça seus palpites.'}</p>
+          <p>${naLista - vistos > 0 ? `${naLista - vistos} ${naLista - vistos === 1 ? 'está' : 'estão'} na sua lista para ver. ` : ''}${c.vencedores ? (info.festival ? 'Os prêmios do júri já saíram.' : 'Os vencedores já saíram.') : (info.festival ? 'O júri anuncia os prêmios no fim do festival; faça seus palpites.' : 'Os vencedores saem na cerimônia; faça seus palpites.')}</p>
         </div>
         <div class="pr-numeros">
           <div><b>${palpitados}<small>/${c.categorias.length}</small></b><span>palpites</span></div>
@@ -371,7 +422,7 @@ function renderPremios() {
           ${palpitados ? `<button class="chip" data-pr="limpar-palpites">${icone('Eraser')} Limpar palpites</button>` : ''}
         </div>
       </section>
-      <div class="pr-categorias">${cards || '<p class="mensagem">Você já viu todos os indicados. 🎉</p>'}</div>`;
+      <div class="pr-categorias">${cards || `<p class="mensagem">Você já viu todos os ${info.festival ? 'filmes da competição' : 'indicados'}. 🎉</p>`}</div>`;
   }
 
   caixa.innerHTML = `
@@ -384,7 +435,8 @@ function renderPremios() {
     </div>
     <div class="pr-abas" role="tablist" aria-label="Cerimônias">${abas}</div>
     ${corpo}`;
-  // A aba escolhida à vista.
+  // O prêmio e a aba escolhidos à vista.
+  $('.pr-lista .chip.ativo', caixa)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   $('.pr-aba.ativo', caixa)?.scrollIntoView({ block: 'nearest', inline: 'center' });
 }
 
@@ -430,10 +482,10 @@ premiosTela.addEventListener('click', async (e) => {
   const x = k && li ? k.indicados[Number(li.dataset.i)] : null;
   switch (b.dataset.pr) {
     case 'fechar': fecharPremios(); break;
-    case 'premio': vista.premio = b.dataset.premio; vista.numero = cerimoniaPadrao(vista.premio); renderPremios(); break;
+    case 'premio': vista.premio = b.dataset.premio; vista.numero = cerimoniaPadrao(vista.premio); renderPremios(); atualizarPremios({ so: vista.premio }); break;
     case 'cerimonia': vista.numero = Number(b.dataset.numero); renderPremios(); $('#premios-caixa').scrollTo({ top: 0 }); break;
     case 'so-falta': vista.soFalta = !vista.soFalta; renderPremios(); break;
-    case 'atualizar': b.disabled = true; await atualizarPremios({ forcar: true }); renderPremios(); break;
+    case 'atualizar': b.disabled = true; await atualizarPremios({ forcar: true, so: vista.premio }); renderPremios(); break;
     case 'limpar-palpites': salvarCedula(vista.premio, c.numero, { ...cedula(vista.premio, c.numero), palpites: {} }); renderPremios(); break;
     case 'palpite': {
       if (!x) return;
@@ -461,9 +513,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !modal.open && !premiosTela.hidden && !estado.painelId) { e.preventDefault(); fecharPremios(); }
 });
 
-// A roda do mouse rola as abas dos anos de lado.
+// A roda do mouse rola de lado a lista de prêmios e as abas dos anos.
 premiosTela.addEventListener('wheel', (e) => {
-  const abas = e.target.closest('.pr-abas');
+  const abas = e.target.closest('.pr-abas, .pr-lista');
   if (!abas || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
   e.preventDefault();
   abas.scrollLeft += e.deltaY;

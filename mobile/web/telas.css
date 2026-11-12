@@ -81,7 +81,8 @@ html.celular #cfg-capas-todas, html.celular #cfg-pasta, html.celular #cfg-backup
 /* Prêmios: uma coluna; as abas dos anos rolam de lado */
 html.celular .pr-topo { gap: 10px; }
 html.celular .pr-topo h2 { font-size: 28px; }
-html.celular .pr-lista { margin-left: 0; order: 3; width: 100%; }
+html.celular .pr-lista { margin: 4px -16px 0; padding: 4px 16px 6px; scrollbar-width: none; }
+html.celular .pr-lista::-webkit-scrollbar { display: none; }
 html.celular .pr-abas { margin: 12px -16px 14px; padding: 4px 16px 8px; scrollbar-width: none; }
 html.celular .pr-abas::-webkit-scrollbar { display: none; }
 html.celular .pr-resumo { grid-template-columns: 1fr; padding: 18px; }

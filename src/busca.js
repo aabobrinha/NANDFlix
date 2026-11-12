@@ -16,7 +16,7 @@ const ACOES_PALETA = [
   { titulo: 'Suas páginas', icone: 'NotebookPen', termos: 'anotacoes textos resenhas', fazer: () => abrirPaginas() },
   { titulo: 'Tierlist', icone: 'Medal', termos: 'ranking tiers', fazer: () => abrirTierlist() },
   { titulo: 'Estatísticas', icone: 'ChartColumn', termos: 'retrospectiva numeros', fazer: () => abrirEstatisticas() },
-  { titulo: 'Prêmios (Oscar)', icone: 'Trophy', termos: 'oscar academy awards cedula bolao palpites indicados vencedores premiacao', fazer: () => abrirPremios() },
+  { titulo: 'Prêmios', icone: 'Trophy', termos: 'oscar globo de ouro golden globe critics choice bafta sag actor awards spirit gotham cannes veneza venice berlim berlinale festival cedula bolao palpites indicados vencedores premiacao', fazer: () => abrirPremios() },
   { titulo: 'Retrospectiva do mês em stories', icone: 'Sparkles', termos: 'instagram imagem mes', fazer: () => abrirRetrospectivaStory(hoje().slice(0, 7)) },
   { titulo: 'Retrospectiva do ano em stories', icone: 'Sparkles', termos: 'instagram imagem ano', fazer: () => abrirRetrospectivaStory(hoje().slice(0, 4)) },
   { titulo: 'Sortear um filme', icone: 'Dices', termos: 'aleatorio sorteio', fazer: () => $('#btn-sortear').click() },
@@ -24,7 +24,7 @@ const ACOES_PALETA = [
   { titulo: 'Listas', icone: 'Tags', termos: 'tags colecoes', fazer: () => abrirMenuListasTela($('#btn-listas')) },
   { titulo: 'Configurações', icone: 'Settings', termos: 'chave tmdb omdb opcoes', fazer: () => abrirConfiguracoes() },
   { titulo: 'Restaurar um backup', icone: 'History', termos: 'backup copia seguranca', fazer: () => abrirRestaurarBackup() },
-  { titulo: 'Importar do Letterboxd', icone: 'Download', termos: 'letterboxd importar', fazer: () => importarLetterboxd() },
+  { titulo: 'Importar de outro app', icone: 'Download', termos: 'importar letterboxd imdb stremio rotten tomatoes csv avaliacoes notas watchlist', fazer: () => abrirImportar() },
 ];
 
 function abrirPaleta(termo = '') {
