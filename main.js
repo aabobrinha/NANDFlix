@@ -428,6 +428,7 @@ const igdb = new Igdb({
 });
 ipcMain.handle('jogos:buscar', (_e, termo) => chamar(() => igdb.buscarJogos(termo)));
 ipcMain.handle('jogos:detalhes', (_e, id) => chamar(() => igdb.detalhesJogo(id)));
+ipcMain.handle('jogos:capas', (_e, pedido) => chamar(() => igdb.capasDeJogos(pedido || {})));
 ipcMain.handle('jogos:igdbDaSteam', (_e, appid) => chamar(() => igdb.igdbDaSteam(appid)));
 // Sem as chaves da IGDB: a loja da Steam (sem chave) responde a busca e os detalhes.
 ipcMain.handle('jogos:buscarSteam', (_e, termo) => chamar(async () => (await steam.buscarLoja(termo)).filter(steam.ehJogoDaLoja).map(steam.resultadoDaLoja)));

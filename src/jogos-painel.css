@@ -164,3 +164,7 @@ html.celular .modal-steam-bib .steam-bib-grade { grid-template-columns: repeat(3
 .jogo-zerei.ativo { background: rgba(var(--acento-rgb), .22); color: var(--acento-texto); box-shadow: inset 0 0 0 1.5px var(--acento-vivo); }
 .jogo-zerei.ativo .ico { fill: currentColor; }
 html.celular .painel-botoes .jogo-zerei { width: 100%; min-height: 46px; border-radius: 6px; font-size: 17px; justify-content: center; }
+
+/* Favorito na página do jogo: a estrela dourada quando ligada (como nos filmes) */
+.jogo-fav.fav-on { color: var(--dourado); }
+.jogo-fav.fav-on .ico { fill: currentColor; }

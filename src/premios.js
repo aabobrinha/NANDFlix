@@ -407,28 +407,103 @@ function fecharPremios() {
   $('#premios-caixa').innerHTML = '';
 }
 
-// A capa de um indicado: a sua (se o filme está na lista) ou a do Stremio (Cinemeta), pelo IMDb;
-// jogo: a da lista ou a capa em pé da Steam (pelo appid), senão só o nome.
-function capaIndicadoHTML(f, ids, titulo, jogo = false) {
+// A capa de um indicado: a sua (se o filme está na lista) ou a do Stremio (Cinemeta), pelo IMDb.
+// Jogo: a da lista, a da IGDB (todos os consoles; vem de capasJogosPremios), a capa em pé da
+// Steam (pelo appid) e, se ela falhar, o cabeçalho da Steam; sem nada, só o nome (e a IGDB
+// completa depois, em completarCapasJogosPremios).
+// busca: o nome do jogo, para achar a capa na IGDB quando o indicado não tem id (só jogos, não pessoas).
+function capaIndicadoHTML(f, ids, titulo, jogo = false, busca = '') {
   const imdb = ids.imdb || (f && f.imdbID);
   const steam = ids.steam && Number.isInteger(Number(ids.steam)) ? Number(ids.steam) : 0;
+  const daIgdb = jogo ? capaIgdbDoIndicado({ ...ids, busca }) : '';
+  const steamBase = steam ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${steam}/` : '';
   const src = (f && srcCapa(f)) || (jogo
-    ? (steam ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${steam}/library_600x900.jpg` : '')
+    ? (daIgdb || (steam ? `${steamBase}library_600x900.jpg` : ''))
     : (imdb ? `https://images.metahub.space/poster/small/${imdb}/img` : ''));
+  // Jogo: os ids vão junto, para a capa da IGDB entrar se esta falhar (ou se não houver nenhuma).
+  const idsJogo = jogo ? ` data-jogo-igdb="${esc(ids.igdb || '')}" data-jogo-slug="${esc(ids.igdbSlug || '')}" data-jogo-busca="${esc(!ids.igdb && !ids.igdbSlug && !(f && srcCapa(f)) ? busca : '')}"` : '';
+  const alt = jogo && steamBase && !daIgdb && !(f && srcCapa(f)) ? ` data-capa-alt="${steamBase}header.jpg"` : '';
   return src
-    ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async" data-titulo-capa="${esc(titulo)}">`
-    : `<span class="pr-capa-vazia">${esc(titulo)}</span>`;
+    ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async" data-titulo-capa="${esc(titulo)}"${idsJogo}${alt}>`
+    : `<span class="pr-capa-vazia"${idsJogo}>${esc(titulo)}</span>`;
 }
 
-// A capa não carregou: fica o título.
+// ---- Capas dos jogos indicados pela IGDB (as da Steam faltam em jogo de console e em alguns da Steam) ----
+// Cache neste aparelho: id/slug → image_id ('' = a IGDB não tem capa). Não vai para a nuvem.
+const CHAVE_CAPAS_PREMIOS = 'nandplay-capas-premios';
+const capasJogosPremios = (() => {
+  try { return new Map(Object.entries(JSON.parse(localStorage.getItem(CHAVE_CAPAS_PREMIOS) || '{}'))); } catch { return new Map(); }
+})();
+function guardarCapasJogosPremios() {
+  try { localStorage.setItem(CHAVE_CAPAS_PREMIOS, JSON.stringify(Object.fromEntries(capasJogosPremios))); } catch { /* sem armazenamento: busca de novo da próxima vez */ }
+}
+const chavesCapaIndicado = (ids) => [ids.igdb ? `id:${ids.igdb}` : '', ids.igdbSlug ? `slug:${ids.igdbSlug}` : '', ids.busca ? `busca:${normalizar(ids.busca)}` : ''].filter(Boolean);
+function capaIgdbDoIndicado(ids) {
+  for (const k of chavesCapaIndicado(ids)) {
+    const c = capasJogosPremios.get(k);
+    if (c) return /^https:/.test(c) ? c : `https://images.igdb.com/igdb/image/upload/t_cover_big/${c}.jpg`; // pela busca, já vem o endereço
+  }
+  return '';
+}
+
+// A capa não carregou: o cabeçalho da Steam, depois a da IGDB (se já soubermos), senão o título.
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement) || !img.dataset.tituloCapa) return;
+  if (img.dataset.capaAlt) { img.src = img.dataset.capaAlt; img.removeAttribute('data-capa-alt'); img.classList.add('pr-capa-deitada'); return; }
+  const daIgdb = capaIgdbDoIndicado({ igdb: img.dataset.jogoIgdb, igdbSlug: img.dataset.jogoSlug, busca: img.dataset.jogoBusca });
+  if (daIgdb && img.getAttribute('src') !== daIgdb) { img.src = daIgdb; img.classList.remove('pr-capa-deitada'); return; }
   const s = document.createElement('span');
   s.className = 'pr-capa-vazia';
   s.textContent = img.dataset.tituloCapa;
+  if (img.dataset.jogoIgdb !== undefined) Object.assign(s.dataset, { jogoIgdb: img.dataset.jogoIgdb, jogoSlug: img.dataset.jogoSlug, jogoBusca: img.dataset.jogoBusca || '' });
   img.replaceWith(s);
 }, true);
+
+// Depois de desenhar: pede à IGDB as capas que faltam e troca os títulos (e as capas deitadas
+// do cabeçalho da Steam) pela capa em pé. Sem as chaves da IGDB, fica como está.
+let pedindoCapasPremios = null;
+async function completarCapasJogosPremios() {
+  const caixa = $('#premios-caixa');
+  if (!caixa || !api.capasJogos) return;
+  const alvos = [...caixa.querySelectorAll('[data-jogo-igdb]')];
+  if (!alvos.length) return;
+  const faltam = { ids: new Set(), slugs: new Set(), buscas: new Set() };
+  for (const el of alvos) {
+    const ids = { igdb: el.dataset.jogoIgdb, igdbSlug: el.dataset.jogoSlug, busca: el.dataset.jogoBusca };
+    if (chavesCapaIndicado(ids).some((k) => capasJogosPremios.has(k))) continue;
+    if (ids.igdb) faltam.ids.add(ids.igdb); else if (ids.igdbSlug) faltam.slugs.add(ids.igdbSlug); else if (ids.busca) faltam.buscas.add(ids.busca);
+  }
+  if ((faltam.ids.size || faltam.slugs.size || faltam.buscas.size) && !pedindoCapasPremios) {
+    pedindoCapasPremios = (async () => {
+      if (faltam.ids.size || faltam.slugs.size) {
+        const r = await api.capasJogos({ ids: [...faltam.ids], slugs: [...faltam.slugs] });
+        if (!r || !r.ok || !r.dados) return; // sem chaves ou sem internet: tenta na próxima vez
+        for (const id of faltam.ids) capasJogosPremios.set(`id:${id}`, r.dados.porId[id] || '');
+        for (const s of faltam.slugs) capasJogosPremios.set(`slug:${s}`, r.dados.porSlug[s] || '');
+      }
+      // Sem id no Wikidata (poucos): a busca da IGDB pelo nome, ficando com o resultado de mesmo nome.
+      for (const nome of faltam.buscas) {
+        const r = await api.buscarJogos(nome);
+        if (!r || !r.ok) break;
+        const alvo = normalizar(nome);
+        const achado = (r.dados || []).find((j) => j.capa && normalizar(j.titulo) === alvo) || (r.dados || []).find((j) => j.capa && normalizar(j.titulo).startsWith(alvo));
+        capasJogosPremios.set(`busca:${alvo}`, achado ? achado.capa : '');
+      }
+      guardarCapasJogosPremios();
+    })().finally(() => { pedindoCapasPremios = null; });
+    await pedindoCapasPremios;
+  }
+  for (const el of caixa.querySelectorAll('.pr-capa-vazia[data-jogo-igdb], img.pr-capa-deitada[data-jogo-igdb]')) {
+    const src = capaIgdbDoIndicado({ igdb: el.dataset.jogoIgdb, igdbSlug: el.dataset.jogoSlug, busca: el.dataset.jogoBusca });
+    if (!src) continue;
+    if (el instanceof HTMLImageElement) { el.src = src; el.classList.remove('pr-capa-deitada'); continue; }
+    const img = document.createElement('img');
+    Object.assign(img, { src, alt: '', loading: 'lazy', decoding: 'async' });
+    Object.assign(img.dataset, { tituloCapa: el.textContent, jogoIgdb: el.dataset.jogoIgdb, jogoSlug: el.dataset.jogoSlug, jogoBusca: el.dataset.jogoBusca || '' });
+    el.replaceWith(img);
+  }
+}
 
 function renderPremios() {
   const caixa = $('#premios-caixa');
@@ -496,7 +571,7 @@ function renderPremios() {
           // Jogo da sua lista: o estado dele (Zerado, Jogando…). Os de filme não têm selo.
           const seloLista = jogo && f ? `<span class="pr-na-lista">Na sua lista${ROTULOS_STATUS_PREMIOS[f.status] ? ` · ${ROTULOS_STATUS_PREMIOS[f.status]}` : ''}</span>` : '';
           return `<li class="pr-ind${x.venceu ? ' venceu' : ''}${eu ? ' palpite' : ''}${visto ? ' visto' : ''}${semTitulo ? ' sem-jogo' : ''}" data-i="${i}">
-            <button class="pr-capa" data-pr="abrir" ${semTitulo ? 'tabindex="-1" aria-hidden="true"' : `title="Ver os detalhes de ${esc(x.titulo)}"`}>${capaIndicadoHTML(f, ids, nomeInd, jogo)}</button>
+            <button class="pr-capa" data-pr="abrir" ${semTitulo ? 'tabindex="-1" aria-hidden="true"' : `title="Ver os detalhes de ${esc(x.titulo)}"`}>${capaIndicadoHTML(f, ids, nomeInd, jogo, jogo && !semTitulo ? x.titulo : '')}</button>
             <div class="pr-ind-texto">
               <b title="${esc(nomeInd)}">${esc(nomeInd)}</b>
               ${pessoa ? `<span>${esc(pessoa)}</span>` : ''}
@@ -639,3 +714,7 @@ document.addEventListener('click', (e) => {
 $('#btn-premios').addEventListener('click', () => abrirPremios());
 
 carregarPremios().then(() => setTimeout(() => atualizarPremios(), 8000));
+
+// Jogos: depois de cada desenho, as capas que faltam vêm da IGDB.
+const renderPremiosSemCapas = renderPremios;
+renderPremios = () => { renderPremiosSemCapas(); if (premioEhDeJogo(vista.premio)) completarCapasJogosPremios(); };

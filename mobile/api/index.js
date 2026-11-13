@@ -822,6 +822,7 @@ window.api = {
   buscarJogos: (termo) => chamar(() => igdb.buscarJogos(termo)),
   detalhesJogo: (id) => chamar(() => igdb.detalhesJogo(id)),
   igdbDaSteam: (appid) => chamar(() => igdb.igdbDaSteam(appid)),
+  capasJogos: (pedido) => chamar(() => igdb.capasDeJogos(pedido || {})),
   buscarJogosSteam: (termo) => chamar(async () => (await steam.buscarLoja(termo)).filter(steam.ehJogoDaLoja).map(steam.resultadoDaLoja)),
   detalhesJogoSteam: (appid) => chamar(async () => {
     const det = await steam.detalhesLoja(appid);

@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('api', {
   buscarJogos: chamar('jogos:buscar'),
   detalhesJogo: chamar('jogos:detalhes'),
   igdbDaSteam: chamar('jogos:igdbDaSteam'),
+  capasJogos: chamar('jogos:capas'),
   buscarJogosSteam: chamar('jogos:buscarSteam'), // sem as chaves da IGDB: a loja da Steam
   detalhesJogoSteam: chamar('jogos:detalhesSteam'),
   jogosDoDesenvolvedor: chamar('jogos:doDesenvolvedor'),

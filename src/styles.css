@@ -3499,3 +3499,6 @@ html[data-com-verde] .cfg-plat-hub { background: linear-gradient(90deg, rgba(109
 .vazio-acoes.so-adicionar { justify-content: flex-start; }
 .vazio-acoes.so-adicionar .vazio-dir { align-items: flex-start; text-align: left; }
 .aviso-fonte-jogo { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: rgba(var(--acento-rgb), .12); font-size: 13px; line-height: 1.4; color: var(--texto); }
+
+/* Prêmios de jogos: a capa deitada (cabeçalho da Steam) cabe inteira enquanto a da IGDB não chega */
+.pr-capa img.pr-capa-deitada { object-fit: contain; background: #0E1114; }

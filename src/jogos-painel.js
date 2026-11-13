@@ -395,6 +395,7 @@ function renderPainelJogo(f) {
           <div class="painel-botoes">
             <button class="btn btn-assistir jogo-steam-btn" data-j="steam" data-acao="${e.tipo === 'steam' ? e.acao : 'link'}" title="${esc(e.dica)}">${botaoSteamConteudoHTML(e)}</button>
             ${f.externo ? '' : zereiBotaoHTML(f)}
+            ${f.externo ? '' : favJogoBotaoHTML(f)}
             ${f.externo ? `<button class="btn jogo-adicionar" data-j="adicionar">${icone('Plus')} Adicionar à lista</button>` : ''}
             ${f.externo ? '' : `<button class="redondo" data-p="story" title="Criar story para o Instagram" aria-label="Criar story para o Instagram">${icone('ImagePlus')}</button>`}
             ${f.trailer ? `<button class="redondo" data-p="trailer" data-rotulo="Trailer" title="Ver o trailer em tela cheia" aria-label="Ver o trailer em tela cheia">${icone('Maximize')}</button>` : ''}
@@ -627,6 +628,17 @@ function zereiBotaoHTML(f) {
     : 'Marcar como zerado hoje (o dia aparece no calendário)';
   return `<button class="btn jogo-zerei${zerado ? ' ativo' : ''}" data-j="zerei" aria-pressed="${zerado}" title="${esc(dica)}">${icone('Trophy')} ${texto}</button>`;
 }
+// A estrela de favorito (como nos filmes): os favoritos aparecem no filtro e na fileira de favoritos.
+function favJogoBotaoHTML(f) {
+  const dica = f.favorito ? 'Tirar dos favoritos' : 'Favoritar';
+  return `<button class="redondo jogo-fav${f.favorito ? ' fav-on' : ''}" data-j="favorito" data-rotulo="Favorito" aria-pressed="${Boolean(f.favorito)}" title="${dica}" aria-label="${dica}">${icone('Star', { preenchido: Boolean(f.favorito) })}</button>`;
+}
+async function alternarFavJogo(f) {
+  await alternar(f.id, 'favorito');
+  const b = document.querySelector('#painel [data-j="favorito"]');
+  if (b && estado.painelId === f.id) b.outerHTML = favJogoBotaoHTML(f);
+  aviso(f.favorito ? `“${f.titulo}” está nos favoritos.` : `“${f.titulo}” saiu dos favoritos.`, { tipo: f.favorito ? 'ok' : '' });
+}
 function atualizarZereiJogo(f) {
   const b = document.querySelector('#painel [data-j="zerei"]');
   if (b && estado.painelId === f.id) b.outerHTML = zereiBotaoHTML(f);
@@ -682,6 +694,7 @@ function ligarPainelJogo(painel) {
       case 'hltb': abrirLinkJogo(linkHltbJogo(f)); break;
       case 'adicionar': adicionarJogoFora(f, b); break;
       case 'zerei': alternarZereiJogo(f); break;
+      case 'favorito': alternarFavJogo(f); break;
       case 'tirar-tag': tirarTagJogo(f, b.dataset.tag); break;
       case 'por-tag': adicionarTagJogo(f, b.dataset.tag); break;
       case 'config': fecharPainel(); abrirConfiguracoes(); setTimeout(() => document.getElementById('cfg-nandplay')?.scrollIntoView({ block: 'start' }), 60); break;
